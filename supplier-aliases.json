@@ -1,0 +1,530 @@
+{
+  "aboukhalid": {
+    "aliases": [
+      "abou-khalid yassine",
+      "abou khalid yassine",
+      "yassine abou khalid"
+    ],
+    "patterns": [
+      "aboukhalid"
+    ]
+  },
+  "afkir": {
+    "aliases": [
+      "afkir oumnya",
+      "oumnya afkir"
+    ],
+    "patterns": [
+      "afkir"
+    ]
+  },
+  "alkhoomsy": {
+    "aliases": [
+      "alkhoomsy",
+      "alkhoomsy srl"
+    ],
+    "patterns": [
+      "alkhoomsy"
+    ]
+  },
+  "axa": {
+    "aliases": [
+      "axa",
+      "axa assurance"
+    ],
+    "patterns": [
+      "axa"
+    ]
+  },
+  "azzabi": {
+    "aliases": [
+      "azzabi sabri",
+      "sabri azzabi"
+    ],
+    "patterns": [
+      "azzabi"
+    ]
+  },
+  "barilyagoubi": {
+    "aliases": [
+      "bari lyagoubi omar",
+      "lyagoubi omar",
+      "bari lyagoubi"
+    ],
+    "patterns": [
+      "barilyagoubi",
+      "lyagoubi"
+    ]
+  },
+  "benyamoune": {
+    "aliases": [
+      "ben yamoune lina",
+      "yamoune lina",
+      "ben yamoune"
+    ],
+    "patterns": [
+      "benyamoune",
+      "yamoune"
+    ]
+  },
+  "bnpparibas": {
+    "aliases": [
+      "bnp paribas",
+      "bnp paribas lease",
+      "bnpparibas"
+    ],
+    "patterns": [
+      "bnpparibas"
+    ]
+  },
+  "citymesh": {
+    "aliases": [
+      "citymesh"
+    ],
+    "patterns": [
+      "citymesh"
+    ]
+  },
+  "clavie": {
+    "aliases": [
+      "clavie",
+      "clavie s.a.",
+      "clavie sa"
+    ],
+    "patterns": [
+      "clavie"
+    ]
+  },
+  "cocacola": {
+    "aliases": [
+      "coca-cola",
+      "cocacola",
+      "coca cola"
+    ],
+    "patterns": [
+      "cocacola"
+    ]
+  },
+  "collibry": {
+    "aliases": [
+      "collibry",
+      "colibri",
+      "collibri",
+      "collibry bv"
+    ],
+    "patterns": [
+      "collibry",
+      "collibrybv"
+    ]
+  },
+  "colruyt": {
+    "aliases": [
+      "colruyt",
+      "collect and go"
+    ],
+    "patterns": [
+      "colruyt",
+      "collectgo"
+    ]
+  },
+  "eblease": {
+    "aliases": [
+      "eb-lease",
+      "eb lease",
+      "eblease"
+    ],
+    "patterns": [
+      "eblease"
+    ]
+  },
+  "edenred": {
+    "aliases": [
+      "edenred",
+      "eden red",
+      "eden",
+      "ticket restaurant"
+    ],
+    "patterns": [
+      "edenred",
+      "edenredbelgium"
+    ]
+  },
+  "elbalghiti": {
+    "aliases": [
+      "el balghiti sabrine",
+      "balghiti sabrine",
+      "balghiti"
+    ],
+    "patterns": [
+      "elbalghiti",
+      "balghiti"
+    ]
+  },
+  "elbarnoussi": {
+    "aliases": [
+      "el barnoussi tarik",
+      "barnoussi tarik",
+      "barnoussi"
+    ],
+    "patterns": [
+      "elbarnoussi",
+      "barnoussi"
+    ]
+  },
+  "eljaouhari": {
+    "aliases": [
+      "el jaouhari lina",
+      "jaouhari lina",
+      "jaouhari"
+    ],
+    "patterns": [
+      "eljaouhari",
+      "jaouhari"
+    ]
+  },
+  "ellallaouiyasmina": {
+    "aliases": [
+      "el allaoui yasmina",
+      "allaoui"
+    ],
+    "patterns": [
+      "ellalaoui",
+      "allaoui"
+    ]
+  },
+  "ellalouimohamed": {
+    "aliases": [
+      "el allaoui mohamed",
+      "allaoui mohamed",
+      "mohamed allaoui"
+    ],
+    "patterns": [
+      "ellalouimohamed",
+      "allaouimohamed"
+    ]
+  },
+  "elmouden": {
+    "aliases": [
+      "el mouden houda",
+      "mouden houda",
+      "houda mouden"
+    ],
+    "patterns": [
+      "elmouden",
+      "mouden"
+    ]
+  },
+  "engie": {
+    "aliases": [
+      "engie",
+      "electrabel"
+    ],
+    "patterns": [
+      "engie",
+      "electrabel"
+    ]
+  },
+  "escompany": {
+    "aliases": [
+      "escompany",
+      "es company"
+    ],
+    "patterns": [
+      "escompany"
+    ]
+  },
+  "fondssocialhoreca": {
+    "aliases": [
+      "fonds social horeca",
+      "fonds social et horeca",
+      "horeca"
+    ],
+    "patterns": [
+      "fondssocial",
+      "horeca"
+    ]
+  },
+  "foster": {
+    "aliases": [
+      "foster",
+      "foster fast food",
+      "foster fastfood"
+    ],
+    "patterns": [
+      "foster",
+      "fosterfastfood"
+    ]
+  },
+  "hfood": {
+    "aliases": [
+      "h-food",
+      "hfood"
+    ],
+    "patterns": [
+      "hfood"
+    ]
+  },
+  "jamhounmokhlis": {
+    "aliases": [
+      "jamhounmokhlis",
+      "jamhoun mokhlis"
+    ],
+    "patterns": [
+      "jamhounmokhlis2"
+    ]
+  },
+  "kalidechami": {
+    "aliases": [
+      "kalidechami",
+      "kali de chami"
+    ],
+    "patterns": [
+      "kalidechami"
+    ]
+  },
+  "kharbouche": {
+    "aliases": [
+      "kharbouche yasmine",
+      "yasmine kharbouche"
+    ],
+    "patterns": [
+      "kharbouche"
+    ]
+  },
+  "krimfatima": {
+    "aliases": [
+      "krim fatima",
+      "fatima krim"
+    ],
+    "patterns": [
+      "krimfatima"
+    ]
+  },
+  "lahayehardies": {
+    "aliases": [
+      "lahaye hardies",
+      "lahaye"
+    ],
+    "patterns": [
+      "lahaye"
+    ]
+  },
+  "lotfisco": {
+    "aliases": [
+      "lotfisco",
+      "lot fiscal"
+    ],
+    "patterns": [
+      "lotfisco"
+    ]
+  },
+  "lugnos": {
+    "aliases": [
+      "lugnos",
+      "lugnos sprl"
+    ],
+    "patterns": [
+      "lugnos"
+    ]
+  },
+  "madidihassan": {
+    "aliases": [
+      "madidi hassan",
+      "hassan madidi"
+    ],
+    "patterns": [
+      "madidihassan"
+    ]
+  },
+  "madidijawad": {
+    "aliases": [
+      "madidi jawad",
+      "jawad madidi"
+    ],
+    "patterns": [
+      "madidijawad"
+    ]
+  },
+  "mahjoub": {
+    "aliases": [
+      "mahjoub mohamed-reda",
+      "mahjoub mohamed reda",
+      "mahjoub"
+    ],
+    "patterns": [
+      "mahjoub"
+    ]
+  },
+  "mrabet": {
+    "aliases": [
+      "mrabet jihad",
+      "jihad mrabet"
+    ],
+    "patterns": [
+      "mrabet"
+    ]
+  },
+  "onss": {
+    "aliases": [
+      "onss"
+    ],
+    "patterns": [
+      "onss"
+    ]
+  },
+  "ourimchi": {
+    "aliases": [
+      "ourimchi haytam",
+      "haytam ourimchi"
+    ],
+    "patterns": [
+      "ourimchi"
+    ]
+  },
+  "parking": {
+    "aliases": [
+      "parking",
+      "indigo parking",
+      "parking botanique",
+      "parking woluwe"
+    ],
+    "patterns": [
+      "parking",
+      "indigo"
+    ]
+  },
+  "persoproject": {
+    "aliases": [
+      "perso project",
+      "persoproject"
+    ],
+    "patterns": [
+      "persoproject"
+    ]
+  },
+  "qibouz": {
+    "aliases": [
+      "qibouz malak",
+      "malak qibouz"
+    ],
+    "patterns": [
+      "qibouz"
+    ]
+  },
+  "restomax": {
+    "aliases": [
+      "restomax"
+    ],
+    "patterns": [
+      "restomax"
+    ]
+  },
+  "samat": {
+    "aliases": [
+      "samat sumeyye",
+      "sumeyye samat"
+    ],
+    "patterns": [
+      "samat"
+    ]
+  },
+  "satti": {
+    "aliases": [
+      "satti ali",
+      "ali satti"
+    ],
+    "patterns": [
+      "satti"
+    ]
+  },
+  "sligro": {
+    "aliases": [
+      "sligro",
+      "sligro brussel",
+      "sligro vorst"
+    ],
+    "patterns": [
+      "sligro"
+    ]
+  },
+  "sogle": {
+    "aliases": [
+      "sogle",
+      "socle"
+    ],
+    "patterns": [
+      "sogle"
+    ]
+  },
+  "taglina": {
+    "aliases": [
+      "tag lina",
+      "lina tag"
+    ],
+    "patterns": [
+      "taglina"
+    ]
+  },
+  "teamprecompteprof": {
+    "aliases": [
+      "teamprecompteprof",
+      "team precompte prof"
+    ],
+    "patterns": [
+      "teamprecompteprof"
+    ]
+  },
+  "tontonchami": {
+    "aliases": [
+      "tonton chami",
+      "tonton chami bureau"
+    ],
+    "patterns": [
+      "tontonchami"
+    ]
+  },
+  "turbatu": {
+    "aliases": [
+      "turbatu elena-minura",
+      "turbatu elena minura",
+      "elena turbatu"
+    ],
+    "patterns": [
+      "turbatu"
+    ]
+  },
+  "tva": {
+    "aliases": [
+      "tva",
+      "taxe valeur ajoutée"
+    ],
+    "patterns": [
+      "tva"
+    ]
+  },
+  "vivaqua": {
+    "aliases": [
+      "vivaqua"
+    ],
+    "patterns": [
+      "vivaqua"
+    ]
+  },
+  "wibra": {
+    "aliases": [
+      "wibra"
+    ],
+    "patterns": [
+      "wibra"
+    ]
+  },
+  "zamounlamya": {
+    "aliases": [
+      "zamounlamya",
+      "zamoun lamya"
+    ],
+    "patterns": [
+      "zamounlamya"
+    ]
+  }
+}

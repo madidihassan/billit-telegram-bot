@@ -1,0 +1,210 @@
+{
+  "alkhoomsy": {
+    "aliases": [
+      "alkhoomsy",
+      "alkhoomsy srl"
+    ],
+    "patterns": [
+      "alkhoomsy"
+    ]
+  },
+  "engie": {
+    "aliases": [
+      "engie",
+      "electrabel"
+    ],
+    "patterns": [
+      "engie",
+      "electrabel"
+    ]
+  },
+  "eblease": {
+    "aliases": [
+      "eb-lease",
+      "eb lease",
+      "eblease"
+    ],
+    "patterns": [
+      "eblease"
+    ]
+  },
+  "citymesh": {
+    "aliases": [
+      "citymesh"
+    ],
+    "patterns": [
+      "citymesh"
+    ]
+  },
+  "cocacola": {
+    "aliases": [
+      "coca-cola",
+      "cocacola",
+      "coca cola"
+    ],
+    "patterns": [
+      "cocacola"
+    ]
+  },
+  "axa": {
+    "aliases": [
+      "axa",
+      "axa assurance"
+    ],
+    "patterns": [
+      "axa"
+    ]
+  },
+  "persoproject": {
+    "aliases": [
+      "perso project",
+      "persoproject"
+    ],
+    "patterns": [
+      "persoproject"
+    ]
+  },
+  "lotfisco": {
+    "aliases": [
+      "lotfisco",
+      "lot fiscal"
+    ],
+    "patterns": [
+      "lotfisco"
+    ]
+  },
+  "fondssocialhoreca": {
+    "aliases": [
+      "fonds social horeca",
+      "fonds social et horeca",
+      "horeca"
+    ],
+    "patterns": [
+      "fondssocial",
+      "horeca"
+    ]
+  },
+  "bnpparibas": {
+    "aliases": [
+      "bnp paribas",
+      "bnp paribas lease",
+      "bnpparibas"
+    ],
+    "patterns": [
+      "bnpparibas"
+    ]
+  },
+  "restomax": {
+    "aliases": [
+      "restomax"
+    ],
+    "patterns": [
+      "restomax"
+    ]
+  },
+  "sligro": {
+    "aliases": [
+      "sligro",
+      "sligro brussel",
+      "sligro vorst"
+    ],
+    "patterns": [
+      "sligro"
+    ]
+  },
+  "colruyt": {
+    "aliases": [
+      "colruyt",
+      "collect and go"
+    ],
+    "patterns": [
+      "colruyt",
+      "collectgo"
+    ]
+  },
+  "hfood": {
+    "aliases": [
+      "h-food",
+      "hfood"
+    ],
+    "patterns": [
+      "hfood"
+    ]
+  },
+  "lahayehardies": {
+    "aliases": [
+      "lahaye hardies",
+      "lahaye"
+    ],
+    "patterns": [
+      "lahaye"
+    ]
+  },
+  "wibra": {
+    "aliases": [
+      "wibra"
+    ],
+    "patterns": [
+      "wibra"
+    ]
+  },
+  "lugnos": {
+    "aliases": [
+      "lugnos",
+      "lugnos sprl"
+    ],
+    "patterns": [
+      "lugnos"
+    ]
+  },
+  "clavie": {
+    "aliases": [
+      "clavie",
+      "clavie s.a.",
+      "clavie sa"
+    ],
+    "patterns": [
+      "clavie"
+    ]
+  },
+  "tva": {
+    "aliases": [
+      "tva",
+      "taxe valeur ajoutée"
+    ],
+    "patterns": [
+      "tva"
+    ]
+  },
+  "tontonchami": {
+    "aliases": [
+      "tonton chami",
+      "tonton chami bureau"
+    ],
+    "patterns": [
+      "tontonchami"
+    ]
+  },
+  "ellallaouiyasmina": {
+    "aliases": [
+      "el allaoui yasmina",
+      "allaoui"
+    ],
+    "patterns": [
+      "ellalaoui",
+      "allaoui"
+    ]
+  },
+  "parking": {
+    "aliases": [
+      "parking",
+      "indigo parking",
+      "parking botanique",
+      "parking woluwe"
+    ],
+    "patterns": [
+      "parking",
+      "indigo"
+    ]
+  }
+}

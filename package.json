@@ -1,0 +1,41 @@
+{
+  "name": "billit-telegram-notifier",
+  "version": "1.0.0",
+  "description": "Système de notifications Telegram pour les factures Billit",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "start:bot": "node dist/index-bot.js",
+    "dev": "ts-node src/index.ts",
+    "dev:bot": "ts-node src/index-bot.ts",
+    "watch": "tsc -w",
+    "test": "ts-node src/test-connection.ts",
+    "pm2:start": "npm run build && pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop billit-notifier",
+    "pm2:restart": "pm2 restart billit-notifier",
+    "pm2:logs": "pm2 logs billit-notifier",
+    "pm2:start:bot": "npm run build && pm2 start ecosystem-bot.config.js"
+  },
+  "keywords": [
+    "billit",
+    "telegram",
+    "notifications",
+    "factures"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "form-data": "^4.0.5",
+    "groq-sdk": "^0.37.0",
+    "node-telegram-bot-api": "^0.64.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/node-telegram-bot-api": "^0.64.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}

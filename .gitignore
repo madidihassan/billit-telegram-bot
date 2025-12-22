@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+logs/
+notified_invoices.json
+.DS_Store
+.vscode/
+.idea/
+temp/

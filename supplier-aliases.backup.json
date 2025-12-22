@@ -1,0 +1,107 @@
+{
+  "foster": {
+    "aliases": [
+      "foster",
+      "foster fast food",
+      "foster fastfood"
+    ],
+    "patterns": [
+      "foster",
+      "fosterfastfood"
+    ]
+  },
+  "edenred": {
+    "aliases": [
+      "edenred",
+      "eden red",
+      "eden",
+      "ticket restaurant"
+    ],
+    "patterns": [
+      "edenred",
+      "edenredbelgium"
+    ]
+  },
+  "collibry": {
+    "aliases": [
+      "collibry",
+      "colibri",
+      "collibri",
+      "collibry bv"
+    ],
+    "patterns": [
+      "collibry",
+      "collibrybv"
+    ]
+  },
+  "onss": {
+    "aliases": [
+      "onss"
+    ],
+    "patterns": [
+      "onss"
+    ]
+  },
+  "sogle": {
+    "aliases": [
+      "sogle",
+      "socle"
+    ],
+    "patterns": [
+      "sogle"
+    ]
+  },
+  "vivaqua": {
+    "aliases": [
+      "vivaqua"
+    ],
+    "patterns": [
+      "vivaqua"
+    ]
+  },
+  "teamprecompteprof": {
+    "aliases": [
+      "teamprecompteprof",
+      "team precompte prof"
+    ],
+    "patterns": [
+      "teamprecompteprof"
+    ]
+  },
+  "kalidechami": {
+    "aliases": [
+      "kalidechami",
+      "kali de chami"
+    ],
+    "patterns": [
+      "kalidechami"
+    ]
+  },
+  "jamhounmokhlis": {
+    "aliases": [
+      "jamhounmokhlis",
+      "jamhoun mokhlis"
+    ],
+    "patterns": [
+      "jamhounmokhlis2"
+    ]
+  },
+  "zamounlamya": {
+    "aliases": [
+      "zamounlamya",
+      "zamoun lamya"
+    ],
+    "patterns": [
+      "zamounlamya"
+    ]
+  },
+  "escompany": {
+    "aliases": [
+      "escompany",
+      "es company"
+    ],
+    "patterns": [
+      "escompany"
+    ]
+  }
+}
