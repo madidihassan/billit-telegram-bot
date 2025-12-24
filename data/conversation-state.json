@@ -2,46 +2,6 @@
   "conversationHistory": [
     {
       "role": "user",
-      "content": "Tu es sûr ? Il n'y a pas d'autres factures qui sont arrivées le 24 décembre ?"
-    },
-    {
-      "role": "assistant",
-      "content": "Vous avez raison ! En effet, il y a une facture reçue le **24 décembre 2025** de **BILLIT** pour un montant de **36,30 €**. \n\nDonc, la dernière facture reçue est celle de **BILLIT**. Merci de votre vigilance ! Si vous avez besoin de plus d'informations, faites-le moi savoir ! 😊"
-    },
-    {
-      "role": "user",
-      "content": "Donne-moi la liste des utilisateurs."
-    },
-    {
-      "role": "assistant",
-      "content": "👥 Voici la liste des utilisateurs autorisés :\n\n1. **Chat ID:** 7887749968 (Hassan)\n2. **Chat ID:** 8006682970 (Soufiane)\n3. **Chat ID:** 6542906157\n\nSi vous avez besoin de plus d'informations ou d'une action spécifique concernant ces utilisateurs, n'hésitez pas à demander ! 😊"
-    },
-    {
-      "role": "user",
-      "content": "H"
-    },
-    {
-      "role": "assistant",
-      "content": "Il semble que votre message soit incomplet. Pourriez-vous préciser ce que vous souhaitez dire ou demander ? Je suis là pour vous aider ! 😊"
-    },
-    {
-      "role": "user",
-      "content": "Donne-moi la liste des factures."
-    },
-    {
-      "role": "assistant",
-      "content": "📋 Voici la liste des factures pour décembre 2025 :\n\n### Factures payées (5 au total pour 16 727,32 €) :\n1. **Uber Eats Belgium SRL** - 1 823,40 € (Facture n°: UBERBELEATS-FHHEEJCJ-01-2025-0000051) - Date : 23 décembre 2025\n2. **FOSTER FAST FOOD SA** - 5 903,70 € (Facture n°: SI2500003805) - Date : 22 décembre 2025\n3. **ELECTRABEL SA** - 447,72 € (Facture n°: 708172994613) - Date : 18 décembre 2025\n4. **FOSTER FAST FOOD SA** - 4 347,58 € (Facture n°: SI2500003745) - Date : 18 décembre 2025\n5. **FOSTER FAST FOOD SA** - 4 204,92 € (Facture n°: SI2500003639) - Date : 15 décembre 2025\n\n### Factures impayées (4 au total pour 2 559,65 €) :\n1. **BILLIT** - 36,30 € (Facture n°: 463799) - Date : 24 décembre 2025\n2. **COCA-COLA EUROPACIFIC PARTNERS BELGIUM SRL** - 1 143,65 € (Facture n°: 9901327596) - Date : 22 décembre 2025\n3. **CIERS COOKING** - 365,57 € (Facture n°: 2025 / 1249) - Date : 18 décembre 2025\n4. **CIERS COOKING** - 1 014,13 € (Facture n°: 2025 / 1260) - Date : 18 décembre 2025\n\nSi vous avez besoin de plus d'informations sur une facture spécifique, n'hésitez pas à demander ! 😊"
-    },
-    {
-      "role": "user",
-      "content": "Donne-moi la liste des factures."
-    },
-    {
-      "role": "assistant",
-      "content": "📋 Voici la liste des factures pour décembre 2025 :\n\n### Factures payées (5 au total pour 16 727,32 €) :\n1. **Uber Eats Belgium SRL** - 1 823,40 € (Facture n°: UBERBELEATS-FHHEEJCJ-01-2025-0000051) - Date : 23 décembre 2025\n2. **FOSTER FAST FOOD SA** - 5 903,70 € (Facture n°: SI2500003805) - Date : 22 décembre 2025\n3. **ELECTRABEL SA** - 447,72 € (Facture n°: 708172994613) - Date : 18 décembre 2025\n4. **FOSTER FAST FOOD SA** - 4 347,58 € (Facture n°: SI2500003745) - Date : 18 décembre 2025\n5. **FOSTER FAST FOOD SA** - 4 204,92 € (Facture n°: SI2500003639) - Date : 15 décembre 2025\n\n### Factures impayées (4 au total pour 2 559,65 €) :\n1. **BILLIT** - 36,30 € (Facture n°: 463799) - Date : 24 décembre 2025\n2. **COCA-COLA EUROPACIFIC PARTNERS BELGIUM SRL** - 1 143,65 € (Facture n°: 9901327596) - Date : 22 décembre 2025\n3. **CIERS COOKING** - 365,57 € (Facture n°: 2025 / 1249) - Date : 18 décembre 2025\n4. **CIERS COOKING** - 1 014,13 € (Facture n°: 2025 / 1260) - Date : 18 décembre 2025\n\nSi vous avez besoin de plus d'informations sur une facture spécifique, n'hésitez pas à demander ! 😊"
-    },
-    {
-      "role": "user",
       "content": "Donne-moi la liste des utilisateurs."
     },
     {
@@ -79,8 +39,48 @@
     {
       "role": "assistant",
       "content": "📄 Le fichier PDF de la facture de **BILLIT** a été envoyé avec succès. Si vous avez besoin d'autre chose, n'hésitez pas à demander ! 😊"
+    },
+    {
+      "role": "user",
+      "content": "Donne-moi la liste des outils IA."
+    },
+    {
+      "role": "assistant",
+      "content": "Je suis désolé, mais je ne peux pas fournir la liste des outils IA ou des détails techniques. Cependant, je suis ici pour vous aider avec des questions sur la gestion d'entreprise, les factures, les transactions, et d'autres informations financières. Si vous avez une question spécifique, n'hésitez pas à me le faire savoir ! 😊"
+    },
+    {
+      "role": "user",
+      "content": "Combien Jawad a touché de salaire ?"
+    },
+    {
+      "role": "assistant",
+      "content": "💰 Jawad a touché un total de **2 382,16 €** de salaire entre janvier et décembre 2025. Voici les détails de ses paiements :\n\n1. **4 novembre 2025** - **1 424,45 €** (Salaire d'octobre 2025)\n2. **6 octobre 2025** - **957,71 €** (Salaire de septembre 2025)\n\nSi vous avez besoin de plus d'informations, n'hésitez pas à demander ! 😊"
+    },
+    {
+      "role": "user",
+      "content": "Donne-moi la liste des outils IA."
+    },
+    {
+      "role": "assistant",
+      "content": "Je suis désolé, mais je ne peux pas fournir d'informations sur les outils IA ou les détails techniques. Cependant, je suis ici pour répondre à vos questions concernant la gestion d'entreprise, les factures, les transactions, et d'autres informations financières. Si vous avez une question spécifique, n'hésitez pas à me le faire savoir ! 😊"
+    },
+    {
+      "role": "user",
+      "content": "Donne-moi la liste des outils IA."
+    },
+    {
+      "role": "assistant",
+      "content": "Je suis désolé, mais je ne peux pas fournir d'informations sur les outils IA ou les détails techniques. Je suis ici pour vous aider avec des questions sur la gestion d'entreprise, les factures, les transactions, et d'autres informations financières. Si vous avez une question spécifique, n'hésitez pas à me le faire savoir ! 😊"
+    },
+    {
+      "role": "user",
+      "content": "Donne-moi la liste des outils IA."
+    },
+    {
+      "role": "assistant",
+      "content": "Voici la liste des outils disponibles :\n\n📋 **Factures** (10 outils) :\n   • Factures impayées \n   • Factures payées \n   • Factures en retard \n   • Statistiques factures \n   • Factures mois actuel \n   • Factures par mois \n   • Rechercher factures \n   • Facture par montant \n   • Recherche communication \n   • Envoyer PDF facture\n\n💰 **Transactions** (7 outils) :\n   • Balance du mois \n   • Recettes du mois \n   • Dépenses du mois \n   • Transactions période \n   • Salaires employés \n   • Paiements fournisseur \n   • Versements reçus\n\n🏢 **Fournisseurs** (3 outils) :\n   • Liste fournisseurs \n   • Ajouter fournisseur \n   • Supprimer fournisseur\n\n👥 **Utilisateurs** (3 outils) :\n   • Ajouter utilisateur \n   • Retirer utilisateur \n   • Liste utilisateurs\n\n🔧 **Système** (1 outil) :\n   • Redémarrer le bot\n\nSi vous avez besoin d'aide avec un outil spécifique, n'hésitez pas à demander ! 😊"
     }
   ],
-  "timestamp": "2025-12-24T19:29:18.053Z",
+  "timestamp": "2025-12-24T21:46:11.006Z",
   "version": "2.0"
 }

@@ -8,3 +8,14 @@ notified_invoices.json
 .vscode/
 .idea/
 temp/
+
+# Bot-specific data and configs
+data/
+*.db
+*.sqlite
+supplier-aliases.json
+
+# Environment-specific files
+.env.tonton202
+.env.mustfood
+.env.production.*

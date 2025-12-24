@@ -27,6 +27,26 @@
       "alkhoomsy"
     ]
   },
+  "amazon marketplace": {
+    "aliases": [
+      "amazon marketplace",
+      "amazon",
+      "amazon marketplace"
+    ],
+    "patterns": [
+      "amazonmarketplace"
+    ]
+  },
+  "apple store r486": {
+    "aliases": [
+      "apple store r486",
+      "apple",
+      "apple store"
+    ],
+    "patterns": [
+      "applestorer486"
+    ]
+  },
   "axa": {
     "aliases": [
       "axa",
@@ -286,6 +306,16 @@
       "fosterfastfood"
     ]
   },
+  "group induver baloise": {
+    "aliases": [
+      "group induver baloise",
+      "group",
+      "group induver"
+    ],
+    "patterns": [
+      "groupinduverbaloise"
+    ]
+  },
   "hfood": {
     "aliases": [
       "h-food",
@@ -446,6 +476,17 @@
       "mediwet"
     ]
   },
+  "messer belgium": {
+    "aliases": [
+      "messer belgium nv",
+      "messer belgium",
+      "messer",
+      "messer belgium"
+    ],
+    "patterns": [
+      "messerbelgiumnv"
+    ]
+  },
   "mrabet": {
     "aliases": [
       "mrabet jihad",
@@ -453,6 +494,17 @@
     ],
     "patterns": [
       "mrabet"
+    ]
+  },
+  "office easy": {
+    "aliases": [
+      "office easy sa",
+      "office easy",
+      "office",
+      "office easy"
+    ],
+    "patterns": [
+      "officeeasysa"
     ]
   },
   "onss": {
@@ -470,6 +522,17 @@
     ],
     "patterns": [
       "ourimchi"
+    ]
+  },
+  "ozfood": {
+    "aliases": [
+      "ozfood sa",
+      "ozfood",
+      "ozfood",
+      "ozfood sa"
+    ],
+    "patterns": [
+      "ozfoodsa"
     ]
   },
   "parking": {
@@ -503,6 +566,17 @@
       "pluxeebelgium",
       "pluxee",
       "pluxi"
+    ]
+  },
+  "ppro payment services": {
+    "aliases": [
+      "ppro payment services sa",
+      "ppro payment services",
+      "ppro",
+      "ppro payment"
+    ],
+    "patterns": [
+      "ppropaymentservicessa"
     ]
   },
   "qibouz": {
@@ -568,6 +642,17 @@
     ],
     "patterns": [
       "sogle"
+    ]
+  },
+  "soufia trading": {
+    "aliases": [
+      "soufia trading sprl",
+      "soufia trading",
+      "soufia",
+      "soufia trading"
+    ],
+    "patterns": [
+      "soufiatradingsprl"
     ]
   },
   "taglina": {
@@ -648,12 +733,53 @@
       "uberpayments"
     ]
   },
+  "v12 groupe": {
+    "aliases": [
+      "v12 groupe",
+      "v12",
+      "v12 groupe"
+    ],
+    "patterns": [
+      "v12groupe"
+    ]
+  },
+  "vias institute": {
+    "aliases": [
+      "vias institute",
+      "vias",
+      "vias institute"
+    ],
+    "patterns": [
+      "viasinstitute"
+    ]
+  },
   "vivaqua": {
     "aliases": [
       "vivaqua"
     ],
     "patterns": [
       "vivaqua"
+    ]
+  },
+  "votre paiement visa bit ovh": {
+    "aliases": [
+      "votre paiement visa debit ovh sa",
+      "votre paiement visa debit ovh",
+      "votre",
+      "votre paiement"
+    ],
+    "patterns": [
+      "votrepaiementvisadebitovhsa"
+    ]
+  },
+  "westland shopping": {
+    "aliases": [
+      "westland shopping",
+      "westland",
+      "westland shopping"
+    ],
+    "patterns": [
+      "westlandshopping"
     ]
   },
   "wibra": {
