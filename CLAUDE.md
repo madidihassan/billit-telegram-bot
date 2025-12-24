@@ -195,6 +195,259 @@ git commit -m "description"
 git push origin main
 ```
 
+---
+
+## 🔄 WORKFLOW MULTI-BOTS (SYSTÈME DE SYNCHRONISATION)
+
+### Vue d'ensemble
+
+Ce projet utilise **Git avec des branches** pour gérer **deux bots Telegram séparés** :
+
+- **tonton202** (branche `main`) - Bot principal pour Hassan
+- **mustfood** (branche `mustfood`) - Bot pour Mustfood
+
+**Le code source est partagé**, mais chaque bot a sa propre configuration (`.env`).
+
+### 🚀 Synchronisation automatique
+
+La commande magique pour synchroniser les deux bots :
+
+```bash
+# OPTION 1: Depuis le répertoire du bot
+cd /home/ubuntu/Billit/tonton202
+sync
+
+# OPTION 2: Depuis n'importe où
+synchronise
+```
+
+#### Ce que fait la commande `sync`
+
+Le script détecte automatiquement votre branche et synchronise vers l'autre bot :
+
+| Vous êtes sur | Il synchronise vers |
+|--------------|-------------------|
+| `main` (Tonton202) | `mustfood` |
+| `mustfood` | `main` (Tonton202) |
+
+**Le workflow automatique (8 étapes)** :
+
+1. ✅ **Vérification** des modifications non commitées
+2. ✅ **Commit** automatique (demande le message si nécessaire)
+3. ✅ **Compilation** du code
+4. ✅ **Push** vers GitHub (branche actuelle)
+5. ✅ **Merge** vers l'autre branche
+6. ✅ **Push** de l'autre branche
+7. ✅ **Déploiement** sur l'instance de développement
+8. ✅ **Redémarrage** du bot cible
+9. ✅ **Retour** à votre branche de travail
+
+### 📋 Exemple d'utilisation
+
+#### Scénario 1 : Travailler sur Tonton202 → partager vers Mustfood
+
+```bash
+# 1. Faire vos modifications
+cd /home/ubuntu/Billit/tonton202
+vim src/telegram-bot.ts
+
+# 2. Tester localement
+npm run build && npm run start:bot
+
+# 3. Synchroniser vers Mustfood
+sync
+
+# ✨ C'est tout ! Tout est fait automatiquement
+```
+
+#### Scénario 2 : Travailler sur Mustfood → partager vers Tonton202
+
+```bash
+# 1. Basculer vers mustfood
+git checkout mustfood
+
+# 2. Faire vos modifications
+vim src/config.ts
+
+# 3. Tester
+npm run build && npm run start:bot
+
+# 4. Synchroniser vers Tonton202
+sync
+
+# Terminé !
+```
+
+### 📁 Structure des répertoires
+
+```
+/home/ubuntu/Billit/
+├── tonton202/          # Espace de travail principal (main)
+│   ├── src/            # Code source
+│   ├── .env            # Config Tonton202
+│   ├── sync.sh         # Script de synchronisation
+│   ├── deploy-all.sh   # Déploiement global
+│   └── WORKFLOW.md     # Documentation détaillée
+│
+└── mustfood/           # Instance Mustfood (mustfood)
+    ├── src/            # Code source synchronisé
+    └── .env            # Config Mustfood (différente)
+
+/home/ubuntu/tonton.app/apps/production/
+├── tonton202/          # Production Tonton202
+└── mustfood/           # Production Mustfood
+```
+
+### 🔧 Scripts disponibles
+
+| Script | Description |
+|--------|-------------|
+| `sync` ou `synchronise` | **Synchronisation automatique complète** entre les deux bots |
+| `./deploy-all.sh` | Déploie sur dev + production de la branche actuelle |
+| `./deploy-to-mustfood.sh` | Copie uniquement vers mustfood dev |
+| `./start-bot-wrapper.sh` | Démarre le bot avec auto-redémarrage |
+
+### 💡 Bonnes pratiques
+
+1. **Toujours tester avant de sync**
+   ```bash
+   npm run build && npm run start:bot
+   sync  # Seulement après avoir testé
+   ```
+
+2. **Messages de commit clairs**
+   ```bash
+   git commit -m "feat: add invoice search by date"
+   ```
+
+3. **Travailler sur une seule branche à la fois**
+   - Préférez travailler sur `main` pour le développement principal
+   - Utilisez `git checkout mustfood` uniquement pour les modifications spécifiques à Mustfood
+
+4. **Vérifier les branches**
+   ```bash
+   git branch          # Voir la branche actuelle
+   git status          # Voir l'état
+   ```
+
+### 🎯 Commandes Git essentielles
+
+```bash
+# Voir la branche actuelle
+git branch
+
+# Changer de branche
+git checkout main      # ou mustfood
+
+# Créer une nouvelle branche
+git checkout -b nouvelle-fonctionnalite
+
+# Voir les modifications
+git status
+git diff
+
+# Commiter
+git add .
+git commit -m "message"
+
+# Pousser
+git push origin main
+git push origin mustfood
+
+# Merger manuellement (si sync ne fonctionne pas)
+git checkout mustfood
+git merge main
+```
+
+### 📖 Documentation détaillée
+
+- **`WORKFLOW.md`** - Guide complet du workflow multi-bots
+- **`SYNC_GUIDE.md`** - Guide d'utilisation de la commande `sync`
+- **`CLAUDE.md`** - Ce fichier (documentation générale)
+
+### 🚨 Dépannage
+
+**Conflits Git lors du merge** :
+```bash
+# Résoudre les conflits manuellement
+vim src/fichier_conflit.ts
+
+# Marquer comme résolu
+git add src/fichier_conflit.ts
+git commit -m "chore: resolve merge conflicts"
+```
+
+**Le bot ne redémarre pas après sync** :
+```bash
+# Vérifier s'il y a déjà une instance
+ps aux | grep "dist/index-bot"
+
+# Tuer l'ancienne instance
+pkill -f "npm run start:bot"
+
+# Redémarrer manuellement
+cd /home/ubuntu/Billit/mustfood
+./start-bot-wrapper.sh &
+```
+
+**.env manquant sur mustfood** :
+```bash
+# Copier le template
+cp /home/ubuntu/Billit/tonton202/.env.example /home/ubuntu/Billit/mustfood/.env
+
+# Éditer avec les valeurs Mustfood
+vim /home/ubuntu/Billit/mustfood/.env
+```
+
+### ⚡ Raccourcis
+
+```bash
+# Voir l'historique des commits
+git log --oneline --graph --all
+
+# Annuler des modifications locales
+git restore fichier.ts
+
+# Voir les fichiers modifiés
+git status --short
+
+# Annuler le dernier commit (garder les modifications)
+git reset --soft HEAD~1
+
+# Revenir au commit précédent (annuler les modifications)
+git reset --hard HEAD~1
+```
+
+### 📊 Résumé du workflow
+
+```
+┌─────────────────────────────────────────┐
+│  1. Travailler sur main (tonton202)     │
+│     vim src/fichier.ts                  │
+└─────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│  2. Tester localement                   │
+│     npm run build && npm start          │
+└─────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│  3. Synchroniser avec Mustfood          │
+│     sync                                │
+└─────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│  ✅ Tout est fait automatiquement :     │
+│     - Commit → Push → Merge             │
+│     - Déploiement → Redémarrage         │
+└─────────────────────────────────────────┘
+```
+
+---
+
 ## Fichiers à ne JAMAIS commit
 
 - `.env` (contient des secrets)
@@ -291,9 +544,11 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 3. **Tester avec tous les utilisateurs** après modifications multi-user
 4. **Sauvegarder sur GitHub** après chaque correction importante
 5. **Vérifier les logs** en cas de comportement inattendu
+6. **Utiliser `sync`** pour synchroniser les modifications entre Tonton202 et Mustfood
 
 ---
 
 **Dernière mise à jour**: 24 décembre 2025
-**Version du bot**: 2.5 avec IA autonome
+**Version du bot**: 2.5 avec IA autonome + Système multi-bots
 **Statut**: Production ✅
+**Nouveau**: Synchronisation automatique avec commande `sync` 🔄
