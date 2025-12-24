@@ -95,6 +95,16 @@
       "clavie"
     ]
   },
+  "cliente 45": {
+    "aliases": [
+      "cliente 45",
+      "cliente",
+      "cliente 45"
+    ],
+    "patterns": [
+      "cliente45"
+    ]
+  },
   "cocacola": {
     "aliases": [
       "coca-cola",

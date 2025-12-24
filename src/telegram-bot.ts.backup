@@ -17,7 +17,6 @@ export class TelegramBotInteractive {
   private bot: TelegramBot;
   private commandHandler: CommandHandler;
   private chatId: string;
-  private currentChatId: string | number; // Chat ID de l'utilisateur actuel
   private waitingForInput: string | null = null; // Pour mémoriser l'état de la conversation
   private lastInvoiceNumber: string | null = null; // Mémoriser la dernière facture consultée
   private voiceService: VoiceService;
@@ -39,7 +38,6 @@ export class TelegramBotInteractive {
     });
     this.commandHandler = commandHandler;
     this.chatId = config.telegram.chatId;
-    this.currentChatId = this.chatId; // Par défaut, utilise le chatId du propriétaire
     this.voiceService = new VoiceService();
     this.intentService = new IntentService();
     this.aiConversationService = new AIConversationService(commandHandler);
@@ -101,11 +99,6 @@ export class TelegramBotInteractive {
         return;
       }
 
-      // Mettre à jour le Chat ID actuel pour les réponses
-      if (msg) {
-        this.currentChatId = msg.chat.id;
-      }
-
       // Répondre au callback pour enlever l'animation de chargement
       try {
         await this.bot.answerCallbackQuery(callbackQuery.id);
@@ -162,9 +155,6 @@ export class TelegramBotInteractive {
         return;
       }
 
-      // Mettre à jour le Chat ID actuel pour les réponses
-      this.currentChatId = msg.chat.id;
-
       if (!match) return;
 
       const command = match[1];
@@ -204,9 +194,6 @@ export class TelegramBotInteractive {
         logUnauthorizedAccess(msg.chat.id, msg.from?.username);
         return;
       }
-
-      // Mettre à jour le Chat ID actuel pour les réponses
-      this.currentChatId = msg.chat.id;
 
       // Gérer les messages vocaux
       if (msg.voice) {
@@ -342,9 +329,9 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
     };
 
     console.log('🎹 Envoi du menu avec', keyboard.inline_keyboard.length, 'rangées de boutons');
-
+    
     try {
-      const result = await this.bot.sendMessage(this.currentChatId, text, {
+      const result = await this.bot.sendMessage(this.chatId, text, {
         parse_mode: 'HTML',
         reply_markup: keyboard
       });
@@ -379,7 +366,7 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
    */
   async sendMessageWithButtons(text: string): Promise<void> {
     try {
-      await this.bot.sendMessage(this.currentChatId, text, {
+      await this.bot.sendMessage(this.chatId, text, {
         parse_mode: 'HTML',
         disable_web_page_preview: true,
         reply_markup: this.getNavigationKeyboard()
@@ -395,7 +382,7 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
    */
   async sendMessage(text: string): Promise<void> {
     try {
-      await this.bot.sendMessage(this.currentChatId, text, {
+      await this.bot.sendMessage(this.chatId, text, {
         parse_mode: 'HTML',
         disable_web_page_preview: true,
       });
@@ -512,14 +499,14 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
   private async processVoiceCommand(text: string): Promise<void> {
     try {
       // Utiliser l'AGENT IA AUTONOME pour traiter la demande vocale
-      const processingMsg = await this.bot.sendMessage(this.currentChatId, '🤖 Analyse en cours...');
+      const processingMsg = await this.bot.sendMessage(this.chatId, '🤖 Analyse en cours...');
 
       // Traiter avec l'agent IA autonome (function calling)
-      const response = await this.aiAgentService.processQuestion(text, String(this.currentChatId));
+      const response = await this.aiAgentService.processQuestion(text, this.chatId);
 
       // Supprimer le message de traitement
       try {
-        await this.bot.deleteMessage(this.currentChatId, processingMsg.message_id);
+        await this.bot.deleteMessage(this.chatId, processingMsg.message_id);
       } catch (e) {
         // Ignorer si le message ne peut pas être supprimé
       }
@@ -576,14 +563,14 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
   private async handleAIQuestion(question: string): Promise<void> {
     try {
       // Envoyer un message de traitement
-      const processingMsg = await this.bot.sendMessage(this.currentChatId, '🤖 Analyse en cours...');
+      const processingMsg = await this.bot.sendMessage(this.chatId, '🤖 Analyse en cours...');
 
       // Traiter la question avec l'AGENT IA autonome
-      const response = await this.aiAgentService.processQuestion(question, String(this.currentChatId));
+      const response = await this.aiAgentService.processQuestion(question, this.chatId);
 
       // Supprimer le message de traitement
       try {
-        await this.bot.deleteMessage(this.currentChatId, processingMsg.message_id);
+        await this.bot.deleteMessage(this.chatId, processingMsg.message_id);
       } catch (e) {
         // Ignorer si le message ne peut pas être supprimé
       }
