@@ -39,6 +39,7 @@ Commandes disponibles:
 - unpaid: Liste des factures impayées (NON payées)
 - paid: Liste des factures payées
 - overdue: Factures en retard
+- markpaid [numéro]: Marquer une facture comme payée (utilisez le numéro de facture)
 - stats: Statistiques factures du mois
 - lastinvoice [fournisseur]: Dernière facture d'un fournisseur
 - search [terme]: Rechercher des factures
@@ -75,6 +76,20 @@ Exemples FACTURES:
 - "Non payées" → {"command": "unpaid", "args": [], "confidence": 0.90}
 - "Pas payées" → {"command": "unpaid", "args": [], "confidence": 0.90}
 - "À payer" → {"command": "unpaid", "args": [], "confidence": 0.90}
+- "La facture de bilite a été payée" → {"command": "markpaid", "args": ["BILLIT"], "confidence": 0.95}
+- "Facture bilite payée" → {"command": "markpaid", "args": ["BILLIT"], "confidence": 0.90}
+- "Marque coca-cola comme payé" → {"command": "markpaid", "args": ["Coca-Cola"], "confidence": 0.95}
+- "J'ai payé foster" → {"command": "markpaid", "args": ["Foster"], "confidence": 0.90}
+- "Coca payé" → {"command": "markpaid", "args": ["Coca-Cola"], "confidence": 0.85}
+- "Foster est payé" → {"command": "markpaid", "args": ["Foster"], "confidence": 0.90}
+- "La facture bilite est payée" → {"command": "markpaid", "args": ["BILLIT"], "confidence": 0.95}
+- "Je confirme que la facture bilite est payée" → {"command": "markpaid", "args": ["BILLIT"], "confidence": 0.95}
+- "Marque la facture 9901329189 comme payée" → {"command": "markpaid", "args": ["9901329189"], "confidence": 0.95}
+- "Marquer comme payée 9901329189" → {"command": "markpaid", "args": ["9901329189"], "confidence": 0.95}
+- "Facture 9901329189 payée" → {"command": "markpaid", "args": ["9901329189"], "confidence": 0.90}
+- "C'est payé 9901329189" → {"command": "markpaid", "args": ["9901329189"], "confidence": 0.85}
+- "Valider le paiement de la facture 9901329189" → {"command": "markpaid", "args": ["9901329189"], "confidence": 0.95}
+- "J'ai payé la facture 9901329189" → {"command": "markpaid", "args": ["9901329189"], "confidence": 0.90}
 - "Factures payées" → {"command": "paid", "args": [], "confidence": 0.95}
 - "Facture payée" → {"command": "paid", "args": [], "confidence": 0.95}
 - "Payé" → {"command": "paid", "args": [], "confidence": 0.85}

@@ -430,4 +430,130 @@ export class BillitClient {
       return null;
     }
   }
+
+  /**
+   * Marque une facture comme payée
+   * @param invoiceId ID de la facture à marquer comme payée
+   * @returns true si succès, false sinon
+   */
+  async markInvoiceAsPaid(invoiceId: string): Promise<boolean> {
+    try {
+      console.log(`💰 Marquage de la facture ${invoiceId} comme payée...`);
+
+      // Selon la doc Billit API : PATCH avec Paid et PaidDate
+      // NE PAS modifier OrderStatus (champ read-only)
+      const patchData = {
+        Paid: true,
+        PaidDate: new Date().toISOString(),
+      };
+
+      const response = await this.axiosInstance.patch(
+        `/v1/orders/${invoiceId}`,
+        patchData
+      );
+
+      console.log(`✅ Facture ${invoiceId} marquée comme payée`);
+      return true;
+    } catch (error: any) {
+      console.error('❌ Erreur lors du marquage de la facture comme payée:');
+
+      if (error.response) {
+        console.error(`   Status: ${error.response.status}`);
+        console.error(`   Message: ${JSON.stringify(error.response.data, null, 2)}`);
+      } else if (error.request) {
+        console.error('   Pas de réponse du serveur');
+      } else {
+        console.error(`   ${error.message}`);
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Marque une facture comme payée par numéro de facture
+   * @param invoiceNumber Numéro de facture
+   * @returns true si succès, false sinon
+   */
+  async markInvoiceAsPaidByNumber(invoiceNumber: string): Promise<boolean> {
+    try {
+      // D'abord chercher la facture par numéro
+      const invoice = await this.findInvoiceByNumber(invoiceNumber);
+
+      if (!invoice) {
+        throw new Error(`Facture "${invoiceNumber}" non trouvée`);
+      }
+
+      console.log(`📋 Facture trouvée: ${invoice.id} - ${invoice.supplier_name}`);
+
+      // Marquer comme payée avec l'ID
+      return await this.markInvoiceAsPaid(invoice.id);
+    } catch (error: any) {
+      console.error(`❌ Erreur lors du marquage de la facture "${invoiceNumber}":`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Marque la facture impayée d'un fournisseur comme payée (intelligent)
+   * Cherche automatiquement la facture impayée du fournisseur et la marque comme payée
+   * @param supplierName Nom du fournisseur
+   * @returns Détails de la facture marquée comme payée
+   */
+  async markSupplierInvoiceAsPaid(supplierName: string): Promise<{
+    success: boolean;
+    invoice?: {
+      id: string;
+      number: string;
+      supplier: string;
+      amount: number;
+      currency: string;
+    };
+    message: string;
+  }> {
+    try {
+      console.log(`🔍 Recherche de facture impayée pour "${supplierName}"...`);
+
+      // Chercher les factures impayées de ce fournisseur
+      const unpaidInvoices = await this.getUnpaidInvoices();
+      const supplierInvoices = unpaidInvoices.filter(inv =>
+        matchesSupplier(inv.supplier_name, supplierName)
+      );
+
+      if (supplierInvoices.length === 0) {
+        return {
+          success: false,
+          message: `Aucune facture impayée trouvée pour "${supplierName}"`,
+        };
+      }
+
+      // S'il y a plusieurs factures, prendre la plus récente
+      const invoice = supplierInvoices.sort((a, b) =>
+        new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime()
+      )[0];
+
+      console.log(`📋 Facture trouvée: ${invoice.invoice_number} - ${invoice.supplier_name} (${invoice.total_amount} ${invoice.currency})`);
+
+      // Marquer comme payée
+      await this.markInvoiceAsPaid(invoice.id);
+
+      return {
+        success: true,
+        invoice: {
+          id: invoice.id,
+          number: invoice.invoice_number,
+          supplier: invoice.supplier_name,
+          amount: invoice.total_amount,
+          currency: invoice.currency,
+        },
+        message: `Facture ${invoice.invoice_number} de ${invoice.supplier_name} (${invoice.total_amount} ${invoice.currency}) marquée comme payée`,
+      };
+    } catch (error: any) {
+      console.error(`❌ Erreur lors du marquage de la facture de "${supplierName}":`, error.message);
+      return {
+        success: false,
+        message: `Erreur: ${error.message}`,
+      };
+    }
+  }
 }

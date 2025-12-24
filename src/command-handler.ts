@@ -123,6 +123,10 @@ export class CommandHandler {
       case 'listusers':
         return this.handleListUsers();
 
+      case 'markpaid':
+      case 'payinvoice':
+        return this.handleMarkPaid(args);
+
       default:
         return `❌ Commande inconnue: /${command}\n\nTapez /help pour voir les commandes disponibles.`;
     }
@@ -139,6 +143,7 @@ export class CommandHandler {
 /unpaid - Factures impayées
 /paid - Factures payées
 /overdue - Factures en retard
+/markpaid [numéro] - Marquer une facture comme payée
 /list_suppliers - Liste de tous les fournisseurs
 /list_employees - Liste de tous les employés
 /lastinvoice [fournisseur] - Dernière facture
@@ -176,6 +181,7 @@ export class CommandHandler {
 <code>/unpaid</code> ou 🎤 "Factures impayées"
 <code>/list_suppliers</code> ou 🎤 "Liste des fournisseurs"
 <code>/recettes_mois</code> ou 🎤 "Recettes de ce mois"
+<code>/markpaid 9901329189</code> pour marquer une facture comme payée
 <code>/addsupplier pluxee "Pluxee Belgium" pluxi pluxee</code>
 <code>/transactions_fournisseur Foster</code>
 <code>/transactions_periode 2025-01-01 2025-12-01</code>
@@ -1461,6 +1467,7 @@ Utilisation: <code>/deletesupplier [clé]</code>
       { name: 'Factures impayées', description: 'Obtenir les factures impayées' },
       { name: 'Factures payées', description: 'Obtenir les factures payées récentes' },
       { name: 'Factures en retard', description: 'Obtenir les factures en retard' },
+      { name: 'Marquer facture payée', description: 'Marquer une facture comme payée' },
       { name: 'Statistiques factures', description: 'Statistiques des factures du mois' },
       { name: 'Balance du mois', description: 'Solde bancaire du mois en cours' },
       { name: 'Recettes du mois', description: 'Total des recettes/rentrées du mois' },
@@ -1495,6 +1502,25 @@ Utilisation: <code>/deletesupplier [clé]</code>
     message += 'Exemple: "Quelles sont les factures impayées ?", "Montre-moi les paiements à Coca-Cola", etc.';
 
     return message;
+  }
+
+  /**
+   * Marque une facture comme payée
+   */
+  private async handleMarkPaid(args: string[]): Promise<string> {
+    if (args.length === 0) {
+      return '❌ Veuillez spécifier un numéro de facture.\n\nExemple: <code>/markpaid 9901329189</code>\n\nVous pouvez aussi utiliser le numéro partiel de la facture.';
+    }
+
+    const invoiceNumber = args[0];
+
+    try {
+      await this.billitClient.markInvoiceAsPaidByNumber(invoiceNumber);
+      return `✅ Facture **${invoiceNumber}** marquée comme payée avec succès !`;
+    } catch (error: any) {
+      console.error('Erreur handleMarkPaid:', error);
+      return `❌ Erreur lors du marquage de la facture: ${error.message}`;
+    }
   }
 
   /**

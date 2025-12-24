@@ -88,6 +88,23 @@ export class AIAgentServiceV2 {
       {
         type: 'function',
         function: {
+          name: 'mark_invoice_as_paid',
+          description: 'Marquer une facture comme payée. Utilisez le numéro de facture exact.',
+          parameters: {
+            type: 'object',
+            properties: {
+              invoice_number: {
+                type: 'string',
+                description: 'Numéro de facture exact (ex: 463799, 9901329189)',
+              },
+            },
+            required: ['invoice_number'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'get_invoice_stats',
           description: 'Obtenir les statistiques des factures du mois',
           parameters: { type: 'object', properties: {}, required: [] },
@@ -500,6 +517,58 @@ export class AIAgentServiceV2 {
               ),
             })),
           };
+          break;
+        }
+
+        case 'mark_invoice_as_paid': {
+          const invoiceNumber = args.invoice_number as string;
+
+          // D'abord trouver la facture
+          const invoice = await this.billitClient.findInvoiceByNumber(invoiceNumber);
+          if (!invoice) {
+            result = {
+              success: false,
+              invoice_number: invoiceNumber,
+              message: `Facture ${invoiceNumber} non trouvée`,
+              verified_status: 'not_found',
+            };
+            break;
+          }
+
+          // Marquer comme payée
+          await this.billitClient.markInvoiceAsPaidByNumber(invoiceNumber);
+
+          // 🔍 VÉRIFICATION OBLIGATOIRE : Récupérer les détails réels depuis Billit
+          const updatedDetails = await this.billitClient.getInvoiceDetails(invoice.id);
+
+          // Vérifier le statut RÉEL dans Billit
+          const isReallyPaid = updatedDetails.Paid === true;
+          const statusIsPaid = updatedDetails.OrderStatus === 'Paid';
+
+          if (isReallyPaid && statusIsPaid) {
+            result = {
+              success: true,
+              verified: true,
+              invoice_number: invoiceNumber,
+              supplier: updatedDetails.CounterParty?.DisplayName || invoice.supplier_name,
+              amount: updatedDetails.TotalIncl || invoice.total_amount,
+              currency: updatedDetails.Currency || invoice.currency,
+              paid_date: updatedDetails.PaidDate,
+              message: `✅ Facture ${invoiceNumber} MARQUÉE COMME PAYÉE (vérifié dans Billit)`,
+              verified_status: 'paid',
+            };
+          } else {
+            // L'API n'a pas marché - dire la vérité !
+            result = {
+              success: false,
+              verified: true,
+              invoice_number: invoiceNumber,
+              supplier: updatedDetails.CounterParty?.DisplayName || invoice.supplier_name,
+              message: `⚠️ Tentative de marquage effectuée mais la facture est encore : ${updatedDetails.OrderStatus} (Paid: ${updatedDetails.Paid})`,
+              verified_status: updatedDetails.OrderStatus,
+              actual_paid: updatedDetails.Paid,
+            };
+          }
           break;
         }
 
