@@ -224,6 +224,17 @@
       "electrabel"
     ]
   },
+  "eps monizze": {
+    "aliases": [
+      "eps monizze sa",
+      "eps monizze",
+      "eps",
+      "eps monizze"
+    ],
+    "patterns": [
+      "epsmonizzesa"
+    ]
+  },
   "escompany": {
     "aliases": [
       "escompany",
@@ -231,6 +242,16 @@
     ],
     "patterns": [
       "escompany"
+    ]
+  },
+  "flitsmeister parkeren": {
+    "aliases": [
+      "flitsmeister parkeren",
+      "flitsmeister",
+      "flitsmeister parkeren"
+    ],
+    "patterns": [
+      "flitsmeisterparkeren"
     ]
   },
   "fondssocialhoreca": {
@@ -264,6 +285,27 @@
       "hfood"
     ]
   },
+  "hubert": {
+    "aliases": [
+      "hubert",
+      "hubert depot",
+      "hubert dépôt"
+    ],
+    "patterns": [
+      "hubert"
+    ]
+  },
+  "it copy services": {
+    "aliases": [
+      "it copy services srl",
+      "it copy services",
+      "it",
+      "it copy"
+    ],
+    "patterns": [
+      "itcopyservicessrl"
+    ]
+  },
   "jamhounmokhlis": {
     "aliases": [
       "jamhounmokhlis",
@@ -280,6 +322,17 @@
     ],
     "patterns": [
       "kalidechami"
+    ]
+  },
+  "kbc bank": {
+    "aliases": [
+      "kbc bank nv",
+      "kbc bank",
+      "kbc",
+      "kbc bank"
+    ],
+    "patterns": [
+      "kbcbanknv"
     ]
   },
   "kharbouche": {
@@ -327,6 +380,16 @@
       "lugnos"
     ]
   },
+  "lukoil belgium": {
+    "aliases": [
+      "lukoil belgium n v",
+      "lukoil",
+      "lukoil belgium"
+    ],
+    "patterns": [
+      "lukoilbelgiumnv"
+    ]
+  },
   "madidihassan": {
     "aliases": [
       "madidi hassan",
@@ -345,6 +408,16 @@
       "madidijawad"
     ]
   },
+  "madidisoufiane": {
+    "aliases": [
+      "soufiane madidi",
+      "madidi soufiane"
+    ],
+    "patterns": [
+      "madidisoufiane",
+      "soufianemadidi"
+    ]
+  },
   "mahjoub": {
     "aliases": [
       "mahjoub mohamed-reda",
@@ -353,6 +426,14 @@
     ],
     "patterns": [
       "mahjoub"
+    ]
+  },
+  "mediwet": {
+    "aliases": [
+      "mediwet"
+    ],
+    "patterns": [
+      "mediwet"
     ]
   },
   "mrabet": {
@@ -402,6 +483,18 @@
       "persoproject"
     ]
   },
+  "pluxee": {
+    "aliases": [
+      "pluxee belgium",
+      "pluxi",
+      "pluxee"
+    ],
+    "patterns": [
+      "pluxeebelgium",
+      "pluxee",
+      "pluxi"
+    ]
+  },
   "qibouz": {
     "aliases": [
       "qibouz malak",
@@ -437,6 +530,17 @@
       "satti"
     ]
   },
+  "shell": {
+    "aliases": [
+      "belgian shell",
+      "shell sa",
+      "shell"
+    ],
+    "patterns": [
+      "belgianshell",
+      "shell"
+    ]
+  },
   "sligro": {
     "aliases": [
       "sligro",
@@ -465,6 +569,18 @@
       "taglina"
     ]
   },
+  "takeaway": {
+    "aliases": [
+      "takeaway.com",
+      "takeaway",
+      "takeawaycom",
+      "tekawe"
+    ],
+    "patterns": [
+      "takeaway",
+      "takeawaycom"
+    ]
+  },
   "teamprecompteprof": {
     "aliases": [
       "teamprecompteprof",
@@ -472,6 +588,14 @@
     ],
     "patterns": [
       "teamprecompteprof"
+    ]
+  },
+  "test": {
+    "aliases": [
+      "test"
+    ],
+    "patterns": [
+      "test"
     ]
   },
   "tontonchami": {
@@ -500,6 +624,18 @@
     ],
     "patterns": [
       "tva"
+    ]
+  },
+  "uber": {
+    "aliases": [
+      "uber eats",
+      "ubereats",
+      "uber"
+    ],
+    "patterns": [
+      "ubereats",
+      "custodianuber",
+      "uberpayments"
     ]
   },
   "vivaqua": {

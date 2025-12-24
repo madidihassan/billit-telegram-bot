@@ -137,6 +137,9 @@ class BillitNotifierWithBot {
     this.intervalId = setInterval(async () => {
       await this.checkForNewInvoices();
     }, config.checkInterval);
+
+    // Démarrer le nouveau service de monitoring des factures
+    await this.telegramBot.startMonitoring();
   }
 
   /**

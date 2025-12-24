@@ -1,6 +1,9 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from './config';
 import { matchesSupplier } from './supplier-aliases';
+import { normalizeSearchTerm } from './utils/string-utils';
+import { BillitFinancialTransaction, BillitTransactionsResponse } from './types/billit-api';
+import { SupplierLearningService } from './supplier-learning-service';
 
 export interface BankTransaction {
   id: string;
@@ -27,12 +30,14 @@ interface TransactionCache {
   transactions: BankTransaction[];
   timestamp: number;
   periodKey: string;
+  expiryMs?: number; // Durée d'expiration personnalisée
 }
 
 export class BankClient {
   private axiosInstance: AxiosInstance;
   private cache: Map<string, TransactionCache> = new Map();
   private cacheExpiryMs = 5 * 60 * 1000; // Cache de 5 minutes
+  private learningService: SupplierLearningService;
 
   constructor() {
     this.axiosInstance = axios.create({
@@ -47,20 +52,25 @@ export class BankClient {
     if (config.billit.partyId) {
       this.axiosInstance.defaults.headers.common['partyID'] = config.billit.partyId;
     }
+
+    // Initialiser le service d'apprentissage
+    this.learningService = new SupplierLearningService();
   }
 
   /**
-   * Récupère toutes les transactions bancaires avec pagination automatique et cache
+   * Récupère toutes les transactions bancaires avec pagination automatique et cache intelligent
    */
   async getAllTransactions(limit?: number, startDate?: Date, endDate?: Date): Promise<BankTransaction[]> {
     try {
       // Vérifier le cache si des dates sont fournies
-      if (startDate && endDate) {
-        const cacheKey = this.getCacheKey(startDate, endDate);
+      // IMPORTANT: Ne pas utiliser le cache pour les périodes spécifiques pour éviter les données obsolètes
+      const useShortCache = startDate && endDate; // Période spécifique = cache court
+      if (!useShortCache) {
+        const cacheKey = 'all_transactions';
         const cached = this.getFromCache(cacheKey);
-        
+
         if (cached) {
-          console.log('✓ Transactions récupérées depuis le cache');
+          console.log('✓ Transactions récupérées depuis le cache (global)');
           return cached;
         }
       }
@@ -83,10 +93,9 @@ export class BankClient {
       // Si une période spécifique est demandée, utiliser la pagination pour contourner la limite de 120
       if (startDate && endDate) {
         transactions = await this.getAllTransactionsWithPagination(filter, limit);
-        
-        // Sauvegarder dans le cache
-        const cacheKey = this.getCacheKey(startDate, endDate);
-        this.saveToCache(cacheKey, transactions);
+
+        // NE PAS mettre en cache les périodes spécifiques pour éviter les données obsolètes
+        // Les transactions peuvent être ajoutées à tout moment
       } else {
         // Sinon, requête simple (comportement par défaut)
         const params: any = {
@@ -97,13 +106,21 @@ export class BankClient {
           params.$filter = filter;
         }
 
-        const response = await this.axiosInstance.get<any>('/v1/financialTransactions', {
+        const response = await this.axiosInstance.get<BillitTransactionsResponse>('/v1/financialTransactions', {
           params,
         });
 
         const items = response.data.Items || response.data.items || response.data || [];
         console.log(`✓ ${Array.isArray(items) ? items.length : 0} transaction(s) récupérée(s)`);
         transactions = Array.isArray(items) ? this.convertTransactions(items) : [];
+
+        // Sauvegarder dans le cache uniquement pour les requêtes globales (pas de dates spécifiques)
+        // et uniquement s'il y a des résultats (JAMAIS mettre en cache un résultat vide)
+        if (transactions.length > 0) {
+          const cacheKey = 'all_transactions';
+          this.saveToCache(cacheKey, transactions, 5 * 60 * 1000); // 5 minutes pour le cache global
+          console.log('💾 Résultats mis en cache (5 minutes)');
+        }
       }
 
       return transactions;
@@ -137,7 +154,7 @@ export class BankClient {
           params.$filter = filter;
         }
 
-        const response = await this.axiosInstance.get<any>('/v1/financialTransactions', {
+        const response = await this.axiosInstance.get<BillitTransactionsResponse>('/v1/financialTransactions', {
           params,
         });
 
@@ -294,29 +311,47 @@ export class BankClient {
 
   /**
    * Convertit les transactions Billit vers notre format
+   * Et apprend automatiquement les nouveaux fournisseurs
    */
-  private convertTransactions(transactions: any[]): BankTransaction[] {
-    return transactions.map(tx => ({
-      id: String(tx.BankAccountTransactionID || tx.ID || ''),
-      iban: tx.IBAN || '',
-      amount: parseFloat(tx.TotalAmount || 0),
-      type: tx.TransactionType === 'Credit' ? 'Credit' : 'Debit',
-      date: tx.ValueDate || tx.Date || new Date().toISOString(),
-      description: tx.Note || tx.Description || tx.Communication || '',
-      currency: tx.Currency || 'EUR',
-      bankAccountId: tx.BankAccountID || 0,
-    }));
+  private convertTransactions(transactions: BillitFinancialTransaction[]): BankTransaction[] {
+    return transactions.map(tx => {
+      // Construire une description complète incluant le nom de la contrepartie
+      let description = '';
+
+      // Priorité 1: Nom de la contrepartie (ex: "N.V. Pluxee Belgium S.A.")
+      if (tx.NameCounterParty) {
+        description = tx.NameCounterParty;
+
+        // 🧑‍🎓 AUTO-APPRENTISSAGE: Essayer d'apprendre ce fournisseur
+        this.learningService.learnFromDescription(description);
+      }
+
+      // Ajouter la note/communication si présente
+      const additionalInfo = tx.Note || tx.Description || tx.Communication || '';
+      if (additionalInfo) {
+        description = description
+          ? `${description} - ${additionalInfo}`
+          : additionalInfo;
+
+        // Essayer aussi d'apprendre depuis la description complète
+        this.learningService.learnFromDescription(description);
+      }
+
+      return {
+        id: String(tx.BankAccountTransactionID || tx.ID || ''),
+        iban: tx.IBAN || '',
+        amount: parseFloat(String(tx.TotalAmount || 0)),
+        type: tx.TransactionType === 'Credit' ? 'Credit' : 'Debit',
+        date: tx.ValueDate || tx.Date || new Date().toISOString(),
+        description: description,
+        currency: tx.Currency || 'EUR',
+        bankAccountId: tx.BankAccountID || 0,
+      };
+    });
   }
 
-  /**
-   * Normalise un texte pour la recherche
-   */
-  private normalizeSearchTerm(text: string): string {
-    return text
-      .toLowerCase()
-      .replace(/[\s\-_\.\/\\]/g, '')
-      .trim();
-  }
+  // Note: normalizeSearchTerm est maintenant importé depuis utils/string-utils
+  // pour éviter la duplication de code
 
   /**
    * Génère une clé de cache unique pour une période
@@ -332,14 +367,15 @@ export class BankClient {
    */
   private getFromCache(cacheKey: string): BankTransaction[] | null {
     const cached = this.cache.get(cacheKey);
-    
+
     if (!cached) {
       return null;
     }
 
-    // Vérifier si le cache a expiré
+    // Vérifier si le cache a expiré (utilise l'expiration personnalisée ou celle par défaut)
     const now = Date.now();
-    if (now - cached.timestamp > this.cacheExpiryMs) {
+    const expiryMs = cached.expiryMs || this.cacheExpiryMs;
+    if (now - cached.timestamp > expiryMs) {
       this.cache.delete(cacheKey);
       return null;
     }
@@ -348,13 +384,21 @@ export class BankClient {
   }
 
   /**
-   * Sauvegarde des transactions dans le cache
+   * Sauvegarde des transactions dans le cache avec durée personnalisable
+   * IMPORTANT: Ne jamais mettre en cache un résultat vide
    */
-  private saveToCache(cacheKey: string, transactions: BankTransaction[]): void {
+  private saveToCache(cacheKey: string, transactions: BankTransaction[], customExpiryMs?: number): void {
+    // NE JAMAIS mettre en cache un résultat vide
+    if (!transactions || transactions.length === 0) {
+      console.log('⚠️  Résultat vide - PAS de mise en cache');
+      return;
+    }
+
     this.cache.set(cacheKey, {
       transactions,
       timestamp: Date.now(),
       periodKey: cacheKey,
+      expiryMs: customExpiryMs, // Stocker la durée d'expiration personnalisée
     });
   }
 

@@ -115,6 +115,11 @@ Exemples TRANSACTIONS BANCAIRES:
 Exemples AVEC DATES/PÉRIODES SPÉCIFIQUES:
 - "Recettes du mois de juillet 2025" → {"command": "transactions_periode", "args": ["2025-07-01", "2025-07-31", "recettes"], "confidence": 0.90}
 - "Recettes de juillet" → {"command": "transactions_periode", "args": ["2025-07-01", "2025-07-31", "recettes"], "confidence": 0.90}
+- "Recettes d'octobre" → {"command": "transactions_periode", "args": ["2025-10-01", "2025-10-31", "recettes"], "confidence": 0.90}
+- "Recettes de novembre" → {"command": "transactions_periode", "args": ["2025-11-01", "2025-11-30", "recettes"], "confidence": 0.90}
+- "Recettes de décembre" → {"command": "transactions_periode", "args": ["2025-12-01", "2025-12-31", "recettes"], "confidence": 0.90}
+- "Combien j'ai gagné en octobre" → {"command": "transactions_periode", "args": ["2025-10-01", "2025-10-31", "recettes"], "confidence": 0.90}
+- "Combien j'ai gagné en novembre" → {"command": "transactions_periode", "args": ["2025-11-01", "2025-11-30", "recettes"], "confidence": 0.90}
 - "Transactions de juillet" → {"command": "transactions_periode", "args": ["2025-07-01", "2025-07-31"], "confidence": 0.85}
 - "Recettes de janvier à mars 2025" → {"command": "transactions_periode", "args": ["2025-01-01", "2025-03-31", "recettes"], "confidence": 0.85}
 - "Dépenses de juillet" → {"command": "transactions_periode", "args": ["2025-07-01", "2025-07-31", "depenses"], "confidence": 0.85}
@@ -126,6 +131,12 @@ Exemples AVEC DATES/PÉRIODES SPÉCIFIQUES:
 - "Combien j'ai payé en salaires en novembre" → {"command": "transactions_periode", "args": ["2025-11-01", "2025-11-30", "salaires"], "confidence": 0.90}
 - "Transactions du 1er janvier au 1er décembre" → {"command": "transactions_periode", "args": ["2025-01-01", "2025-12-01"], "confidence": 0.85}
 - "Transactions entre le 01/01/2025 et le 01/12/2025" → {"command": "transactions_periode", "args": ["2025-01-01", "2025-12-01"], "confidence": 0.85}
+
+Exemples COMPARAISONS DEUX PÉRIODES:
+- "Compare octobre et novembre" → {"command": "unpaid", "args": [], "confidence": 0.50}
+- "Compare les recettes d'octobre et novembre" → {"command": "unpaid", "args": [], "confidence": 0.50}
+- "Combien j'ai gagné en octobre par rapport à novembre" → {"command": "unpaid", "args": [], "confidence": 0.50}
+- ATTENTION: Les comparaisons entre périodes ne sont PAS supportées par le système actuel. Utilisez une commande simple.
 
 Exemples FOURNISSEUR + PÉRIODE SPÉCIFIQUE:
 - "Transactions Foster du mois de novembre" → {"command": "transactions_periode", "args": ["2025-11-01", "2025-11-30", "Foster"], "confidence": 0.90}

@@ -2,6 +2,8 @@ import axios, { AxiosInstance } from 'axios';
 import { config } from './config';
 import { BillitInvoice, BillitInvoicesResponse } from './types';
 import { matchesSupplier, getSupplierPatterns } from './supplier-aliases';
+import { normalizeSearchTerm } from './utils/string-utils';
+import { BillitOrderDetails, BillitOrdersResponse, BillitODataParams } from './types/billit-api';
 
 export class BillitClient {
   private axiosInstance: AxiosInstance;
@@ -42,7 +44,7 @@ export class BillitClient {
         filter += ` and LastModified ge DateTime'${params.from_date}'`;
       }
 
-      const response = await this.axiosInstance.get<any>('/v1/orders', {
+      const response = await this.axiosInstance.get<BillitOrdersResponse>('/v1/orders', {
         params: {
           $filter: filter,
           $top: params?.limit || 100,
@@ -93,7 +95,7 @@ export class BillitClient {
   /**
    * Convertit les orders Billit vers notre format
    */
-  private convertBillitOrders(orders: any[]): BillitInvoice[] {
+  private convertBillitOrders(orders: BillitOrderDetails[]): BillitInvoice[] {
     return orders.map(order => ({
       id: String(order.OrderID || ''),
       invoice_number: order.OrderNumber || '',
@@ -142,6 +144,50 @@ export class BillitClient {
   async getUnpaidInvoices(): Promise<BillitInvoice[]> {
     const invoices = await this.getInvoices({ limit: 100 });
     return invoices.filter(inv => inv.status.toLowerCase() !== 'paid' && inv.status.toLowerCase() !== 'payé');
+  }
+
+  /**
+   * Récupère toutes les factures payées
+   */
+  async getPaidInvoices(): Promise<BillitInvoice[]> {
+    const invoices = await this.getInvoices({ limit: 100 });
+    return invoices.filter(inv => inv.status.toLowerCase() === 'paid' || inv.status.toLowerCase() === 'payé');
+  }
+
+  /**
+   * Récupère tous les documents (factures + brouillons) pour le monitoring
+   * Inclut les documents en cours de saisie (saisi rapide)
+   */
+  async getAllDocuments(params?: {
+    limit?: number;
+    from_date?: string;
+  }): Promise<BillitInvoice[]> {
+    try {
+      console.log('🔍 Récupération de tous les documents (factures + brouillons)...');
+
+      // Construire le filtre OData pour inclure les factures ET les brouillons
+      // OrderType peut être 'Invoice' ou 'Draft' (brouillon/saisi rapide)
+      let filter = "(OrderType eq 'Invoice' or OrderType eq 'Draft') and OrderDirection eq 'Cost'";
+
+      if (params?.from_date) {
+        filter += ` and LastModified ge DateTime'${params.from_date}'`;
+      }
+
+      const response = await this.axiosInstance.get<BillitOrdersResponse>('/v1/orders', {
+        params: {
+          $filter: filter,
+          $top: params?.limit || 100,
+        },
+      });
+
+      const documents = response.data.Items || response.data.items || response.data || [];
+      console.log(`✓ ${Array.isArray(documents) ? documents.length : 0} document(s) récupéré(s)`);
+
+      return Array.isArray(documents) ? this.convertBillitOrders(documents) : [];
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la récupération des documents:');
+      throw error;
+    }
   }
 
   /**
@@ -204,28 +250,21 @@ export class BillitClient {
     };
   }
 
-  /**
-   * Normalise un texte pour la recherche (enlève espaces, tirets, etc.)
-   */
-  private normalizeSearchTerm(text: string): string {
-    return text
-      .toLowerCase()
-      .replace(/[\s\-_\.\/\\]/g, '') // Enlever espaces, tirets, underscores, points, slashes
-      .trim();
-  }
+  // Note: normalizeSearchTerm est maintenant importé depuis utils/string-utils
+  // pour éviter la duplication de code
 
   /**
    * Recherche des factures par terme général (recherche intelligente)
    */
   async searchInvoices(searchTerm: string, limit: number = 10): Promise<BillitInvoice[]> {
     const invoices = await this.getInvoices({ limit: 100 });
-    const normalizedTerm = this.normalizeSearchTerm(searchTerm);
+    const normalizedTerm = normalizeSearchTerm(searchTerm);
 
     // Recherche avec normalisation
     const results = invoices.filter(inv => {
-      const normalizedInvoiceNumber = this.normalizeSearchTerm(inv.invoice_number);
-      const normalizedSupplierName = this.normalizeSearchTerm(inv.supplier_name);
-      const normalizedStatus = this.normalizeSearchTerm(inv.status);
+      const normalizedInvoiceNumber = normalizeSearchTerm(inv.invoice_number);
+      const normalizedSupplierName = normalizeSearchTerm(inv.supplier_name);
+      const normalizedStatus = normalizeSearchTerm(inv.status);
 
       // Recherche exacte normalisée
       if (normalizedInvoiceNumber.includes(normalizedTerm)) return true;
@@ -245,18 +284,65 @@ export class BillitClient {
 
     // Trier par pertinence : correspondance exacte en premier
     results.sort((a, b) => {
-      const aNumber = this.normalizeSearchTerm(a.invoice_number);
-      const bNumber = this.normalizeSearchTerm(b.invoice_number);
-      
+      const aNumber = normalizeSearchTerm(a.invoice_number);
+      const bNumber = normalizeSearchTerm(b.invoice_number);
+
       // Si correspondance exacte, mettre en premier
       if (aNumber === normalizedTerm) return -1;
       if (bNumber === normalizedTerm) return 1;
-      
+
       // Sinon, par date (plus récent en premier)
       return new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime();
     });
 
     return results.slice(0, limit);
+  }
+
+  /**
+   * Recherche une facture par numéro de communication
+   * @param communicationNumber Numéro de communication (partiel ou complet)
+   * @returns Factures correspondantes
+   */
+  async searchByCommunication(communicationNumber: string, limit: number = 10): Promise<BillitInvoice[]> {
+    try {
+      console.log(`🔍 Recherche par communication: ${communicationNumber}`);
+
+      const invoices = await this.getInvoices({ limit: 100 });
+
+      // Normaliser le terme de recherche (enlever espaces, slash, etc.)
+      const normalizedTerm = communicationNumber.replace(/[\s\/\-]/g, '').toLowerCase();
+
+      const results = invoices.filter(inv => {
+        if (!inv.communication) return false;
+
+        // Normaliser la communication de la facture
+        const normalizedCommunication = inv.communication.replace(/[\s\/\-+\+]/g, '').toLowerCase();
+
+        // Recherche exacte
+        if (normalizedCommunication === normalizedTerm) return true;
+
+        // Recherche partielle (si terme >= 4 caractères)
+        if (normalizedTerm.length >= 4) {
+          if (normalizedCommunication.includes(normalizedTerm)) return true;
+        }
+
+        // Recherche par digits seulement (pour les communications structurées)
+        const termDigits = normalizedTerm.replace(/\D/g, '');
+        if (termDigits.length >= 4) {
+          const commDigits = normalizedCommunication.replace(/\D/g, '');
+          if (commDigits.includes(termDigits)) return true;
+        }
+
+        return false;
+      });
+
+      console.log(`✅ ${results.length} facture(s) trouvée(s) pour la communication "${communicationNumber}"`);
+      return results.slice(0, limit);
+
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la recherche par communication:', error.message);
+      return [];
+    }
   }
 
   /**
@@ -270,7 +356,7 @@ export class BillitClient {
   /**
    * Récupère les détails complets d'une facture (avec lignes)
    */
-  async getInvoiceDetails(invoiceId: string): Promise<any> {
+  async getInvoiceDetails(invoiceId: string): Promise<BillitOrderDetails> {
     try {
       console.log(`🔍 Récupération des détails de la facture ${invoiceId}...`);
 
@@ -295,10 +381,52 @@ export class BillitClient {
       // L'API Billit peut avoir un endpoint pour le PDF
       // Format probable: /v1/orders/{id}/pdf ou similaire
       const pdfUrl = `https://my.billit.eu/api/v1/orders/${invoiceId}/pdf`;
-      
+
       return pdfUrl;
     } catch (error: any) {
       console.error('❌ Erreur lors de la récupération du PDF:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Télécharge le PDF d'une facture sous forme de Buffer
+   * @param invoiceId ID de la facture
+   * @returns Buffer du PDF ou null si erreur
+   */
+  async downloadInvoicePdf(invoiceId: string): Promise<Buffer | null> {
+    try {
+      console.log(`📥 Téléchargement du PDF de la facture ${invoiceId}...`);
+
+      // Étape 1: Récupérer les détails de la facture pour obtenir le FileID
+      const orderDetails = await this.getInvoiceDetails(invoiceId);
+
+      if (!orderDetails.OrderPDF || !orderDetails.OrderPDF.FileID) {
+        console.error(`❌ Pas de PDF disponible pour la facture ${invoiceId}`);
+        return null;
+      }
+
+      const fileId = orderDetails.OrderPDF.FileID;
+      console.log(`📄 FileID trouvé: ${fileId}`);
+
+      // Étape 2: Télécharger le fichier via l'endpoint /v1/files/{FileID}
+      const fileUrl = `${config.billit.apiUrl}/v1/files/${fileId}`;
+
+      const response = await this.axiosInstance.get(fileUrl);
+
+      if (!response.data || !response.data.FileContent) {
+        console.error(`❌ Pas de contenu de fichier dans la réponse`);
+        return null;
+      }
+
+      // Étape 3: Décoder le Base64 pour obtenir le Buffer
+      const base64Content = response.data.FileContent;
+      const buffer = Buffer.from(base64Content, 'base64');
+
+      console.log(`✅ PDF téléchargé: ${response.data.FileName} (${buffer.length} bytes)`);
+      return buffer;
+    } catch (error: any) {
+      console.error('❌ Erreur lors du téléchargement du PDF:', error.message);
       return null;
     }
   }

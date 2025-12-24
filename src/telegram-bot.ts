@@ -1,8 +1,15 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { config } from './config';
+import { config, isAllowedChatId } from './config';
 import { CommandHandler } from './command-handler';
 import { VoiceService } from './voice-service';
 import { IntentService } from './intent-service';
+import { AIConversationService } from './ai-conversation-service';
+import { AIAgentService } from './ai-agent-service';
+import { AIAgentServiceV2 } from './ai-agent-service-v2';
+import { InvoiceMonitoringService } from './invoice-monitoring-service';
+import { sanitizeError, logUnauthorizedAccess, logSuspiciousActivity, sanitizeUrl } from './utils/security';
+import { validateUserInput, sanitizeArgs } from './utils/validation';
+import { RateLimiterManager, RateLimiterFactory } from './utils/rate-limiter';
 import fs from 'fs';
 import path from 'path';
 
@@ -14,6 +21,10 @@ export class TelegramBotInteractive {
   private lastInvoiceNumber: string | null = null; // Mémoriser la dernière facture consultée
   private voiceService: VoiceService;
   private intentService: IntentService;
+  private aiConversationService: AIConversationService;
+  private aiAgentService: AIAgentServiceV2; // Version V2 améliorée
+  private invoiceMonitoringService: InvoiceMonitoringService;
+  private rateLimitManager: RateLimiterManager;
 
   constructor(commandHandler: CommandHandler) {
     this.bot = new TelegramBot(config.telegram.botToken, { 
@@ -29,13 +40,45 @@ export class TelegramBotInteractive {
     this.chatId = config.telegram.chatId;
     this.voiceService = new VoiceService();
     this.intentService = new IntentService();
-    
+    this.aiConversationService = new AIConversationService(commandHandler);
+    this.aiAgentService = new AIAgentServiceV2(commandHandler, this.bot); // V2 avec synthèse améliorée + bot Telegram
+
+    // Initialiser le service de monitoring des factures
+    this.invoiceMonitoringService = new InvoiceMonitoringService(
+      this,
+      commandHandler.getBillitClient(),
+      {
+        enabled: process.env.INVOICE_MONITORING_ENABLED === 'true',
+        intervalMinutes: parseInt(process.env.INVOICE_MONITORING_INTERVAL || '5', 10),
+        checkPaid: process.env.INVOICE_MONITORING_CHECK_PAID !== 'false', // true par défaut
+        checkUnpaid: process.env.INVOICE_MONITORING_CHECK_UNPAID !== 'false', // true par défaut
+        storageFile: process.env.INVOICE_MONITORING_STORAGE || './data/processed-invoices.json',
+      }
+    );
+
+    // Initialiser le rate limiter
+    this.rateLimitManager = new RateLimiterManager();
+    this.setupRateLimiters();
+
     console.log('🔧 Configuration du bot Telegram...');
     console.log('   Chat ID:', this.chatId);
     console.log('   Reconnaissance vocale:', this.voiceService.isConfigured() ? '✅ Activée' : '❌ Désactivée');
-    console.log('   Compréhension IA:', this.intentService.isConfigured() ? '✅ Activée' : '❌ Désactivée');
-    
+    console.log('   Compréhension IA (vocaux):', this.intentService.isConfigured() ? '✅ Activée' : '❌ Désactivée');
+    console.log('   Conversation IA (ancien):', this.aiConversationService.isConfigured() ? '✅ Activée' : '❌ Désactivée');
+    console.log('   🆕 Agent IA autonome V2:', this.aiAgentService.isConfigured() ? '✅ Activé (synthèse améliorée)' : '❌ Désactivé');
+    console.log('   Monitoring factures:', this.invoiceMonitoringService['config'].enabled ? '✅ Activé' : '❌ Désactivé');
+    console.log('   Rate limiting:', '✅ Activé');
+
     this.setupHandlers();
+  }
+
+  /**
+   * Configure les rate limiters pour différentes catégories
+   */
+  private setupRateLimiters(): void {
+    this.rateLimitManager.register('general', RateLimiterFactory.createDefault());
+    this.rateLimitManager.register('ai', RateLimiterFactory.createForAI());
+    this.rateLimitManager.register('voice', RateLimiterFactory.createForVoice());
   }
 
   /**
@@ -45,13 +88,14 @@ export class TelegramBotInteractive {
     // IMPORTANT: Gérer les callbacks des boutons EN PREMIER
     this.bot.on('callback_query', async (callbackQuery) => {
       console.log('🔘 Callback reçu:', callbackQuery.data);
-      
+
       const msg = callbackQuery.message;
       const data = callbackQuery.data;
 
-      // Vérifier que le message vient du bon chat
-      if (msg && msg.chat.id.toString() !== this.chatId) {
+      // SÉCURITÉ: Vérifier que le message vient d'un chat autorisé (whitelist)
+      if (msg && !isAllowedChatId(msg.chat.id)) {
         console.log(`⚠️  Callback ignoré d'un chat non autorisé: ${msg.chat.id}`);
+        logUnauthorizedAccess(msg.chat.id, callbackQuery.from.username);
         return;
       }
 
@@ -97,15 +141,17 @@ export class TelegramBotInteractive {
         await this.sendMessageWithButtons(response);
       } catch (error: any) {
         console.error('Erreur lors du traitement du callback:', error);
-        await this.sendMessage(`❌ Erreur: ${error.message}`);
+        const safeMessage = sanitizeError(error, 'Une erreur est survenue lors du traitement de votre demande');
+        await this.sendMessage(`❌ ${safeMessage}`);
       }
     });
 
     // Gérer les commandes
     this.bot.onText(/^\/(\w+)(.*)/, async (msg, match) => {
-      // Vérifier que le message vient du bon chat
-      if (msg.chat.id.toString() !== this.chatId) {
+      // SÉCURITÉ: Vérifier que le message vient d'un chat autorisé (whitelist)
+      if (!isAllowedChatId(msg.chat.id)) {
         console.log(`⚠️  Message ignoré d'un chat non autorisé: ${msg.chat.id}`);
+        logUnauthorizedAccess(msg.chat.id, msg.from?.username);
         return;
       }
 
@@ -113,7 +159,17 @@ export class TelegramBotInteractive {
 
       const command = match[1];
       const argsString = match[2].trim();
-      const args = argsString ? argsString.split(/\s+/) : [];
+      const rawArgs = argsString ? argsString.split(/\s+/) : [];
+
+      // SÉCURITÉ: Valider et sanitiser les arguments
+      const args = sanitizeArgs(rawArgs);
+
+      // RATE LIMITING: Vérifier la limite de requêtes
+      const rateLimit = this.rateLimitManager.check('general', msg.chat.id);
+      if (!rateLimit.allowed) {
+        await this.sendMessage(`⏱️ ${rateLimit.message}\n\n<i>Réessayez dans ${Math.ceil(rateLimit.resetIn / 1000)} secondes.</i>`);
+        return;
+      }
 
       try {
         const response = await this.commandHandler.handleCommand(command, args);
@@ -124,16 +180,18 @@ export class TelegramBotInteractive {
         await this.sendMessageWithButtons(response);
       } catch (error: any) {
         console.error('Erreur lors du traitement de la commande:', error);
-        await this.sendMessage(`❌ Erreur: ${error.message}`);
+        const safeMessage = sanitizeError(error, 'Une erreur est survenue lors de l\'exécution de la commande');
+        await this.sendMessage(`❌ ${safeMessage}`);
       }
     });
 
     // Gérer les messages texte normaux (sans commande)
     this.bot.on('message', async (msg) => {
       console.log('📩 Event message:', msg.text || msg.voice ? '🎤 Voice' : msg.caption || '[media]', 'from chat:', msg.chat.id);
-      
-      // Vérifier que le message vient du bon chat
-      if (msg.chat.id.toString() !== this.chatId) {
+
+      // SÉCURITÉ: Vérifier que le message vient d'un chat autorisé (whitelist)
+      if (!isAllowedChatId(msg.chat.id)) {
+        logUnauthorizedAccess(msg.chat.id, msg.from?.username);
         return;
       }
 
@@ -150,13 +208,25 @@ export class TelegramBotInteractive {
 
       // Traiter les réponses en fonction de l'état
       if (msg.text && this.waitingForInput) {
-        console.log('📨 Réponse reçue pour:', this.waitingForInput, '- Valeur:', msg.text);
-        
+        // SÉCURITÉ: Valider l'input utilisateur
+        const validation = validateUserInput(msg.text, {
+          maxLength: config.security.maxInputLength,
+          allowEmpty: false,
+          fieldName: 'Votre saisie',
+        });
+
+        if (!validation.valid) {
+          await this.sendMessage(`❌ ${validation.error}`);
+          return;
+        }
+
+        console.log('📨 Réponse reçue pour:', this.waitingForInput, '- Valeur:', validation.sanitized);
+
         try {
           let response: string;
-          
+
           const command = this.waitingForInput;
-          const args = [msg.text];
+          const args = [validation.sanitized!];
           
           switch (command) {
             case 'search':
@@ -179,16 +249,44 @@ export class TelegramBotInteractive {
           await this.sendMessageWithButtons(response);
         } catch (error: any) {
           console.error('Erreur lors du traitement de la réponse:', error);
-          await this.sendMessage(`❌ Erreur: ${error.message}`);
+          const safeMessage = sanitizeError(error, 'Une erreur est survenue lors du traitement de votre réponse');
+          await this.sendMessage(`❌ ${safeMessage}`);
         }
         
         return;
       }
 
-      // Répondre aux messages non-commandes avec le menu
+      // Répondre aux messages non-commandes avec l'IA ou le menu
       if (msg.text) {
-        console.log('📨 Message texte reçu, envoi du menu');
-        await this.sendWelcomeMessage();
+        // SÉCURITÉ: Valider le message avant traitement
+        const validation = validateUserInput(msg.text, {
+          maxLength: config.security.maxInputLength,
+          allowEmpty: false,
+          fieldName: 'Message',
+        });
+
+        if (!validation.valid) {
+          await this.sendMessage(`❌ ${validation.error}`);
+          return;
+        }
+
+        // Vérifier si c'est une question qui nécessite une réponse IA
+        const isQuestion = this.detectQuestionIntent(validation.sanitized!);
+
+        if (isQuestion) {
+          // RATE LIMITING: Limiter les questions IA (plus coûteuses)
+          const aiRateLimit = this.rateLimitManager.check('ai', msg.chat.id);
+          if (!aiRateLimit.allowed) {
+            await this.sendMessage(`⏱️ ${aiRateLimit.message}\n\n<i>Réessayez dans ${Math.ceil(aiRateLimit.resetIn / 1000)} secondes.</i>`);
+            return;
+          }
+
+          console.log('🤖 Question détectée, traitement par IA conversationnelle');
+          await this.handleAIQuestion(validation.sanitized!);
+        } else {
+          console.log('📨 Message texte reçu, envoi du menu');
+          await this.sendWelcomeMessage();
+        }
       }
     });
 
@@ -306,6 +404,13 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
       return;
     }
 
+    // RATE LIMITING: Limiter les messages vocaux
+    const voiceRateLimit = this.rateLimitManager.check('voice', msg.chat.id);
+    if (!voiceRateLimit.allowed) {
+      await this.sendMessage(`⏱️ ${voiceRateLimit.message}\n\n<i>Réessayez dans ${Math.ceil(voiceRateLimit.resetIn / 1000)} secondes.</i>`);
+      return;
+    }
+
     try {
       // Envoyer un message de traitement
       await this.sendMessage('🎤 Transcription en cours...');
@@ -324,8 +429,7 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
         fs.mkdirSync(tempDir, { recursive: true });
       }
 
-      // Télécharger le fichier
-      const fileUrl = `https://api.telegram.org/file/bot${config.telegram.botToken}/${file.file_path}`;
+      // Télécharger le fichier (ne PAS logger l'URL avec le token)
       const tempFilePath = path.join(tempDir, `voice_${Date.now()}.ogg`);
       
       console.log('📥 Téléchargement du fichier vocal...');
@@ -353,7 +457,8 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
 
     } catch (error: any) {
       console.error('❌ Erreur lors du traitement du message vocal:', error);
-      await this.sendMessage(`❌ Erreur lors de la transcription: ${error.message}`);
+      const safeMessage = sanitizeError(error, 'Erreur lors du traitement du message vocal');
+      await this.sendMessage(`❌ ${safeMessage}`);
     }
   }
 
@@ -389,34 +494,94 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
   }
 
   /**
-   * Traite une commande vocale transcrite avec IA
+   * Traite une commande vocale transcrite avec l'agent IA autonome
    */
   private async processVoiceCommand(text: string): Promise<void> {
     try {
-      // Utiliser l'IA pour comprendre l'intention
-      await this.sendMessage('🧠 Analyse de votre demande...');
-      
-      const intent = await this.intentService.analyzeIntent(text, this.lastInvoiceNumber);
-      
-      console.log('🎯 Intention détectée:', intent);
+      // Utiliser l'AGENT IA AUTONOME pour traiter la demande vocale
+      const processingMsg = await this.bot.sendMessage(this.chatId, '🤖 Analyse en cours...');
 
-      // Vérifier la confiance
-      if (intent.confidence < 0.5) {
-        await this.sendMessage(`❓ Je ne suis pas sûr d'avoir compris: "${text}"\n\n<b>Exemples de demandes:</b>\n• "Liste les factures de Foster"\n• "Montre-moi ce que je dois payer"\n• "Combien de factures en retard ?"\n• "Dernière facture CIERS"\n• "Cherche tout sur Foster"`);
-        return;
+      // Traiter avec l'agent IA autonome (function calling)
+      const response = await this.aiAgentService.processQuestion(text, this.chatId);
+
+      // Supprimer le message de traitement
+      try {
+        await this.bot.deleteMessage(this.chatId, processingMsg.message_id);
+      } catch (e) {
+        // Ignorer si le message ne peut pas être supprimé
       }
-
-      // Exécuter la commande
-      const response = await this.commandHandler.handleCommand(intent.command, intent.args);
-      
-      // Capturer le contexte
-      this.captureInvoiceContext(intent.command, intent.args, response);
 
       await this.sendMessageWithButtons(response);
 
     } catch (error: any) {
       console.error('Erreur lors du traitement de la commande vocale:', error);
-      await this.sendMessage(`❌ Erreur: ${error.message}`);
+      const safeMessage = sanitizeError(error, 'Erreur lors du traitement de votre commande vocale');
+      await this.sendMessage(`❌ ${safeMessage}`);
+    }
+  }
+
+  /**
+   * Détecte si un message est une question qui nécessite une réponse IA
+   */
+  private detectQuestionIntent(text: string): boolean {
+    const t = text.toLowerCase().trim();
+
+    // Mots-clés qui indiquent une question explicite
+    const questionWords = [
+      'combien', 'quel', 'quelle', 'quels', 'quelles',
+      'montre', 'montrez', 'show', 'voir',
+      'liste', 'list', 'lister',
+      'calcule', 'calculer',
+      'total', 'somme', 'moyenne',
+      'analyse', 'analyser',
+      'compare', 'comparer',
+      'cherche', 'recherche', 'rechercher', 'search',
+      'où', 'quand', 'comment', 'pourquoi',
+      'est-ce que', 'est ce que',
+      '?', '¿', '？'
+    ];
+
+    // Vérifier si le texte contient un mot-clé de question
+    const hasQuestionWord = questionWords.some(word => t.includes(word));
+
+    // Vérifier si c'est une phrase courte (moins de 100 caractères)
+    const isShortMessage = text.length < 100;
+
+    // Vérifier si ce n'est pas juste "salut", "merci", etc.
+    const greetings = ['salut', 'bonjour', 'hello', 'hi', 'hey', 'merci', 'thanks', 'ok', 'oui', 'non'];
+    const isGreeting = greetings.some(g => t === g || t === g + ' ');
+
+    // AMÉLIORATION: Traiter TOUS les messages courts comme des requêtes IA
+    // Sauf les greetings. Ça permet de gérer les réponses comme "Pluxee belgium"
+    // ou "Moniz M-O-N-I-Z-Z-E" même sans mot-clé de question.
+    return isShortMessage && !isGreeting;
+  }
+
+  /**
+   * Traite une question avec l'IA autonome (function calling)
+   */
+  private async handleAIQuestion(question: string): Promise<void> {
+    try {
+      // Envoyer un message de traitement
+      const processingMsg = await this.bot.sendMessage(this.chatId, '🤖 Analyse en cours...');
+
+      // Traiter la question avec l'AGENT IA autonome
+      const response = await this.aiAgentService.processQuestion(question, this.chatId);
+
+      // Supprimer le message de traitement
+      try {
+        await this.bot.deleteMessage(this.chatId, processingMsg.message_id);
+      } catch (e) {
+        // Ignorer si le message ne peut pas être supprimé
+      }
+
+      // Envoyer la réponse
+      await this.sendMessageWithButtons(response);
+
+    } catch (error: any) {
+      console.error('❌ Erreur lors du traitement IA:', error);
+      const safeMessage = sanitizeError(error, 'Erreur lors du traitement de votre question');
+      await this.sendMessage(`❌ ${safeMessage}\n\n💡 Essayez de reformuler ou utilisez /help`);
     }
   }
 
@@ -425,6 +590,67 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
    */
   stop(): void {
     this.bot.stopPolling();
+    this.invoiceMonitoringService.stop();
+    this.rateLimitManager.stopAll();
     console.log('👋 Bot Telegram arrêté');
+  }
+
+  /**
+   * Démarre le monitoring des factures (à appeler après le démarrage du bot)
+   */
+  async startMonitoring(): Promise<void> {
+    await this.invoiceMonitoringService.start();
+  }
+
+  /**
+   * Envoie un message à tous les chats autorisés (pour les notifications de monitoring)
+   */
+  async broadcastMessage(message: string): Promise<void> {
+    const allowedChatIds = config.telegram.allowedChatIds;
+
+    for (const chatId of allowedChatIds) {
+      try {
+        await this.bot.sendMessage(chatId, message, {
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+        });
+        console.log(`📤 Notification envoyée au chat ${chatId}`);
+      } catch (error) {
+        console.error(`❌ Erreur lors de l'envoi au chat ${chatId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Envoie un document (PDF) avec un message à tous les chats autorisés
+   */
+  async broadcastDocument(
+    document: Buffer,
+    filename: string,
+    caption?: string
+  ): Promise<void> {
+    const allowedChatIds = config.telegram.allowedChatIds;
+
+    for (const chatId of allowedChatIds) {
+      try {
+        await this.bot.sendDocument(chatId, document, {
+          caption: caption,
+          parse_mode: 'HTML',
+        }, {
+          filename: filename,
+          contentType: 'application/pdf',
+        });
+        console.log(`📤 Document envoyé au chat ${chatId} (${filename})`);
+      } catch (error) {
+        console.error(`❌ Erreur lors de l'envoi du document au chat ${chatId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Retourne les stats de monitoring
+   */
+  getMonitoringStats() {
+    return this.invoiceMonitoringService.getStats();
   }
 }

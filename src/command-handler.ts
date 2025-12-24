@@ -2,7 +2,8 @@ import { BillitClient } from './billit-client';
 import { TelegramClient } from './telegram-client';
 import { BankClient } from './bank-client';
 import { BillitInvoice } from './types';
-import { matchesSupplier, getSupplierDisplayName, normalizeSearchTerm as normalizeSupplierTerm, SUPPLIER_ALIASES } from './supplier-aliases';
+import { matchesSupplier, getSupplierDisplayName, normalizeSearchTerm as normalizeSupplierTerm, SUPPLIER_ALIASES, addSupplier, deleteSupplier, listSuppliers } from './supplier-aliases';
+import { normalizeSearchTerm } from './utils/string-utils';
 
 // Liste des employés (pour filtrer les salaires)
 const EMPLOYEE_KEYS = [
@@ -10,7 +11,7 @@ const EMPLOYEE_KEYS = [
   'eljaouhari', 'azzabi', 'aboukhalid', 'elbalghiti', 'ourimchi',
   'benyamoune', 'kharbouche', 'afkir', 'ellalouimohamed', 'madidijawad',
   'samat', 'barilyagoubi', 'taglina', 'turbatu', 'qibouz', 'mrabet',
-  'madidihassan', 'elmouden', 'satti', 'jamhounmokhlis'
+  'madidihassan', 'elmouden', 'satti', 'jamhounmokhlis', 'madidisoufiane'
 ];
 
 export class CommandHandler {
@@ -22,6 +23,13 @@ export class CommandHandler {
     this.billitClient = billitClient;
     this.telegramClient = telegramClient;
     this.bankClient = new BankClient();
+  }
+
+  /**
+   * Retourne le client Billit (pour le monitoring)
+   */
+  getBillitClient(): BillitClient {
+    return this.billitClient;
   }
 
   /**
@@ -61,6 +69,16 @@ export class CommandHandler {
       case 'suppliers':
         return this.handleListSuppliers();
 
+      case 'add_supplier':
+      case 'addsupplier':
+      case 'ajouter_fournisseur':
+        return this.handleAddSupplier(args);
+
+      case 'delete_supplier':
+      case 'deletesupplier':
+      case 'supprimer_fournisseur':
+        return this.handleDeleteSupplier(args);
+
       case 'list_employees':
       case 'employes':
       case 'employees':
@@ -92,6 +110,18 @@ export class CommandHandler {
 
       case 'transactions_periode':
         return this.handleTransactionsPeriode(args);
+
+      case 'tools':
+        return this.handleTools();
+
+      case 'adduser':
+        return this.handleAddUser(args);
+
+      case 'removeuser':
+        return this.handleRemoveUser(args);
+
+      case 'listusers':
+        return this.handleListUsers();
 
       default:
         return `❌ Commande inconnue: /${command}\n\nTapez /help pour voir les commandes disponibles.`;
@@ -127,6 +157,18 @@ export class CommandHandler {
 /stats - Statistiques factures du mois
 /supplier [nom] - Factures d'un fournisseur
 
+<b>⚙️ Gestion des fournisseurs</b>
+/addsupplier [clé] [nom] [aliases...] - Ajouter un fournisseur
+/deletesupplier [clé] - Supprimer un fournisseur
+
+<b>👥 Gestion des utilisateurs</b>
+/adduser [chat_id] - Ajouter un utilisateur autorisé
+/removeuser [chat_id] - Supprimer un utilisateur autorisé
+/listusers - Liste tous les utilisateurs autorisés
+
+<b>🤖 Agent IA</b>
+/tools - Liste tous les outils IA disponibles
+
 <b>ℹ️ Aide</b>
 /help - Afficher cette aide
 
@@ -134,6 +176,7 @@ export class CommandHandler {
 <code>/unpaid</code> ou 🎤 "Factures impayées"
 <code>/list_suppliers</code> ou 🎤 "Liste des fournisseurs"
 <code>/recettes_mois</code> ou 🎤 "Recettes de ce mois"
+<code>/addsupplier pluxee "Pluxee Belgium" pluxi pluxee</code>
 <code>/transactions_fournisseur Foster</code>
 <code>/transactions_periode 2025-01-01 2025-12-01</code>
     `.trim();
@@ -368,8 +411,11 @@ ${lines.join('\n')}${moreText}
    */
   private async handleListSuppliers(): Promise<string> {
     try {
-      // Récupérer les fournisseurs depuis le dictionnaire
-      const suppliers = Object.entries(SUPPLIER_ALIASES);
+      // Récupérer tous les fournisseurs depuis le dictionnaire
+      const allSuppliers = Object.entries(SUPPLIER_ALIASES);
+
+      // Filtrer pour exclure les employés
+      const suppliers = allSuppliers.filter(([key]) => !EMPLOYEE_KEYS.includes(key));
 
       if (suppliers.length === 0) {
         return '❌ Aucun fournisseur configuré dans le dictionnaire.';
@@ -616,7 +662,7 @@ ${status} <b>Statut:</b> ${invoice.status}
   /**
    * Formate les détails complets d'une facture avec lignes
    */
-  private formatInvoiceDetails(details: any, invoice: BillitInvoice): string {
+  private formatInvoiceDetails(details: import('./types/billit-api').BillitOrderDetails, invoice: BillitInvoice): string {
     const invoiceDate = new Date(invoice.invoice_date).toLocaleDateString('fr-BE');
     const dueDate = new Date(invoice.due_date).toLocaleDateString('fr-BE');
     const status = this.getStatusEmoji(invoice.status);
@@ -1193,14 +1239,258 @@ ${summarySection}
     }
   }
 
+  // Note: normalizeSearchTerm est maintenant importé depuis utils/string-utils
+  // pour éviter la duplication de code
+
   /**
-   * Normalise un texte pour la recherche (enlève espaces, tirets, etc.)
+   * Ajoute un nouveau fournisseur
+   * Syntaxe: /addsupplier [clé] [nom principal] [alias1] [alias2] ...
+   * Exemple: /addsupplier pluxee "Pluxee Belgium" pluxi pluxee belgium
    */
-  private normalizeSearchTerm(text: string): string {
-    return text
-      .toLowerCase()
-      .replace(/[\s\-_\.\/\\]/g, '') // Enlever espaces, tirets, underscores, points, slashes
-      .trim();
+  private async handleAddSupplier(args: string[]): Promise<string> {
+    try {
+      if (args.length < 2) {
+        return `
+❌ <b>Syntaxe incorrecte</b>
+
+Utilisation: <code>/addsupplier [clé] [nom principal] [alias1] [alias2] ...</code>
+
+<b>Exemples:</b>
+<code>/addsupplier pluxee "Pluxee Belgium" pluxi pluxee</code>
+<code>/addsupplier moniz "EPS MONIZZE" moniz eps</code>
+
+<b>Paramètres:</b>
+• <b>clé</b>: Identifiant unique (ex: pluxee, moniz)
+• <b>nom principal</b>: Nom d'affichage principal (entre guillemets si avec espaces)
+• <b>alias1, alias2...</b>: Variantes de nom pour la recherche (optionnel)
+        `.trim();
+      }
+
+      const key = args[0].toLowerCase();
+      const primaryName = args[1];
+      const aliases = args.slice(2); // Tous les autres arguments sont des alias
+
+      // Générer automatiquement les patterns depuis le nom et les alias
+      const patterns = [primaryName, ...aliases].map(a => normalizeSupplierTerm(a));
+
+      // Ajouter le fournisseur
+      const result = addSupplier(key, primaryName, aliases, patterns);
+
+      return result.message;
+    } catch (error: any) {
+      console.error('Erreur handleAddSupplier:', error);
+      return `❌ Erreur lors de l'ajout: ${error.message}`;
+    }
+  }
+
+  /**
+   * Supprime un fournisseur
+   * Syntaxe: /deletesupplier [clé]
+   * Exemple: /deletesupplier pluxee
+   */
+  private async handleDeleteSupplier(args: string[]): Promise<string> {
+    try {
+      if (args.length === 0) {
+        return `
+❌ <b>Syntaxe incorrecte</b>
+
+Utilisation: <code>/deletesupplier [clé]</code>
+
+<b>Exemples:</b>
+<code>/deletesupplier pluxee</code>
+<code>/deletesupplier moniz</code>
+
+💡 <i>Pour voir la liste des fournisseurs et leurs clés: /list_suppliers</i>
+        `.trim();
+      }
+
+      const key = args[0];
+      const result = deleteSupplier(key);
+
+      return result.message;
+    } catch (error: any) {
+      console.error('Erreur handleDeleteSupplier:', error);
+      return `❌ Erreur lors de la suppression: ${error.message}`;
+    }
+  }
+
+  /**
+   * Ajoute un utilisateur autorisé
+   */
+  private async handleAddUser(args: string[]): Promise<string> {
+    if (args.length === 0) {
+      return '❌ Veuillez spécifier un Chat ID.\n\nExemple: <code>/adduser 123456789</code>\n\n💡 Pour trouver votre Chat ID, parlez au bot @userinfobot sur Telegram.';
+    }
+
+    const chatIdToAdd = args[0].trim();
+
+    // Vérifier que c'est un nombre valide
+    if (!/^\d+$/.test(chatIdToAdd)) {
+      return `❌ Chat ID invalide: "${chatIdToAdd}"\n\nUn Chat ID doit contenir uniquement des chiffres.`;
+    }
+
+    // Vérifier s'il est déjà dans la liste
+    const currentAllowed = process.env.TELEGRAM_ALLOWED_CHAT_IDS || '';
+    const currentList = currentAllowed.split(',').map(id => id.trim()).filter(id => id.length > 0);
+
+    if (currentList.includes(chatIdToAdd)) {
+      return `ℹ️  Le Chat ID <b>${chatIdToAdd}</b> est déjà autorisé.`;
+    }
+
+    try {
+      // Lire le fichier .env
+      const fs = await import('fs');
+      const envPath = '/home/ubuntu/Billit/tonton202/.env';
+
+      let envContent = fs.readFileSync(envPath, 'utf-8');
+
+      // Remplacer la ligne TELEGRAM_ALLOWED_CHAT_IDS
+      const newAllowedIds = [...currentList, chatIdToAdd].join(',');
+      const newLine = `TELEGRAM_ALLOWED_CHAT_IDS=${newAllowedIds}`;
+
+      // Utiliser une regex pour remplacer la ligne
+      envContent = envContent.replace(/^TELEGRAM_ALLOWED_CHAT_IDS=.*$/m, newLine);
+
+      // Écrire le fichier
+      fs.writeFileSync(envPath, envContent, 'utf-8');
+
+      let message = `✅ Utilisateur ajouté avec succès !\n\n`;
+      message += `📱 Chat ID: <b>${chatIdToAdd}</b>\n`;
+      message += `👥 Total utilisateurs: ${currentList.length + 1}\n\n`;
+      message += `⚠️ Le bot doit être redémarré pour appliquer les changements.\n`;
+      message += `Utilisez /restart pour redémarrer le bot.`;
+
+      return message;
+    } catch (error: any) {
+      console.error('Erreur handleAddUser:', error);
+      return `❌ Erreur lors de l'ajout: ${error.message}`;
+    }
+  }
+
+  /**
+   * Supprime un utilisateur autorisé
+   */
+  private async handleRemoveUser(args: string[]): Promise<string> {
+    if (args.length === 0) {
+      return '❌ Veuillez spécifier un Chat ID.\n\nExemple: <code>/removeuser 123456789</code>';
+    }
+
+    const chatIdToRemove = args[0].trim();
+
+    try {
+      // Lire le fichier .env
+      const fs = await import('fs');
+      const envPath = '/home/ubuntu/Billit/tonton202/.env';
+
+      let envContent = fs.readFileSync(envPath, 'utf-8');
+
+      // Récupérer la liste actuelle
+      const currentAllowed = process.env.TELEGRAM_ALLOWED_CHAT_IDS || '';
+      const currentList = currentAllowed.split(',').map(id => id.trim()).filter(id => id.length > 0);
+
+      // Vérifier si l'ID existe
+      if (!currentList.includes(chatIdToRemove)) {
+        return `❌ Le Chat ID <b>${chatIdToRemove}</b> n'est pas dans la liste des utilisateurs autorisés.\n\nUtilisez /listusers pour voir la liste.`;
+      }
+
+      // Retirer l'ID de la liste
+      const newList = currentList.filter(id => id !== chatIdToRemove);
+
+      // Sécurité : empêcher de supprimer tous les utilisateurs
+      if (newList.length === 0) {
+        return `❌ Impossible de supprimer le dernier utilisateur.\n\nIl doit toujours y avoir au moins un utilisateur autorisé.`;
+      }
+
+      // Remplacer la ligne TELEGRAM_ALLOWED_CHAT_IDS
+      const newAllowedIds = newList.join(',');
+      const newLine = `TELEGRAM_ALLOWED_CHAT_IDS=${newAllowedIds}`;
+
+      envContent = envContent.replace(/^TELEGRAM_ALLOWED_CHAT_IDS=.*$/m, newLine);
+
+      // Écrire le fichier
+      fs.writeFileSync(envPath, envContent, 'utf-8');
+
+      let message = `🗑️ Utilisateur supprimé avec succès !\n\n`;
+      message += `📱 Chat ID: <b>${chatIdToRemove}</b>\n`;
+      message += `👥 Total utilisateurs restants: ${newList.length}\n\n`;
+      message += `⚠️ Le bot doit être redémarré pour appliquer les changements.\n`;
+      message += `Utilisez /restart pour redémarrer le bot.`;
+
+      return message;
+    } catch (error: any) {
+      console.error('Erreur handleRemoveUser:', error);
+      return `❌ Erreur lors de la suppression: ${error.message}`;
+    }
+  }
+
+  /**
+   * Liste tous les utilisateurs autorisés
+   */
+  private handleListUsers(): string {
+    const currentAllowed = process.env.TELEGRAM_ALLOWED_CHAT_IDS || '';
+    const currentList = currentAllowed.split(',').map(id => id.trim()).filter(id => id.length > 0);
+
+    let message = `👥 Utilisateurs autorisés (${currentList.length})\n\n`;
+
+    // Mapping known des Chat IDs
+    const knownUsers: { [key: string]: string } = {
+      '7887749968': 'Hassan',
+      '8006682970': 'Soufiane',
+    };
+
+    currentList.forEach((chatId, index) => {
+      const username = knownUsers[chatId] || 'Inconnu';
+      message += `${index + 1}. Chat ID: <b>${chatId}</b>`;
+      if (username !== 'Inconnu') {
+        message += ` (${username})`;
+      }
+      message += '\n';
+    });
+
+    message += '\n💡 Pour ajouter un utilisateur: /adduser <chat_id>';
+    message += '\n💡 Pour supprimer un utilisateur: /removeuser <chat_id>';
+
+    return message;
+  }
+
+  /**
+   * Affiche tous les outils IA disponibles
+   */
+  private handleTools(): string {
+    const tools = [
+      { name: 'get_unpaid_invoices', description: 'Obtenir les factures impayées' },
+      { name: 'get_paid_invoices', description: 'Obtenir les factures payées récentes' },
+      { name: 'get_overdue_invoices', description: 'Obtenir les factures en retard' },
+      { name: 'get_invoice_stats', description: 'Statistiques des factures' },
+      { name: 'get_monthly_balance', description: 'Solde du mois en cours' },
+      { name: 'get_monthly_credits', description: 'Recettes du mois' },
+      { name: 'get_monthly_debits', description: 'Dépenses du mois' },
+      { name: 'get_period_transactions', description: 'Transactions sur une période' },
+      { name: 'get_employee_salaries', description: 'Salaires des employés' },
+      { name: 'get_supplier_payments', description: 'Paiements à un fournisseur' },
+      { name: 'get_supplier_received_payments', description: 'Paiements reçus d\'un fournisseur' },
+      { name: 'search_invoices', description: 'Rechercher des factures' },
+      { name: 'get_invoice_by_supplier_and_amount', description: 'Facture par fournisseur et montant' },
+      { name: 'list_suppliers', description: 'Lister tous les fournisseurs' },
+      { name: 'get_monthly_invoices', description: 'Factures du mois en cours' },
+      { name: 'get_invoices_by_month', description: 'Factures d\'un mois spécifique' },
+      { name: 'send_invoice_pdf', description: 'Envoyer le PDF d\'une facture' },
+      { name: 'search_by_communication', description: 'Rechercher par communication' },
+      { name: 'add_supplier', description: 'Ajouter un fournisseur' },
+      { name: 'delete_supplier', description: 'Supprimer un fournisseur' },
+    ];
+
+    let message = '🤖 **Outils IA disponibles**\n\n';
+    message += `Le bot dispose de **${tools.length} outils** pour vous aider:\n\n`;
+
+    tools.forEach((tool, index) => {
+      message += `${index + 1}. **${tool.name}**\n   ➜ ${tool.description}\n\n`;
+    });
+
+    message += '\n💡 **Astuce**: Utilisez l\'agent IA en mode conversation pour poser vos questions en langage naturel !\n';
+    message += 'Exemple: "Quelles sont les factures impayées ?", "Montre-moi les paiements à Coca-Cola", etc.';
+
+    return message;
   }
 
   /**
