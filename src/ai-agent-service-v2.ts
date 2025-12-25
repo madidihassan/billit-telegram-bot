@@ -577,40 +577,62 @@ export class AIAgentServiceV2 {
         }
 
         case 'get_latest_invoice': {
-          // Récupérer toutes les factures et trier par date pour obtenir la plus récente
-          const allInvoices = await this.billitClient.getInvoices({ limit: 200 });
+          try {
+            // Récupérer toutes les factures et trier par date pour obtenir la plus récente
+            const allInvoices = await this.billitClient.getInvoices({ limit: 200 });
 
-          if (allInvoices.length === 0) {
+            if (!allInvoices || allInvoices.length === 0) {
+              result = {
+                success: false,
+                message: 'Aucune facture trouvée',
+              };
+              break;
+            }
+
+            console.log(`📊 get_latest_invoice: ${allInvoices.length} factures récupérées`);
+
+            // Filtrer les factures avec une date valide et trier par date (la plus récente en premier)
+            const sortedInvoices = allInvoices
+              .filter(inv => inv.invoice_date && !isNaN(new Date(inv.invoice_date).getTime()))
+              .sort((a, b) => {
+                const dateA = new Date(a.invoice_date).getTime();
+                const dateB = new Date(b.invoice_date).getTime();
+                return dateB - dateA; // Ordre décroissant (plus récent en premier)
+              });
+
+            if (sortedInvoices.length === 0) {
+              result = {
+                success: false,
+                message: 'Aucune facture avec une date valide trouvée',
+              };
+              break;
+            }
+
+            const latestInvoice = sortedInvoices[0];
+            console.log(`📄 Dernière facture: ${latestInvoice.supplier_name} - ${latestInvoice.invoice_date} - ${latestInvoice.total_amount}€`);
+
+            result = {
+              success: true,
+              invoice: {
+                id: latestInvoice.id,
+                supplier: latestInvoice.supplier_name,
+                invoice_number: latestInvoice.invoice_number,
+                invoice_date: latestInvoice.invoice_date,
+                due_date: latestInvoice.due_date,
+                amount: latestInvoice.total_amount,
+                currency: latestInvoice.currency || 'EUR',
+                status: latestInvoice.status,
+                communication: latestInvoice.communication || '',
+              },
+            };
+          } catch (error: any) {
+            console.error('❌ Erreur get_latest_invoice:', error);
             result = {
               success: false,
-              message: 'Aucune facture trouvée',
+              error: 'api_error',
+              message: `Erreur lors de la récupération de la dernière facture: ${error.message}`,
             };
-            break;
           }
-
-          // Trier par date de facture (la plus récente en premier)
-          const sortedInvoices = allInvoices.sort((a, b) => {
-            const dateA = new Date(a.invoice_date).getTime();
-            const dateB = new Date(b.invoice_date).getTime();
-            return dateB - dateA; // Ordre décroissant (plus récent en premier)
-          });
-
-          const latestInvoice = sortedInvoices[0];
-
-          result = {
-            success: true,
-            invoice: {
-              id: latestInvoice.id,
-              supplier: latestInvoice.supplier_name,
-              invoice_number: latestInvoice.invoice_number,
-              invoice_date: latestInvoice.invoice_date,
-              due_date: latestInvoice.due_date,
-              amount: latestInvoice.total_amount,
-              currency: latestInvoice.currency,
-              status: latestInvoice.status,
-              communication: latestInvoice.communication,
-            },
-          };
           break;
         }
 
