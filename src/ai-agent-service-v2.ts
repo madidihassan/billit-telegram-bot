@@ -6,6 +6,18 @@ import { BankClient } from './bank-client';
 import { OpenRouterClient } from './openrouter-client';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  getAllAuthorizedUsers,
+  getUserByChatId,
+  addAuthorizedUser,
+  removeAuthorizedUser,
+  getAllEmployees,
+  addEmployee,
+  getEmployeeByName,
+  employeeExistsByName,
+  removeEmployee,
+  getAllSuppliers,
+} from './database';
 
 /**
  * Service d'agent IA autonome AMÉLIORÉ avec données structurées
@@ -286,7 +298,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'list_suppliers',
-          description: '⚠️ APPEL OBLIGATOIRE: Lister TOUS les fournisseurs RÉELS enregistrés. Tu DOIS appeler cet outil pour TOUTE question sur la liste des fournisseurs. Ne JAMAIS inventer de noms. Exemples: "Liste des fournisseurs", "Quels fournisseurs?", "Montre tous les fournisseurs", "Fournisseurs connus?"',
+          description: '⚠️ APPEL OBLIGATOIRE: Lister TOUS les fournisseurs RÉELS enregistrés. Tu DOIS appeler cet outil pour TOUTE question sur la liste des fournisseurs. Ne JAMAIS inventer de noms. Exemples: "Liste des fournisseurs", "Quels fournisseurs?", "Montre tous les fournisseurs", "Fournisseurs connus?". ⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction. C\'est un COPY-PASTE pur et dur.',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -439,6 +451,60 @@ export class AIAgentServiceV2 {
             type: 'object',
             properties: {},
             required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'list_employees',
+          description: '⚠️ OBLIGATOIRE: Liste tous les employés. TU DOIS APPELER cette fonction AVANT de répondre à toute question sur les employés ou salariés. Ne JAMAIS inventer de liste. Utilise cette fonction pour: "Liste des employés", "Qui sont les employés ?", "Montre les salariés", "Quels employés ?", ou toute question concernant les employés. ⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction. C\'est un COPY-PASTE pur et dur.',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'add_employee',
+          description: 'Ajoute un nouvel employé dans la base de données. Utilise cette fonction pour: "Ajoute un employé", "Nouvel employé", "Enregistre cet employé". Tu DOIS appeler list_employees() après l\'ajout pour confirmer.',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'Nom complet de l\'employé (ex: "Mohamed Ali", "Sarah Dupont")',
+              },
+              chat_id: {
+                type: 'string',
+                description: 'Chat ID Telegram de l\'employé (optionnel, ex: "123456789")',
+              },
+              position: {
+                type: 'string',
+                description: 'Poste/Position de l\'employé (optionnel, ex: "Employé", "Manager", "Caissier")',
+              },
+            },
+            required: ['name'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'remove_employee',
+          description: 'Supprime un employé de la base de données (désactivation). Utilise cette fonction pour: "Supprime l\'employé", "Retire cet employé", "Enlève X de la liste". Le nom DOIT provenir du résultat de list_employees(), PAS d\'invention. Tu DOIS appeler list_employees() après la suppression pour confirmer.',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'Nom EXACT de l\'employé à supprimer (doit correspondre exactement à celui de list_employees())',
+              },
+            },
+            required: ['name'],
           },
         },
       },
@@ -973,17 +1039,43 @@ export class AIAgentServiceV2 {
         }
 
         case 'list_suppliers': {
-          // Lister tous les fournisseurs
-          const { SupplierLearningService } = await import('./supplier-learning-service');
-          const learningService = new SupplierLearningService();
+          // Lister tous les fournisseurs depuis la base de données SQLite
+          try {
+            const suppliers = getAllSuppliers();
 
-          const suppliers = learningService.listSuppliers();
+            if (suppliers.length === 0) {
+              result = {
+                success: false,
+                error: 'empty_list',
+                message: '❌ Aucun fournisseur n\'est configuré.',
+              };
+              break;
+            }
 
-          result = {
-            count: suppliers.length,
-            suppliers: suppliers,
-            message: `✅ ${suppliers.length} fournisseur(s) dans la base de données`,
-          };
+            // Formatage optimisé pour Telegram
+            const suppliersList = suppliers.map((sup, index) => {
+              const num = String(index + 1).padStart(2);
+              const name = sup.name;
+              const type = sup.type || 'fournisseur';
+              const typeIcon = type === 'fournisseur' ? '📦' : type === 'partenaire' ? '🤝' : '👤';
+
+              return `\`${num}. ${name}\`\n   └─ ${typeIcon} ${type}`;
+            }).join('\n\n');
+
+            const formattedMessage = `📦 Liste des fournisseurs (${suppliers.length})\n\n${suppliersList}`;
+
+            result = {
+              success: true,
+              direct_response: formattedMessage,
+              message: formattedMessage,
+            };
+          } catch (error: any) {
+            result = {
+              success: false,
+              error: 'database_error',
+              message: `❌ Erreur lors de la récupération des fournisseurs: ${error.message}`,
+            };
+          }
           break;
         }
 
@@ -1223,8 +1315,9 @@ export class AIAgentServiceV2 {
         }
 
         case 'add_user': {
-          // Ajouter un utilisateur autorisé
+          // Ajouter un utilisateur autorisé à la base de données SQLite
           const chatIdToAdd = args.chat_id?.trim();
+          const usernameToAdd = args.username?.trim() || null;
 
           // Validation
           if (!chatIdToAdd) {
@@ -1245,82 +1338,53 @@ export class AIAgentServiceV2 {
             break;
           }
 
-          // Lire le fichier .env
-          const fs = await import('fs');
-          const envPath = '/home/ubuntu/Billit/tonton202/.env';
-          let envContent: string;
-
           try {
-            envContent = fs.readFileSync(envPath, 'utf-8');
+            // Vérifier si l'utilisateur existe déjà
+            const existingUser = getUserByChatId(chatIdToAdd);
+            if (existingUser) {
+              result = {
+                success: false,
+                error: 'already_exists',
+                message: `⚠️ L'utilisateur avec le Chat ID "${chatIdToAdd}" est déjà autorisé.`,
+              };
+              break;
+            }
+
+            // Ajouter le nouvel utilisateur
+            const success = addAuthorizedUser(chatIdToAdd, usernameToAdd, 'user', 'ai_assistant');
+
+            if (!success) {
+              result = {
+                success: false,
+                error: 'database_error',
+                message: `❌ Erreur lors de l'ajout de l'utilisateur.`,
+              };
+              break;
+            }
+
+            // Récupérer le total d'utilisateurs
+            const allUsers = getAllAuthorizedUsers();
+            const username = usernameToAdd || 'Inconnu';
+
+            result = {
+              success: true,
+              chat_id: chatIdToAdd,
+              username: username,
+              total_users: allUsers.length,
+              message: `✅ Utilisateur ajouté avec succès !\n\n📱 Chat ID: <b>${chatIdToAdd}</b>${username !== 'Inconnu' ? ` (${username})` : ''}\n👥 Total utilisateurs: ${allUsers.length}\n\n✅ Changements appliqués immédiatement (pas besoin de redémarrage).`,
+            };
           } catch (error: any) {
             result = {
               success: false,
-              error: 'file_read_error',
-              message: `❌ Erreur lors de la lecture du fichier .env: ${error.message}`,
+              error: 'database_error',
+              message: `❌ Erreur lors de l'ajout de l'utilisateur: ${error.message}`,
             };
-            break;
           }
-
-          // Extraire la liste actuelle
-          const currentMatch = envContent.match(/^TELEGRAM_ALLOWED_CHAT_IDS=(.+)$/m);
-          const currentAllowed = currentMatch ? currentMatch[1].trim() : '';
-
-          if (!currentAllowed) {
-            result = {
-              success: false,
-              error: 'empty_list',
-              message: '❌ Erreur: La liste des utilisateurs autorisés est vide.',
-            };
-            break;
-          }
-
-          const currentList = currentAllowed.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0);
-
-          // Vérifier si l'utilisateur existe déjà
-          if (currentList.includes(chatIdToAdd)) {
-            result = {
-              success: false,
-              error: 'already_exists',
-              message: `⚠️ L'utilisateur avec le Chat ID "${chatIdToAdd}" est déjà autorisé.`,
-            };
-            break;
-          }
-
-          // Ajouter le nouvel utilisateur
-          const newAllowedIds = [...currentList, chatIdToAdd].join(',');
-          const newLine = `TELEGRAM_ALLOWED_CHAT_IDS=${newAllowedIds}`;
-          envContent = envContent.replace(/^TELEGRAM_ALLOWED_CHAT_IDS=.*$/m, newLine);
-
-          try {
-            fs.writeFileSync(envPath, envContent, 'utf-8');
-          } catch (error: any) {
-            result = {
-              success: false,
-              error: 'file_write_error',
-              message: `❌ Erreur lors de la sauvegarde du fichier .env: ${error.message}`,
-            };
-            break;
-          }
-
-          // Mapping des noms connus
-          const knownUsers: { [key: string]: string } = {
-            '7887749968': 'Hassan',
-            '8006682970': 'Soufiane',
-          };
-          const username = knownUsers[chatIdToAdd] || 'Inconnu';
-
-          result = {
-            success: true,
-            chat_id: chatIdToAdd,
-            username: username,
-            total_users: currentList.length + 1,
-            message: `✅ Utilisateur ajouté avec succès !\n\n📱 Chat ID: <b>${chatIdToAdd}</b>${username !== 'Inconnu' ? ` (${username})` : ''}\n👥 Total utilisateurs: ${currentList.length + 1}\n\n⚠️ Le bot doit être redémarré pour appliquer les changements.`,
-          };
           break;
         }
 
         case 'remove_user': {
-          // Supprimer un utilisateur autorisé
+          // Supprimer un utilisateur autorisé depuis la base de données SQLite
           const chatIdToRemove = args.chat_id?.trim();
 
           // Validation
@@ -1342,122 +1406,307 @@ export class AIAgentServiceV2 {
             break;
           }
 
-          // Lire le fichier .env
-          const fs = await import('fs');
-          const envPath = '/home/ubuntu/Billit/tonton202/.env';
-          let envContent: string;
-
           try {
-            envContent = fs.readFileSync(envPath, 'utf-8');
+            // Vérifier si l'utilisateur existe
+            const existingUser = getUserByChatId(chatIdToRemove);
+            if (!existingUser) {
+              result = {
+                success: false,
+                error: 'not_found',
+                message: `⚠️ L'utilisateur avec le Chat ID "${chatIdToRemove}" n'existe pas dans la liste.`,
+              };
+              break;
+            }
+
+            // Vérifier qu'il restera au moins un utilisateur
+            const allUsers = getAllAuthorizedUsers();
+            if (allUsers.length <= 1) {
+              result = {
+                success: false,
+                error: 'cannot_remove_last',
+                message: '❌ Impossible de supprimer le dernier utilisateur autorisé. Il doit toujours y avoir au moins un utilisateur.',
+              };
+              break;
+            }
+
+            // Supprimer l'utilisateur (désactive dans la BD)
+            const success = removeAuthorizedUser(chatIdToRemove);
+
+            if (!success) {
+              result = {
+                success: false,
+                error: 'database_error',
+                message: `❌ Erreur lors de la suppression de l'utilisateur.`,
+              };
+              break;
+            }
+
+            const username = existingUser.username || 'Inconnu';
+            const remainingUsers = getAllAuthorizedUsers();
+
+            result = {
+              success: true,
+              chat_id: chatIdToRemove,
+              username: username,
+              total_users: remainingUsers.length,
+              message: `✅ Utilisateur supprimé avec succès !\n\n📱 Chat ID: <b>${chatIdToRemove}</b>${username !== 'Inconnu' ? ` (${username})` : ''}\n👥 Total utilisateurs: ${remainingUsers.length}`,
+            };
           } catch (error: any) {
             result = {
               success: false,
-              error: 'file_read_error',
-              message: `❌ Erreur lors de la lecture du fichier .env: ${error.message}`,
+              error: 'database_error',
+              message: `❌ Erreur lors de la suppression de l'utilisateur: ${error.message}`,
             };
-            break;
           }
-
-          // Extraire la liste actuelle
-          const currentMatch = envContent.match(/^TELEGRAM_ALLOWED_CHAT_IDS=(.+)$/m);
-          const currentAllowed = currentMatch ? currentMatch[1].trim() : '';
-
-          if (!currentAllowed) {
-            result = {
-              success: false,
-              error: 'empty_list',
-              message: '❌ Erreur: La liste des utilisateurs autorisés est vide.',
-            };
-            break;
-          }
-
-          const currentList = currentAllowed.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0);
-
-          // Vérifier si l'utilisateur existe
-          if (!currentList.includes(chatIdToRemove)) {
-            result = {
-              success: false,
-              error: 'not_found',
-              message: `⚠️ L'utilisateur avec le Chat ID "${chatIdToRemove}" n'existe pas dans la liste.`,
-            };
-            break;
-          }
-
-          // Vérifier qu'il restera au moins un utilisateur
-          if (currentList.length <= 1) {
-            result = {
-              success: false,
-              error: 'cannot_remove_last',
-              message: '❌ Impossible de supprimer le dernier utilisateur autorisé. Il doit toujours y avoir au moins un utilisateur.',
-            };
-            break;
-          }
-
-          // Supprimer l'utilisateur
-          const newList = currentList.filter((id: string) => id !== chatIdToRemove);
-          const newAllowedIds = newList.join(',');
-          const newLine = `TELEGRAM_ALLOWED_CHAT_IDS=${newAllowedIds}`;
-          envContent = envContent.replace(/^TELEGRAM_ALLOWED_CHAT_IDS=.*$/m, newLine);
-
-          try {
-            fs.writeFileSync(envPath, envContent, 'utf-8');
-          } catch (error: any) {
-            result = {
-              success: false,
-              error: 'file_write_error',
-              message: `❌ Erreur lors de la sauvegarde du fichier .env: ${error.message}`,
-            };
-            break;
-          }
-
-          // Mapping des noms connus
-          const knownUsers: { [key: string]: string } = {
-            '7887749968': 'Hassan',
-            '8006682970': 'Soufiane',
-          };
-          const username = knownUsers[chatIdToRemove] || 'Inconnu';
-
-          result = {
-            success: true,
-            chat_id: chatIdToRemove,
-            username: username,
-            total_users: newList.length,
-            message: `✅ Utilisateur supprimé avec succès !\n\n📱 Chat ID: <b>${chatIdToRemove}</b>${username !== 'Inconnu' ? ` (${username})` : ''}\n👥 Total utilisateurs: ${newList.length}\n\n⚠️ Le bot doit être redémarré pour appliquer les changements.`,
-          };
           break;
         }
 
         case 'list_users': {
-          // Lister tous les utilisateurs autorisés
-          const currentAllowed = process.env.TELEGRAM_ALLOWED_CHAT_IDS || '';
-          const currentList = currentAllowed.split(',').map((id: string) => id.trim()).filter((id: string) => id.length > 0);
+          // Lister tous les utilisateurs autorisés depuis la base de données SQLite
+          try {
+            const users = getAllAuthorizedUsers();
 
-          if (currentList.length === 0) {
+            if (users.length === 0) {
+              result = {
+                success: false,
+                error: 'empty_list',
+                message: '❌ Aucun utilisateur autorisé n\'est configuré.',
+              };
+              break;
+            }
+
+            const usersList = users.map((user, index) => {
+              const username = user.username || 'Inconnu';
+              const roleLabel = user.role === 'owner' ? '👑' : user.role === 'admin' ? '⭐' : '';
+              return `${index + 1}. Chat ID: <b>${user.chat_id}</b>${username !== 'Inconnu' ? ` (${username})` : ''} ${roleLabel}`;
+            }).join('\n');
+
+            const formattedMessage = `👥 Utilisateurs autorisés (${users.length})\n\n${usersList}`;
+
+            result = {
+              success: true,
+              direct_response: formattedMessage,
+              message: formattedMessage,
+            };
+          } catch (error: any) {
             result = {
               success: false,
-              error: 'empty_list',
-              message: '❌ Aucun utilisateur autorisé n\'est configuré.',
+              error: 'database_error',
+              message: `❌ Erreur lors de la récupération des utilisateurs: ${error.message}`,
+            };
+          }
+          break;
+        }
+
+        case 'list_employees': {
+          // Lister tous les employés depuis la base de données SQLite
+          try {
+            const employees = getAllEmployees();
+
+            if (employees.length === 0) {
+              result = {
+                success: false,
+                error: 'empty_list',
+                message: '❌ Aucun employé n\'est configuré.',
+              };
+              break;
+            }
+
+            // Formatage optimisé pour Telegram (avec code blocks pour l'alignement)
+            const employeesList = employees.map((emp, index) => {
+              const num = String(index + 1).padStart(2);
+              const name = emp.name;
+              const position = emp.position || 'Employé';
+              const chatId = emp.chat_id || 'N/A';
+
+              // Utiliser code block pour chaque ligne pour monospace
+              return `\`${num}. ${name}\`\n   └─ ${position} ${chatId !== 'N/A' ? `│ ID: ${chatId}` : ''}`;
+            }).join('\n\n');
+
+            const formattedMessage = `💼 Liste des employés (${employees.length})\n\n${employeesList}`;
+
+            result = {
+              success: true,
+              direct_response: formattedMessage,
+              message: formattedMessage,
+            };
+          } catch (error: any) {
+            result = {
+              success: false,
+              error: 'database_error',
+              message: `❌ Erreur lors de la récupération des employés: ${error.message}`,
+            };
+          }
+          break;
+        }
+
+        case 'add_employee': {
+          // Ajouter un nouvel employé
+          const employeeName = args.name?.trim();
+          const employeeChatId = args.chat_id?.trim() || null;
+          const employeePosition = args.position?.trim() || 'Employé';
+
+          // Validation
+          if (!employeeName) {
+            result = {
+              success: false,
+              error: 'missing_name',
+              message: '❌ Veuillez spécifier un nom pour l\'employé.\n\nExemple: "Ajoute l\'employé Mohamed Ali"',
             };
             break;
           }
 
-          // Mapping des noms connus
-          const knownUsers: { [key: string]: string } = {
-            '7887749968': 'Hassan',
-            '8006682970': 'Soufiane',
-          };
+          if (employeeName.length < 3) {
+            result = {
+              success: false,
+              error: 'invalid_name',
+              message: '❌ Le nom de l\'employé doit contenir au moins 3 caractères.',
+            };
+            break;
+          }
 
-          const usersList = currentList.map((chatId: string, index: number) => {
-            const username = knownUsers[chatId] || 'Inconnu';
-            return `${index + 1}. Chat ID: <b>${chatId}</b>${username !== 'Inconnu' ? ` (${username})` : ''}`;
-          }).join('\n');
+          try {
+            // Vérifier si l'employé existe déjà (actif ou inactif)
+            const existing = employeeExistsByName(employeeName);
+            if (existing) {
+              if (existing.is_active) {
+                result = {
+                  success: false,
+                  error: 'already_exists',
+                  message: `⚠️ Un employé nommé "${employeeName}" existe déjà dans la base de données (actif).`,
+                };
+              } else {
+                result = {
+                  success: false,
+                  error: 'already_exists_inactive',
+                  message: `⚠️ Un employé nommé "${employeeName}" existe déjà mais est désactivé. Veuillez d'abord le supprimer complètement ou utiliser un autre nom.`,
+                };
+              }
+              break;
+            }
 
-          result = {
-            success: true,
-            total_users: currentList.length,
-            users: currentList,
-            message: `👥 Utilisateurs autorisés (${currentList.length})\n\n${usersList}`,
-          };
+            // Ajouter l'employé
+            const employeeId = addEmployee(employeeName, employeeChatId, employeePosition);
+
+            if (!employeeId) {
+              result = {
+                success: false,
+                error: 'database_error',
+                message: '❌ Erreur lors de l\'ajout de l\'employé dans la base de données.',
+              };
+              break;
+            }
+
+            // Récupérer tous les employés pour afficher la liste mise à jour
+            const allEmployees = getAllEmployees();
+            const employeesList = allEmployees.map((emp, index) => {
+              const num = String(index + 1).padStart(2, ' ');
+              const name = emp.name;
+              const position = emp.position || 'Employé';
+              const chatId = emp.chat_id || 'N/A';
+              return `\`${num}. ${name}\`\n   └─ ${position} ${chatId !== 'N/A' ? `│ ID: ${chatId}` : ''}`;
+            }).join('\n\n');
+
+            const chatInfo = employeeChatId ? `\n📱 Chat ID: ${employeeChatId}` : '';
+            const formattedMessage = `✅ Employé ajouté avec succès !\n\n👤 Nom: ${employeeName}\n💼 Poste: ${employeePosition}${chatInfo}\n🆔 ID: ${employeeId}\n\n💼 Liste mise à jour des employés (${allEmployees.length})\n\n${employeesList}`;
+
+            result = {
+              success: true,
+              employee_id: employeeId,
+              name: employeeName,
+              position: employeePosition,
+              chat_id: employeeChatId,
+              direct_response: formattedMessage,
+              message: formattedMessage,
+            };
+          } catch (error: any) {
+            result = {
+              success: false,
+              error: 'database_error',
+              message: `❌ Erreur lors de l'ajout de l'employé: ${error.message}`,
+            };
+          }
+          break;
+        }
+
+        case 'remove_employee': {
+          // Supprimer un employé
+          const employeeName = args.name?.trim();
+
+          // Validation
+          if (!employeeName) {
+            result = {
+              success: false,
+              error: 'missing_name',
+              message: '❌ Veuillez spécifier le nom de l\'employé à supprimer.\n\nExemple: "Supprime l\'employé Hassan Madidi"',
+            };
+            break;
+          }
+
+          try {
+            // Chercher l'employé
+            const employee = getEmployeeByName(employeeName);
+
+            if (!employee) {
+              result = {
+                success: false,
+                error: 'not_found',
+                message: `⚠️ Aucun employé nommé "${employeeName}" n'a été trouvé.\n\nVeuillez vérifier l'orthographe exacte avec la commande "liste des employés".`,
+              };
+              break;
+            }
+
+            // Vérifier qu'il restera au moins un employé
+            const allEmployees = getAllEmployees();
+            if (allEmployees.length <= 1) {
+              result = {
+                success: false,
+                error: 'cannot_remove_last',
+                message: '❌ Impossible de supprimer le dernier employé. Il doit toujours y avoir au moins un employé.',
+              };
+              break;
+            }
+
+            // Supprimer l'employé (désactiver)
+            const success = removeEmployee(employee.id);
+
+            if (!success) {
+              result = {
+                success: false,
+                error: 'database_error',
+                message: '❌ Erreur lors de la suppression de l\'employé.',
+              };
+              break;
+            }
+
+            const remainingEmployees = getAllEmployees();
+
+            // Formatage de la liste mise à jour
+            const employeesList = remainingEmployees.map((emp, index) => {
+              const num = String(index + 1).padStart(2);
+              const name = emp.name;
+              const position = emp.position || 'Employé';
+              const chatId = emp.chat_id || 'N/A';
+
+              return `\`${num}. ${name}\`\n   └─ ${position} ${chatId !== 'N/A' ? `│ ID: ${chatId}` : ''}`;
+            }).join('\n\n');
+
+            const formattedMessage = `✅ Employé supprimé avec succès !\n\n👤 Nom: ${employee.name}\n💼 Poste: ${employee.position || 'N/A'}\n\n💼 Liste mise à jour des employés (${remainingEmployees.length})\n\n${employeesList}`;
+
+            result = {
+              success: true,
+              employee_id: employee.id,
+              name: employee.name,
+              direct_response: formattedMessage,
+              message: formattedMessage,
+            };
+          } catch (error: any) {
+            result = {
+              success: false,
+              error: 'database_error',
+              message: `❌ Erreur lors de la suppression de l'employé: ${error.message}`,
+            };
+          }
           break;
         }
 
@@ -1640,6 +1889,14 @@ TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
      4. Appeler list_users() à nouveau pour confirmer
    - Après add_user() ou remove_user(), tu DOIS rappeler list_users() pour afficher la liste mise à jour
    - TOUJOURS utiliser les données RÉELLES retournées par les outils, JAMAIS ta mémoire ou imagination
+
+12. ⚠️ **FONCTIONS AVEC MESSAGE PRÉFORMATÉ** - CRITIQUE:
+   - Pour list_users(), list_employees(), list_suppliers(): La réponse contient un champ "direct_response"
+   - ⚠️⚠️⚠️ RÈGLE ABSOLUE: Si la réponse contient le champ "direct_response", tu DOIS renvoyer EXACTEMENT ce contenu, RIEN D'AUTRE
+   - NE PAS ajouter "Voici la liste", "Voici", "Voici la liste des employés", "Voici les fournisseurs", ou une introduction
+   - NE PAS reformater, NE PAS créer ta propre liste, NE PAS modifier le format
+   - "direct_response" est déjà formaté pour Telegram, RENVOIE-LE TEL QUEL sans un seul changement, sans un seul mot ajouté
+   - C'est comme un "COPY-PASTE": tu copies exactement direct_response et tu envoies, rien de plus
 
 EXEMPLES D'UTILISATION CORRECTE DES OUTILS:
 ✅ Question: "Combien de factures en décembre ?"
