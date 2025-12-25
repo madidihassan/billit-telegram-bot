@@ -176,7 +176,18 @@ if [ -d "$DEV_PATH" ]; then
     echo "────────────────────────────────────────────────────────────"
     
     info "Arrêt de l'ancien processus..."
-    pkill -f "$DEV_PATH.*node.*dist/index-bot" || true
+    # Trouver les PIDs des processus node dist/index-bot
+    OLD_PIDS=$(pgrep -f "node dist/index-bot" || true)
+    if [ -n "$OLD_PIDS" ]; then
+        for pid in $OLD_PIDS; do
+            # Vérifier le répertoire de travail du processus
+            PWD_PATH=$(pwdx "$pid" 2>/dev/null | awk '{print $2}')
+            if [ "$PWD_PATH" = "$DEV_PATH" ]; then
+                info "Arrêt du processus $pid (répertoire: $PWD_PATH)"
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
     sleep 2
     
     info "Démarrage du nouveau bot..."
