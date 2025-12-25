@@ -1,51 +1,58 @@
 /**
  * Dictionnaire d'aliases pour les fournisseurs
  * Permet de mapper des noms communs vers les vrais noms dans les transactions
+ *
+ * NOUVEAU: Utilise SQLite au lieu de supplier-aliases.json
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import { getAllSuppliers, getSupplierAliases, addSupplier as dbAddSupplier, removeSupplier, findSupplierByNameOrAlias } from './database';
 
 export interface SupplierAlias {
   aliases: string[];  // Noms que l'utilisateur peut utiliser
   patterns: string[]; // Patterns à chercher dans les descriptions de transactions
 }
 
-// Charger les aliases depuis le fichier JSON
+// Charger les aliases depuis la base de données SQLite
 function loadSupplierAliases(): Record<string, SupplierAlias> {
   try {
-    const aliasesPath = path.join(__dirname, '..', 'supplier-aliases.json');
-    
-    if (fs.existsSync(aliasesPath)) {
-      const content = fs.readFileSync(aliasesPath, 'utf-8');
-      const loaded = JSON.parse(content);
-      console.log(`✓ ${Object.keys(loaded).length} fournisseur(s) chargé(s) depuis supplier-aliases.json`);
-      return loaded;
-    } else {
-      console.warn('⚠️  Fichier supplier-aliases.json non trouvé, utilisation des aliases par défaut');
+    const suppliers = getAllSuppliers();
+    const result: Record<string, SupplierAlias> = {};
+
+    for (const supplier of suppliers) {
+      const aliases = getSupplierAliases(supplier.id);
+
+      // Créer l'entrée avec tous les alias
+      result[supplier.name] = {
+        aliases: [supplier.name, ...aliases],
+        patterns: aliases  // Les alias peuvent servir de patterns
+      };
     }
+
+    console.log(`✓ ${Object.keys(result).length} fournisseur(s) chargé(s) depuis la base de données SQLite`);
+    return result;
   } catch (error: any) {
-    console.error('❌ Erreur lors du chargement de supplier-aliases.json:', error.message);
+    console.error('❌ Erreur lors du chargement des fournisseurs depuis SQLite:', error.message);
+
+    // Fallback: aliases par défaut
+    return {
+      'foster': {
+        aliases: ['foster', 'foster fast food', 'foster fastfood'],
+        patterns: ['foster', 'fosterfastfood']
+      },
+      'edenred': {
+        aliases: ['edenred', 'eden red', 'eden', 'ticket restaurant'],
+        patterns: ['edenred', 'edenredbelgium']
+      },
+      'collibry': {
+        aliases: ['collibry', 'colibri', 'collibri'],
+        patterns: ['collibry']
+      }
+    };
   }
-  
-  // Fallback: aliases par défaut
-  return {
-    'foster': {
-      aliases: ['foster', 'foster fast food', 'foster fastfood'],
-      patterns: ['foster', 'fosterfastfood']
-    },
-    'edenred': {
-      aliases: ['edenred', 'eden red', 'eden', 'ticket restaurant'],
-      patterns: ['edenred', 'edenredbelgium']
-    },
-    'collibry': {
-      aliases: ['collibry', 'colibri', 'collibri'],
-      patterns: ['collibry']
-    }
-  };
 }
 
-export const SUPPLIER_ALIASES: Record<string, SupplierAlias> = loadSupplierAliases();
+// Cache en mémoire pour les performances (chargé au démarrage)
+export let SUPPLIER_ALIASES: Record<string, SupplierAlias> = loadSupplierAliases();
 
 /**
  * Normalise un terme de recherche en enlevant espaces, accents, ponctuation
@@ -240,23 +247,16 @@ export function getSupplierDisplayName(supplierName: string): string {
 }
 
 /**
- * Sauvegarde les aliases dans le fichier JSON
+ * Sauvegarde les aliases (OBSOLÈTE - utilise maintenant SQLite directement)
+ * Conservé pour compatibilité mais ne fait plus rien
  */
 function saveSupplierAliases(suppliers: Record<string, SupplierAlias>): boolean {
-  try {
-    const aliasesPath = path.join(__dirname, '..', 'supplier-aliases.json');
-    const content = JSON.stringify(suppliers, null, 2);
-    fs.writeFileSync(aliasesPath, content, 'utf-8');
-    console.log(`✓ ${Object.keys(suppliers).length} fournisseur(s) sauvegardé(s) dans supplier-aliases.json`);
-    return true;
-  } catch (error: any) {
-    console.error('❌ Erreur lors de la sauvegarde de supplier-aliases.json:', error.message);
-    return false;
-  }
+  // Cette fonction est obsolète, la sauvegarde se fait directement dans SQLite
+  return true;
 }
 
 /**
- * Ajoute un nouveau fournisseur
+ * Ajoute un nouveau fournisseur dans SQLite
  * @param key Clé unique du fournisseur (ex: 'pluxee')
  * @param primaryName Nom principal d'affichage (ex: 'Pluxee Belgium')
  * @param aliases Liste des alias (ex: ['pluxee', 'pluxi', 'pluxee belgium'])
@@ -268,42 +268,31 @@ export function addSupplier(
   aliases: string[],
   patterns: string[]
 ): { success: boolean; message: string } {
-  // Normaliser la clé
-  const normalizedKey = normalizeSearchTerm(key);
+  try {
+    // Combiner aliases et patterns, puis dédupliquer
+    const allAliases = [...new Set([...aliases, ...patterns])];
 
-  // Vérifier si le fournisseur existe déjà
-  if (SUPPLIER_ALIASES[normalizedKey]) {
-    return {
-      success: false,
-      message: `❌ Le fournisseur "${primaryName}" existe déjà avec la clé "${normalizedKey}"`
-    };
-  }
+    // Ajouter dans la base de données SQLite
+    const supplierId = dbAddSupplier(primaryName, allAliases, 'fournisseur');
 
-  // S'assurer que le nom principal est dans les aliases
-  if (!aliases.includes(primaryName)) {
-    aliases.unshift(primaryName);
-  }
+    if (!supplierId) {
+      return {
+        success: false,
+        message: `❌ Le fournisseur "${primaryName}" existe déjà ou une erreur s'est produite`
+      };
+    }
 
-  // Créer le nouveau fournisseur
-  const newSupplier: SupplierAlias = {
-    aliases: aliases.map(a => a.toLowerCase()),
-    patterns: patterns.map(p => normalizeSearchTerm(p))
-  };
+    // Recharger le cache en mémoire
+    SUPPLIER_ALIASES = loadSupplierAliases();
 
-  // Ajouter à la base
-  SUPPLIER_ALIASES[normalizedKey] = newSupplier;
-
-  // Sauvegarder
-  if (saveSupplierAliases(SUPPLIER_ALIASES)) {
     return {
       success: true,
-      message: `✅ Fournisseur "${primaryName}" ajouté avec succès !\n\nClé: ${normalizedKey}\nAliases: ${newSupplier.aliases.join(', ')}\nPatterns: ${newSupplier.patterns.join(', ')}`
+      message: `✅ Fournisseur "${primaryName}" ajouté avec succès dans la base de données !\n\nID: ${supplierId}\nAliases: ${allAliases.join(', ')}`
     };
-  } else {
-    delete SUPPLIER_ALIASES[normalizedKey]; // Rollback
+  } catch (error: any) {
     return {
       success: false,
-      message: `❌ Erreur lors de la sauvegarde du fournisseur`
+      message: `❌ Erreur lors de l'ajout du fournisseur: ${error.message}`
     };
   }
 }
@@ -335,58 +324,54 @@ export function listSuppliers(): string {
 }
 
 /**
- * Supprime un fournisseur
+ * Supprime un fournisseur de la base de données SQLite
  */
 export function deleteSupplier(key: string): { success: boolean; message: string } {
-  const normalizedKey = normalizeSearchTerm(key);
+  try {
+    // Chercher le fournisseur dans la BD
+    const supplier = findSupplierByNameOrAlias(key);
 
-  // Chercher le fournisseur
-  let foundKey: string | null = null;
-  for (const k of Object.keys(SUPPLIER_ALIASES)) {
-    if (normalizeSearchTerm(k) === normalizedKey) {
-      foundKey = k;
-      break;
+    if (!supplier) {
+      return {
+        success: false,
+        message: `❌ Fournisseur non trouvé: "${key}"`
+      };
     }
-  }
 
-  if (!foundKey || !SUPPLIER_ALIASES[foundKey]) {
-    return {
-      success: false,
-      message: `❌ Fournisseur non trouvé: "${key}"`
-    };
-  }
+    const displayName = supplier.name
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
 
-  const supplier = SUPPLIER_ALIASES[foundKey];
-  const displayName = supplier.aliases[0]
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+    // Supprimer de la base de données (désactive)
+    const success = removeSupplier(supplier.id);
 
-  // Supprimer
-  delete SUPPLIER_ALIASES[foundKey];
+    if (!success) {
+      return {
+        success: false,
+        message: `❌ Erreur lors de la suppression du fournisseur`
+      };
+    }
 
-  // Sauvegarder
-  if (saveSupplierAliases(SUPPLIER_ALIASES)) {
+    // Recharger le cache en mémoire
+    SUPPLIER_ALIASES = loadSupplierAliases();
+
     return {
       success: true,
-      message: `✅ Fournisseur "${displayName}" supprimé avec succès !`
+      message: `✅ Fournisseur "${displayName}" supprimé avec succès de la base de données !`
     };
-  } else {
-    // Rollback
-    SUPPLIER_ALIASES[foundKey] = supplier;
+  } catch (error: any) {
     return {
       success: false,
-      message: `❌ Erreur lors de la suppression du fournisseur`
+      message: `❌ Erreur lors de la suppression du fournisseur: ${error.message}`
     };
   }
 }
 
 /**
- * Recharge les fournisseurs depuis le fichier (après modifications externes)
+ * Recharge les fournisseurs depuis la base de données SQLite (après modifications externes)
  */
 export function reloadSuppliers(): number {
-  const suppliers = loadSupplierAliases();
-  // Mettre à jour les entrées existantes
-  Object.assign(SUPPLIER_ALIASES, suppliers);
+  SUPPLIER_ALIASES = loadSupplierAliases();
   return Object.keys(SUPPLIER_ALIASES).length;
 }

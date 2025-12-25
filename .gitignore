@@ -19,3 +19,9 @@ supplier-aliases.json
 .env.tonton202
 .env.mustfood
 .env.production.*
+
+# Test files
+test-*.ts
+check-*.ts
+clean-*.ts
+cleanup-*.ts

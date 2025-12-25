@@ -12,6 +12,8 @@
     "watch": "tsc -w",
     "test": "ts-node src/test-connection.ts",
     "test:ai": "ts-node test-ai-conversation.ts",
+    "migrate": "ts-node src/migrate-to-database.ts",
+    "backup": "ts-node src/backup-database.ts",
     "pm2:start": "npm run build && pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop billit-notifier",
     "pm2:restart": "pm2 restart billit-notifier",
@@ -28,12 +30,14 @@
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.0",
+    "better-sqlite3": "^12.5.0",
     "dotenv": "^16.3.1",
     "form-data": "^4.0.5",
     "groq-sdk": "^0.37.0",
     "node-telegram-bot-api": "^0.64.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",
     "@types/node-telegram-bot-api": "^0.64.0",
     "ts-node": "^10.9.2",

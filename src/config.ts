@@ -11,8 +11,9 @@ export const config = {
   telegram: {
     botToken: process.env.TELEGRAM_BOT_TOKEN || '',
     chatId: process.env.TELEGRAM_CHAT_ID || '',
-    // Support multiple chat IDs separated by commas for security whitelist
-    allowedChatIds: (process.env.TELEGRAM_ALLOWED_CHAT_IDS || process.env.TELEGRAM_CHAT_ID || '')
+    // OBSOLÈTE: Utilisez maintenant la base de données (isUserAuthorized)
+    // Gardé pour compatibilité avec les anciennes commandes qui mettent à jour le .env
+    allowedChatIds: (process.env.TELEGRAM_ALLOWED_CHAT_IDS || '')
       .split(',')
       .map(id => id.trim())
       .filter(id => id.length > 0),
@@ -41,9 +42,7 @@ export function validateConfig(): void {
   if (!config.telegram.chatId) {
     errors.push('TELEGRAM_CHAT_ID manquant');
   }
-  if (config.telegram.allowedChatIds.length === 0) {
-    errors.push('TELEGRAM_ALLOWED_CHAT_IDS manquant (ou TELEGRAM_CHAT_ID)');
-  }
+  // TELEGRAM_ALLOWED_CHAT_IDS n'est plus obligatoire (base de données utilisée à la place)
 
   if (errors.length > 0) {
     throw new Error(`Configuration invalide:\n- ${errors.join('\n- ')}`);

@@ -1,5 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { config, isAllowedChatId } from './config';
+import { config } from './config';
+import { isUserAuthorized } from './database';
 import { CommandHandler } from './command-handler';
 import { VoiceService } from './voice-service';
 import { IntentService } from './intent-service';
@@ -94,8 +95,8 @@ export class TelegramBotInteractive {
       const msg = callbackQuery.message;
       const data = callbackQuery.data;
 
-      // SÉCURITÉ: Vérifier que le message vient d'un chat autorisé (whitelist)
-      if (msg && !isAllowedChatId(msg.chat.id)) {
+      // SÉCURITÉ: Vérifier que le message vient d'un chat autorisé (base de données)
+      if (msg && !isUserAuthorized(String(msg.chat.id))) {
         console.log(`⚠️  Callback ignoré d'un chat non autorisé: ${msg.chat.id}`);
         logUnauthorizedAccess(msg.chat.id, callbackQuery.from.username);
         return;
@@ -155,8 +156,8 @@ export class TelegramBotInteractive {
 
     // Gérer les commandes
     this.bot.onText(/^\/(\w+)(.*)/, async (msg, match) => {
-      // SÉCURITÉ: Vérifier que le message vient d'un chat autorisé (whitelist)
-      if (!isAllowedChatId(msg.chat.id)) {
+      // SÉCURITÉ: Vérifier que le message vient d'un chat autorisé (base de données)
+      if (!isUserAuthorized(String(msg.chat.id))) {
         console.log(`⚠️  Message ignoré d'un chat non autorisé: ${msg.chat.id}`);
         logUnauthorizedAccess(msg.chat.id, msg.from?.username);
         return;
@@ -199,8 +200,8 @@ export class TelegramBotInteractive {
     this.bot.on('message', async (msg) => {
       console.log('📩 Event message:', msg.text || msg.voice ? '🎤 Voice' : msg.caption || '[media]', 'from chat:', msg.chat.id);
 
-      // SÉCURITÉ: Vérifier que le message vient d'un chat autorisé (whitelist)
-      if (!isAllowedChatId(msg.chat.id)) {
+      // SÉCURITÉ: Vérifier que le message vient d'un chat autorisé (base de données)
+      if (!isUserAuthorized(String(msg.chat.id))) {
         logUnauthorizedAccess(msg.chat.id, msg.from?.username);
         return;
       }

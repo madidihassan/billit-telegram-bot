@@ -4,6 +4,7 @@ import { BankClient } from './bank-client';
 import { BillitInvoice } from './types';
 import { matchesSupplier, getSupplierDisplayName, normalizeSearchTerm as normalizeSupplierTerm, SUPPLIER_ALIASES, addSupplier, deleteSupplier, listSuppliers } from './supplier-aliases';
 import { normalizeSearchTerm } from './utils/string-utils';
+import { addAuthorizedUser, removeAuthorizedUser, getAllAuthorizedUsers, getUserByChatId, getAllEmployees } from './database';
 
 // Liste des employés (pour filtrer les salaires)
 const EMPLOYEE_KEYS = [
@@ -472,48 +473,24 @@ ${lines.join('\n\n')}
    */
   private async handleListEmployees(): Promise<string> {
     try {
-      // Filtrer uniquement les employés depuis le dictionnaire
-      const allSuppliers = Object.entries(SUPPLIER_ALIASES);
-
-      const employees = allSuppliers.filter(([key]) => EMPLOYEE_KEYS.includes(key));
+      // Utiliser la base de données au lieu du dictionnaire
+      const employees = getAllEmployees();
 
       if (employees.length === 0) {
-        return '❌ Aucun employé trouvé dans le dictionnaire.';
+        return '❌ Aucun employé trouvé dans la base de données.';
       }
 
-      // Trier par ordre alphabétique
-      const sortedEmployees = employees.sort((a, b) => {
-        const nameA = a[1].aliases[0].toLowerCase();
-        const nameB = b[1].aliases[0].toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
+      // Formatage optimisé pour Telegram
+      const lines = employees.map((emp, idx) => {
+        const num = String(idx + 1).padStart(2);
+        const name = emp.name;
+        const position = emp.position || 'Employé';
+        const chatId = emp.chat_id || 'N/A';
 
-      const lines = sortedEmployees.map(([key, employee], idx) => {
-        const mainName = getSupplierDisplayName(employee.aliases[0]);
+        return `\`${num}. ${name}\`\n   └─ ${position} ${chatId !== 'N/A' ? `│ ID: ${chatId}` : ''}`;
+      }).join('\n\n');
 
-        // Afficher les autres aliases s'il y en a
-        let aliasesText = '';
-        if (employee.aliases.length > 1) {
-          const otherAliases = employee.aliases.slice(1).join(', ');
-          aliasesText = `\n   🏷️  Alias: ${otherAliases}`;
-        }
-
-        return `${idx + 1}. <b>${mainName}</b>${aliasesText}`;
-      });
-
-      return `
-━━━━━━━━━━━━━━━━━━━━━━
-👥 <b>LISTE DES EMPLOYÉS</b>
-━━━━━━━━━━━━━━━━━━━━━━
-
-${lines.join('\n\n')}
-
-━━━━━━━━━━━━━━━━━━━━━━
-📊 <b>Total:</b> ${sortedEmployees.length} employé${sortedEmployees.length > 1 ? 's' : ''}
-━━━━━━━━━━━━━━━━━━━━━━
-
-💡 <i>Utilisez /transactions_fournisseur [nom] pour voir les paiements à un employé</i>
-      `.trim();
+      return `💼 Liste des employés (${employees.length})\n\n${lines}`;
     } catch (error: any) {
       console.error('Erreur handleListEmployees:', error);
       return `❌ Erreur lors de la récupération: ${error.message}`;
@@ -1335,42 +1312,28 @@ Utilisation: <code>/deletesupplier [clé]</code>
       return `❌ Chat ID invalide: "${chatIdToAdd}"\n\nUn Chat ID doit contenir uniquement des chiffres.`;
     }
 
-    // Vérifier s'il est déjà dans la liste
-    const currentAllowed = process.env.TELEGRAM_ALLOWED_CHAT_IDS || '';
-    const currentList = currentAllowed.split(',').map(id => id.trim()).filter(id => id.length > 0);
-
-    if (currentList.includes(chatIdToAdd)) {
+    // Vérifier s'il est déjà dans la base de données
+    const existingUser = getUserByChatId(chatIdToAdd);
+    if (existingUser) {
       return `ℹ️  Le Chat ID <b>${chatIdToAdd}</b> est déjà autorisé.`;
     }
 
-    try {
-      // Lire le fichier .env
-      const fs = await import('fs');
-      const envPath = '/home/ubuntu/Billit/tonton202/.env';
+    // Ajouter à la base de données
+    const success = addAuthorizedUser(chatIdToAdd, null, 'user', 'admin_command');
 
-      let envContent = fs.readFileSync(envPath, 'utf-8');
-
-      // Remplacer la ligne TELEGRAM_ALLOWED_CHAT_IDS
-      const newAllowedIds = [...currentList, chatIdToAdd].join(',');
-      const newLine = `TELEGRAM_ALLOWED_CHAT_IDS=${newAllowedIds}`;
-
-      // Utiliser une regex pour remplacer la ligne
-      envContent = envContent.replace(/^TELEGRAM_ALLOWED_CHAT_IDS=.*$/m, newLine);
-
-      // Écrire le fichier
-      fs.writeFileSync(envPath, envContent, 'utf-8');
-
-      let message = `✅ Utilisateur ajouté avec succès !\n\n`;
-      message += `📱 Chat ID: <b>${chatIdToAdd}</b>\n`;
-      message += `👥 Total utilisateurs: ${currentList.length + 1}\n\n`;
-      message += `⚠️ Le bot doit être redémarré pour appliquer les changements.\n`;
-      message += `Utilisez /restart pour redémarrer le bot.`;
-
-      return message;
-    } catch (error: any) {
-      console.error('Erreur handleAddUser:', error);
-      return `❌ Erreur lors de l'ajout: ${error.message}`;
+    if (!success) {
+      return `❌ Erreur lors de l'ajout de l'utilisateur.`;
     }
+
+    // Récupérer le nouveau total
+    const allUsers = getAllAuthorizedUsers();
+
+    let message = `✅ Utilisateur ajouté avec succès !\n\n`;
+    message += `📱 Chat ID: <b>${chatIdToAdd}</b>\n`;
+    message += `👥 Total utilisateurs: ${allUsers.length}\n\n`;
+    message += `✨ L'utilisateur est immédiatement actif (pas de redémarrage nécessaire).`;
+
+    return message;
   }
 
   /**
@@ -1383,74 +1346,48 @@ Utilisation: <code>/deletesupplier [clé]</code>
 
     const chatIdToRemove = args[0].trim();
 
-    try {
-      // Lire le fichier .env
-      const fs = await import('fs');
-      const envPath = '/home/ubuntu/Billit/tonton202/.env';
-
-      let envContent = fs.readFileSync(envPath, 'utf-8');
-
-      // Récupérer la liste actuelle
-      const currentAllowed = process.env.TELEGRAM_ALLOWED_CHAT_IDS || '';
-      const currentList = currentAllowed.split(',').map(id => id.trim()).filter(id => id.length > 0);
-
-      // Vérifier si l'ID existe
-      if (!currentList.includes(chatIdToRemove)) {
-        return `❌ Le Chat ID <b>${chatIdToRemove}</b> n'est pas dans la liste des utilisateurs autorisés.\n\nUtilisez /listusers pour voir la liste.`;
-      }
-
-      // Retirer l'ID de la liste
-      const newList = currentList.filter(id => id !== chatIdToRemove);
-
-      // Sécurité : empêcher de supprimer tous les utilisateurs
-      if (newList.length === 0) {
-        return `❌ Impossible de supprimer le dernier utilisateur.\n\nIl doit toujours y avoir au moins un utilisateur autorisé.`;
-      }
-
-      // Remplacer la ligne TELEGRAM_ALLOWED_CHAT_IDS
-      const newAllowedIds = newList.join(',');
-      const newLine = `TELEGRAM_ALLOWED_CHAT_IDS=${newAllowedIds}`;
-
-      envContent = envContent.replace(/^TELEGRAM_ALLOWED_CHAT_IDS=.*$/m, newLine);
-
-      // Écrire le fichier
-      fs.writeFileSync(envPath, envContent, 'utf-8');
-
-      let message = `🗑️ Utilisateur supprimé avec succès !\n\n`;
-      message += `📱 Chat ID: <b>${chatIdToRemove}</b>\n`;
-      message += `👥 Total utilisateurs restants: ${newList.length}\n\n`;
-      message += `⚠️ Le bot doit être redémarré pour appliquer les changements.\n`;
-      message += `Utilisez /restart pour redémarrer le bot.`;
-
-      return message;
-    } catch (error: any) {
-      console.error('Erreur handleRemoveUser:', error);
-      return `❌ Erreur lors de la suppression: ${error.message}`;
+    // Vérifier si l'ID existe dans la base de données
+    const existingUser = getUserByChatId(chatIdToRemove);
+    if (!existingUser) {
+      return `❌ Le Chat ID <b>${chatIdToRemove}</b> n'est pas dans la liste des utilisateurs autorisés.\n\nUtilisez /listusers pour voir la liste.`;
     }
+
+    // Sécurité : empêcher de supprimer le dernier utilisateur
+    const allUsers = getAllAuthorizedUsers();
+    if (allUsers.length === 1) {
+      return `❌ Impossible de supprimer le dernier utilisateur.\n\nIl doit toujours y avoir au moins un utilisateur autorisé.`;
+    }
+
+    // Supprimer de la base de données
+    const success = removeAuthorizedUser(chatIdToRemove);
+
+    if (!success) {
+      return `❌ Erreur lors de la suppression de l'utilisateur.`;
+    }
+
+    // Récupérer le nouveau total
+    const remainingUsers = getAllAuthorizedUsers();
+
+    let message = `🗑️ Utilisateur supprimé avec succès !\n\n`;
+    message += `📱 Chat ID: <b>${chatIdToRemove}</b>\n`;
+    message += `👥 Total utilisateurs restants: ${remainingUsers.length}\n\n`;
+    message += `✨ L'utilisateur est immédiatement désactivé (pas de redémarrage nécessaire).`;
+
+    return message;
   }
 
   /**
    * Liste tous les utilisateurs autorisés
    */
   private handleListUsers(): string {
-    const currentAllowed = process.env.TELEGRAM_ALLOWED_CHAT_IDS || '';
-    const currentList = currentAllowed.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    const allUsers = getAllAuthorizedUsers();
 
-    let message = `👥 Utilisateurs autorisés (${currentList.length})\n\n`;
+    let message = `👥 Utilisateurs autorisés (${allUsers.length})\n\n`;
 
-    // Mapping known des Chat IDs
-    const knownUsers: { [key: string]: string } = {
-      '7887749968': 'Hassan',
-      '8006682970': 'Soufiane',
-    };
-
-    currentList.forEach((chatId, index) => {
-      const username = knownUsers[chatId] || 'Inconnu';
-      message += `${index + 1}. Chat ID: <b>${chatId}</b>`;
-      if (username !== 'Inconnu') {
-        message += ` (${username})`;
-      }
-      message += '\n';
+    allUsers.forEach((user, index) => {
+      const username = user.username || 'Inconnu';
+      message += `${index + 1}. Chat ID: <b>${user.chat_id}</b>`;
+      message += ` (${username}) [${user.role}]\n`;
     });
 
     message += '\n💡 Pour ajouter un utilisateur: /adduser <chat_id>';
