@@ -215,8 +215,22 @@ npm run start:bot
 
 ### 3. Déploiement
 ```bash
-# Tuer les anciens processus
-pkill -f "npm run start:bot"
+# ⚠️ NOUVEAU: Utilisez start-bot-safe.sh au lieu de start-bot-wrapper.sh
+# Ce script garantit qu'un seul bot tourne par dossier
+
+# Pour démarrer le bot Tonton202:
+cd /home/ubuntu/Billit/tonton202
+./start-bot-safe.sh
+
+# Pour démarrer le bot Mustfood:
+cd /home/ubuntu/Billit/mustfood
+./start-bot-safe.sh
+
+# Le script start-bot-safe.sh:
+# - Tue automatiquement les anciens processus du MÊME dossier
+# - N'interfère PAS avec les bots des autres dossiers
+# - Vérifie que le bot démarre correctement
+# - Utilise pwdx pour identifier précisément les processus à tuer
 
 # Commiter les changements
 git add .

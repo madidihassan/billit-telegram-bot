@@ -160,8 +160,9 @@ if [ -d "$DEV_PATH" ]; then
         --exclude='.git/' \
         --exclude='*.log' \
         src/ "$DEV_PATH/src/"
-    
-    cp package.json tsconfig.json "$DEV_PATH/" 2>/dev/null || true
+
+    cp package.json tsconfig.json start-bot-safe.sh start-bot-wrapper.sh "$DEV_PATH/" 2>/dev/null || true
+    chmod +x "$DEV_PATH/start-bot-safe.sh" "$DEV_PATH/start-bot-wrapper.sh" 2>/dev/null || true
     
     cd "$DEV_PATH"
     npm run build > /dev/null 2>&1
@@ -190,17 +191,12 @@ if [ -d "$DEV_PATH" ]; then
     fi
     sleep 2
     
-    info "Démarrage du nouveau bot..."
+    info "Démarrage du nouveau bot avec start-bot-safe.sh..."
     cd "$DEV_PATH"
-    ./start-bot-wrapper.sh > /dev/null 2>&1 &
-    sleep 3
-    
-    if pgrep -f "node dist/index-bot" > /dev/null; then
-        success "Bot ${TARGET_NAME} redémarré avec succès"
-    else
-        warning "Le bot n'a pas pu être redémarré automatiquement"
-        info "Veuillez le démarrer manuellement avec: cd $DEV_PATH && ./start-bot-wrapper.sh"
-    fi
+    ./start-bot-safe.sh
+
+    # Le script start-bot-safe.sh gère déjà la vérification
+    success "Bot ${TARGET_NAME} redémarré (voir les détails ci-dessus)"
 else
     warning "Répertoire $DEV_PATH non trouvé - déploiement développement ignoré"
 fi
