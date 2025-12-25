@@ -104,10 +104,10 @@ supplier-aliases.json  # Alias des fournisseurs
 ### 1. Support Multi-Utilisateurs ✅
 - **Chaque utilisateur reçoit ses propres réponses**
 - Whitelist via `TELEGRAM_ALLOWED_CHAT_IDS` dans `.env`
-- Chat IDs configurés (pour tonton202):
+- **⚠️ NOTE IMPORTANTE** : La liste des utilisateurs change dynamiquement. Pour connaître la liste ACTUELLE, utiliser l'outil `list_users()` - NE PAS se fier à cette documentation qui peut être obsolète.
+- Exemples de Chat IDs (non exhaustif, peut avoir changé) :
   - Hassan (propriétaire): 7887749968
   - Soufiane: 8006682970
-  - Loubna: 6542906157
 
 **Implementation**: `currentChatId` dans `telegram-bot.ts` (ligne ~20)
 
@@ -577,7 +577,7 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 ## Contact et support
 
 - **Propriétaire**: Hassan (Chat ID: 7887749968)
-- **Utilisateurs**: Soufiane (8006682970), Loubna (6542906157)
+- **⚠️ Liste complète des utilisateurs** : Utiliser l'outil `list_users()` pour la liste ACTUELLE et À JOUR (cette documentation peut être obsolète)
 - **Repository**: GitHub (privé)
 - **Documentation**: Voir fichiers `.md` dans le projet
 

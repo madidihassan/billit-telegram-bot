@@ -417,13 +417,13 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'remove_user',
-          description: '⚠️ Supprime un utilisateur de la liste blanche. IMPORTANT: Si l\'utilisateur dit "supprime le 4" ou "supprime le 3ème", tu DOIS d\'abord appeler list_users() pour obtenir la vraie liste, puis extraire le Chat ID correspondant à la position demandée. Ne JAMAIS inventer ou deviner les Chat IDs. Utilise cette fonction pour: "Supprime 123456789", "Retire ce Chat ID", "Supprime le 2ème", "Enlève le dernier". Attention: action irréversible !',
+          description: '⚠️ Supprime un utilisateur. WORKFLOW OBLIGATOIRE si position ("le 3", "le 2ème", "l\'utilisateur 3"):\n1. APPELLE list_users() pour obtenir la liste ACTUELLE\n2. EXTRAIS le Chat ID à la position demandée depuis le RÉSULTAT de list_users()\n3. APPELLE remove_user() avec ce Chat ID\n4. APPELLE list_users() à nouveau pour confirmer\n⚠️ NE JAMAIS utiliser CLAUDE.md ou ta mémoire pour les Chat IDs - UNIQUEMENT le résultat de list_users().\nExemples: "Supprime le 3ème" → list_users() → extrait le 3ème Chat ID → remove_user(ce_chat_id)',
           parameters: {
             type: 'object',
             properties: {
               chat_id: {
                 type: 'string',
-                description: 'Chat ID Telegram EXACT de l\'utilisateur à supprimer (ex: "7887749968"). DOIT être un Chat ID réel obtenu via list_users(), pas un numéro de position.',
+                description: 'Chat ID Telegram EXACT (ex: "7887749968"). DOIT provenir du résultat de list_users(), PAS de CLAUDE.md, PAS de ta mémoire, PAS d\'invention.',
               },
             },
             required: ['chat_id'],
@@ -1630,6 +1630,9 @@ TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
 11. ⚠️ **GESTION DES UTILISATEURS - NE JAMAIS INVENTER** - CRITIQUE:
    - Pour TOUTE question sur les utilisateurs, tu DOIS appeler list_users() AVANT de répondre
    - NE JAMAIS inventer de Chat IDs ou de noms d'utilisateurs
+   - ⚠️ NE JAMAIS utiliser les infos de CLAUDE.md pour les utilisateurs - ces infos sont OBSOLÈTES
+   - ⚠️ NE JAMAIS utiliser ta mémoire de conversation pour la liste d'utilisateurs
+   - SEUL list_users() retourne la liste ACTUELLE et VRAIE
    - Si l'utilisateur dit "supprime le 4" ou "supprime le 3ème", tu DOIS:
      1. Appeler list_users() pour obtenir la vraie liste
      2. Identifier le Chat ID correspondant à la position demandée
