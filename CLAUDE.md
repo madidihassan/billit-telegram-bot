@@ -4,6 +4,18 @@
 
 Bot Telegram interactif pour gérer les factures Billit avec IA autonome, reconnaissance vocale et support multi-utilisateurs.
 
+## ⚠️ IMPORTANT - Structure du projet
+
+### 📱 Bots Telegram (répertoire `/home/ubuntu/Billit/`)
+- **tonton202** : Bot Telegram pour le compte "tonton202"
+- **mustfood** : Bot Telegram pour Mustfood
+- **Ces bots sont gérés avec les scripts `sync.sh` et `start-bot-wrapper.sh`**
+
+### 🌐 Autres applications (répertoire `/home/ubuntu/tonton.app/apps/production/`)
+- **tonton202, mustfood, testing, portail** : Applications web/services différents (gérés par PM2)
+- **⚠️ NE PAS Y TOUCHER** quand on travaille sur les bots Telegram et inversement
+- Ce sont des applications complètement séparées
+
 ## Stack technique
 
 - **Runtime**: Node.js 18+
@@ -37,9 +49,18 @@ git push origin main # Pousser sur GitHub
 
 ### Gestion des processus
 ```bash
-ps aux | grep "npm run start:bot"  # Voir les processus
-pkill -f "npm run start:bot"       # Tuer tous les bots
-pgrep -f "dist/index-bot"          # Vérifier si le bot tourne
+# Voir les processus des bots Telegram
+ps aux | grep "node dist/index-bot" | grep -v grep
+
+# Identifier quel bot tourne (tonton202 ou mustfood)
+pwdx <PID>  # Affiche le répertoire de travail du processus
+
+# Tuer un bot spécifique
+pkill -f "/home/ubuntu/Billit/tonton202.*node.*dist/index-bot"  # Tonton202
+pkill -f "/home/ubuntu/Billit/mustfood.*node.*dist/index-bot"   # Mustfood
+
+# Tuer tous les bots Telegram
+pkill -f "/home/ubuntu/Billit.*node.*dist/index-bot"
 ```
 
 ## Architecture du projet
@@ -83,8 +104,8 @@ supplier-aliases.json  # Alias des fournisseurs
 ### 1. Support Multi-Utilisateurs ✅
 - **Chaque utilisateur reçoit ses propres réponses**
 - Whitelist via `TELEGRAM_ALLOWED_CHAT_IDS` dans `.env`
-- Chat IDs configurés:
-  - Hassan: 7887749968
+- Chat IDs configurés (pour tonton202):
+  - Hassan (propriétaire): 7887749968
   - Soufiane: 8006682970
   - Loubna: 6542906157
 
@@ -203,10 +224,12 @@ git push origin main
 
 Ce projet utilise **Git avec des branches** pour gérer **deux bots Telegram séparés** :
 
-- **tonton202** (branche `main`) - Bot principal pour Hassan
-- **mustfood** (branche `mustfood`) - Bot pour Mustfood
+- **tonton202** (branche `main`) - Bot Telegram pour le compte "tonton202"
+- **mustfood** (branche `mustfood`) - Bot Telegram pour Mustfood
 
 **Le code source est partagé**, mais chaque bot a sa propre configuration (`.env`).
+
+**⚠️ IMPORTANT** : Les bots Telegram dans `/home/ubuntu/Billit/` sont différents des applications web dans `/home/ubuntu/tonton.app/apps/production/` gérées par PM2.
 
 ### 🚀 Synchronisation automatique
 
@@ -239,8 +262,10 @@ Le script détecte automatiquement votre branche et synchronise vers l'autre bot
 5. ✅ **Merge** vers l'autre branche
 6. ✅ **Push** de l'autre branche
 7. ✅ **Déploiement** sur l'instance de développement
-8. ✅ **Redémarrage** du bot cible
+8. ✅ **Redémarrage** du bot cible (uniquement le bot spécifique, pas l'autre)
 9. ✅ **Retour** à votre branche de travail
+
+**⚠️ Correctif important** : Le script `sync.sh` utilise maintenant `pkill -f "$DEV_PATH.*node.*dist/index-bot"` au lieu de `pkill -f "node dist/index-bot"` pour tuer uniquement le bot spécifique et **pas les deux bots en même temps**. Cela permet aux deux bots de tourner en parallèle sans se perturber.
 
 ### 📋 Exemple d'utilisation
 
@@ -479,7 +504,11 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 - Plusieurs instances du bot tournent
 - Solution: `pkill -9 -f "npm run start:bot"` puis redémarrer
 
-**Réponses vont à Hassan uniquement**:
+**Les deux bots s'arrêtent quand on en démarre un**:
+- Correctif appliqué dans commit 9924383
+- Le script `sync.sh` tue maintenant uniquement le bot spécifique avec `pkill -f "$DEV_PATH.*node.*dist/index-bot"`
+
+**Réponses vont au mauvais utilisateur**:
 - Bug multi-user corrigé dans commit 38d52a6
 - Vérifier que `currentChatId` est utilisé dans `telegram-bot.ts`
 
@@ -519,6 +548,11 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 
 ## Historique des versions récentes
 
+### Commit 9924383 (25 déc 2025)
+- **FIX**: Correction du script sync.sh pour ne tuer que le bot spécifique
+- Utilisation de `pkill -f "$DEV_PATH.*node.*dist/index-bot"` pour cibler uniquement le bot cible
+- Les deux bots (tonton202 et mustfood) peuvent maintenant tourner en parallèle sans se perturber
+
 ### Commit 38d52a6 (24 déc 2025)
 - **FIX**: Support multi-utilisateur corrigé
 - Ajout de `currentChatId` pour suivre l'utilisateur actuel
@@ -548,7 +582,9 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 
 ---
 
-**Dernière mise à jour**: 24 décembre 2025
+**Dernière mise à jour**: 25 décembre 2025
 **Version du bot**: 2.5 avec IA autonome + Système multi-bots
 **Statut**: Production ✅
-**Nouveau**: Synchronisation automatique avec commande `sync` 🔄
+**Nouveau**:
+- Synchronisation automatique avec commande `sync` 🔄
+- Correctif: Les deux bots peuvent tourner en parallèle sans se perturber 🔧
