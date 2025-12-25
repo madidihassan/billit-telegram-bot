@@ -400,13 +400,13 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'add_user',
-          description: 'Ajoute un utilisateur autorisé à la liste blanche du bot. Utilise cette fonction quand l\'utilisateur demande: "Ajoute l\'utilisateur 123456789", "Autorise ce Chat ID", "Ajoute cette personne", "Donne accès à". Le Chat ID doit être un nombre.',
+          description: '⚠️ Ajoute un utilisateur à la liste blanche. Tu DOIS appeler list_users() après l\'ajout pour confirmer. Ne JAMAIS inventer de Chat IDs. Utilise cette fonction pour: "Ajoute 123456789", "Autorise ce Chat ID", "Donne accès à", "Ajoute cette personne".',
           parameters: {
             type: 'object',
             properties: {
               chat_id: {
                 type: 'string',
-                description: 'Chat ID Telegram de l\'utilisateur à ajouter (ex: "123456789"). Doit contenir uniquement des chiffres.',
+                description: 'Chat ID Telegram EXACT de l\'utilisateur à ajouter (ex: "7887749968"). DOIT contenir uniquement des chiffres.',
               },
             },
             required: ['chat_id'],
@@ -417,13 +417,13 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'remove_user',
-          description: 'Supprime un utilisateur de la liste blanche du bot. Utilise cette fonction quand l\'utilisateur demande: "Supprime l\'utilisateur 123456789", "Retire ce Chat ID", "Enlève cet utilisateur", "Révoque l\'accès". Attention: cette action est irréversible !',
+          description: '⚠️ Supprime un utilisateur de la liste blanche. IMPORTANT: Si l\'utilisateur dit "supprime le 4" ou "supprime le 3ème", tu DOIS d\'abord appeler list_users() pour obtenir la vraie liste, puis extraire le Chat ID correspondant à la position demandée. Ne JAMAIS inventer ou deviner les Chat IDs. Utilise cette fonction pour: "Supprime 123456789", "Retire ce Chat ID", "Supprime le 2ème", "Enlève le dernier". Attention: action irréversible !',
           parameters: {
             type: 'object',
             properties: {
               chat_id: {
                 type: 'string',
-                description: 'Chat ID Telegram de l\'utilisateur à supprimer (ex: "123456789"). Doit contenir uniquement des chiffres.',
+                description: 'Chat ID Telegram EXACT de l\'utilisateur à supprimer (ex: "7887749968"). DOIT être un Chat ID réel obtenu via list_users(), pas un numéro de position.',
               },
             },
             required: ['chat_id'],
@@ -434,7 +434,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'list_users',
-          description: 'Liste tous les utilisateurs autorisés à utiliser le bot. Utilise cette fonction quand l\'utilisateur demande: "Qui a accès au bot ?", "Liste des utilisateurs", "Montre-moi les utilisateurs autorisés", "Quels sont les utilisateurs ?".',
+          description: '⚠️ OBLIGATOIRE: Liste tous les utilisateurs autorisés. TU DOIS APPELER cette fonction AVANT de répondre à toute question sur les utilisateurs. Ne JAMAIS inventer de liste. Utilise cette fonction pour: "Qui a accès ?", "Liste des utilisateurs", "Montre les utilisateurs", "Quels utilisateurs ?", ou toute question concernant les utilisateurs autorisés.',
           parameters: {
             type: 'object',
             properties: {},
@@ -1617,6 +1617,17 @@ RÈGLES IMPORTANTES:
 9. **TOUS LES SALAIRES** - Quand on demande "tous les salaires" ou "les salaires" sans période spécifique, utilise get_employee_salaries SANS paramètre month (couvre toute l'année)
 
 10. **ZERO RÉSULTAT FOURNISSEUR/EMPLOYÉ = DEMANDE ORTHOGRAPHE** - UNIQUEMENT pour get_supplier_payments, get_supplier_received_payments, get_employee_salaries: Si le résultat est 0 (payment_count: 0, total: 0), demande l'orthographe: "🔍 Je ne trouve pas de fournisseur/employé nommé 'X'. Pourriez-vous vérifier l'orthographe ?" MAIS pour les autres fonctions (recettes_mois, get_period_transactions, etc.), réponds normalement avec les montants, même si c'est 0 €.
+
+11. ⚠️ **GESTION DES UTILISATEURS - NE JAMAIS INVENTER** - CRITIQUE:
+   - Pour TOUTE question sur les utilisateurs, tu DOIS appeler list_users() AVANT de répondre
+   - NE JAMAIS inventer de Chat IDs ou de noms d'utilisateurs
+   - Si l'utilisateur dit "supprime le 4" ou "supprime le 3ème", tu DOIS:
+     1. Appeler list_users() pour obtenir la vraie liste
+     2. Identifier le Chat ID correspondant à la position demandée
+     3. Appeler remove_user() avec le Chat ID EXACT
+     4. Appeler list_users() à nouveau pour confirmer
+   - Après add_user() ou remove_user(), tu DOIS rappeler list_users() pour afficher la liste mise à jour
+   - TOUJOURS utiliser les données RÉELLES retournées par les outils, JAMAIS ta mémoire ou imagination
 
 EXEMPLES D'UTILISATION DES OUTILS:
 Question: "Combien de factures en décembre ?"
