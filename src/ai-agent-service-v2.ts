@@ -65,7 +65,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_unpaid_invoices',
-          description: 'Obtenir les factures impayées avec leurs montants',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures impayées RÉELLES. Tu DOIS appeler cet outil pour TOUTE question sur les factures impayées. Ne JAMAIS inventer de montants ou de nombres de factures. Exemples: "Factures impayées?", "Combien de factures à payer?", "Montant total impayé?"',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -73,7 +73,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_paid_invoices',
-          description: 'Obtenir les factures payées récentes',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures payées RÉELLES récentes. Tu DOIS appeler cet outil pour TOUTE question sur les factures payées. Ne JAMAIS inventer de liste ou de montants. Exemples: "Factures payées?", "Combien de factures payées ce mois?", "Dernières factures payées?"',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -81,7 +81,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_overdue_invoices',
-          description: 'Obtenir les factures en retard',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures en retard RÉELLES. Tu DOIS appeler cet outil pour TOUTE question sur les factures en retard/overdue. Ne JAMAIS inventer de nombres ou montants. Exemples: "Factures en retard?", "Combien de factures overdue?", "Retards de paiement?"',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -106,7 +106,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_invoice_stats',
-          description: 'Obtenir les statistiques des factures du mois',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les statistiques RÉELLES des factures du mois. Tu DOIS appeler cet outil pour TOUTE question sur les stats/statistiques de factures. Ne JAMAIS inventer de chiffres. Exemples: "Stats du mois?", "Statistiques factures?", "Combien de factures?"',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -114,7 +114,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_monthly_balance',
-          description: 'Obtenir la balance bancaire du mois (recettes - dépenses)',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir la balance bancaire RÉELLE du mois (recettes - dépenses). Tu DOIS appeler cet outil pour TOUTE question sur la balance, solde ou résultat du mois. Ne JAMAIS calculer ou inventer. Exemples: "Balance du mois?", "Solde bancaire?", "Résultat mensuel?"',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -122,7 +122,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_monthly_credits',
-          description: 'Obtenir le total des recettes/rentrées du mois',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir le total RÉEL des recettes/rentrées du mois. Tu DOIS appeler cet outil pour TOUTE question sur les recettes, rentrées, ou entrées d\'argent. Ne JAMAIS inventer de montant. Exemples: "Recettes du mois?", "Total rentrées?", "Combien d\'entrées?"',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -130,7 +130,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_monthly_debits',
-          description: 'Obtenir le total des dépenses/sorties du mois',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir le total RÉEL des dépenses/sorties du mois. Tu DOIS appeler cet outil pour TOUTE question sur les dépenses, sorties ou débits. Ne JAMAIS inventer de montant. Exemples: "Dépenses du mois?", "Total sorties?", "Combien de débits?"',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -243,7 +243,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'search_invoices',
-          description: 'Rechercher des factures par fournisseur ou numéro',
+          description: '⚠️ APPEL OBLIGATOIRE: Rechercher des factures RÉELLES par fournisseur ou numéro. Tu DOIS appeler cet outil pour TOUTE recherche de facture. Ne JAMAIS inventer de résultats. Exemples: "Cherche factures Foster", "Trouve facture 123", "Recherche Coca-Cola"',
           parameters: {
             type: 'object',
             properties: {
@@ -286,7 +286,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'list_suppliers',
-          description: 'Lister tous les fournisseurs enregistrés dans la base de données. Utilise cette fonction quand l\'utilisateur demande: "Donne-moi la liste des fournisseurs", "Quels fournisseurs sont connus ?", "Montre-moi tous les fournisseurs", "Liste des fournisseurs".',
+          description: '⚠️ APPEL OBLIGATOIRE: Lister TOUS les fournisseurs RÉELS enregistrés. Tu DOIS appeler cet outil pour TOUTE question sur la liste des fournisseurs. Ne JAMAIS inventer de noms. Exemples: "Liste des fournisseurs", "Quels fournisseurs?", "Montre tous les fournisseurs", "Fournisseurs connus?"',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -294,7 +294,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_monthly_invoices',
-          description: 'UTILISE CETTE FONCTION pour obtenir TOUTES les factures du mois en cours. Répond aux questions: "Combien de factures ce mois?", "Factures du mois", "Liste les factures"',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir TOUTES les factures RÉELLES du mois en cours. Tu DOIS appeler cet outil pour TOUTE question sur les factures du mois actuel. Ne JAMAIS inventer de liste ou de nombres. Exemples: "Combien de factures ce mois?", "Factures du mois", "Liste les factures"',
           parameters: { type: 'object', properties: {}, required: [] },
         },
       },
@@ -302,7 +302,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_invoices_by_month',
-          description: 'UTILISE CETTE FONCTION pour obtenir les factures d\'un mois spécifique (ex: "factures de décembre", "combien en novembre"). TOUJOURS utiliser cette fonction quand un mois est mentionné.',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures RÉELLES d\'un mois spécifique. Tu DOIS TOUJOURS appeler cet outil quand un mois est mentionné dans la question. Ne JAMAIS inventer de données. Exemples: "factures de décembre", "combien en novembre", "factures octobre 2024"',
           parameters: {
             type: 'object',
             properties: {
@@ -1593,8 +1593,17 @@ IMPORTANT - CALCUL DES DATES:
 - Quand l'utilisateur dit "les 3 derniers mois" → calcule à partir d'aujourd'hui (${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()})
 
 RÈGLES IMPORTANTES:
-1. **UTILISE TES OUTILS** - Tu as accès à tout! Si on te demande des informations sur les factures ou transactions, APPELLE LA FONCTION appropriée
-2. **NE DIS JAMAIS "je n'ai pas accès"** - Tu as TOUTES les données via tes outils
+⚠️ **RÈGLE ABSOLUE - ZÉRO HALLUCINATION** ⚠️
+TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
+- Pour TOUTE question nécessitant des données (montants, nombres, listes, noms), tu DOIS appeler l'outil correspondant
+- Si un outil existe pour une question, tu DOIS l'appeler AVANT de répondre
+- NE JAMAIS utiliser ta mémoire ou ta connaissance générale pour répondre à des questions factuelles sur ce business
+- NE JAMAIS inventer de chiffres, même approximatifs
+- NE JAMAIS inventer de noms de fournisseurs, d'employés ou d'utilisateurs
+- Si tu n'as pas appelé d'outil pour obtenir les données, tu NE DOIS PAS répondre
+
+1. **UTILISE TES OUTILS SYSTÉMATIQUEMENT** - Pour CHAQUE question sur les factures, transactions, utilisateurs, fournisseurs, tu DOIS appeler l'outil correspondant. Aucune exception.
+2. **NE DIS JAMAIS "je n'ai pas accès"** - Tu as TOUTES les données via tes outils. Appelle-les.
 2b. **LISTE DES OUTILS** - Si on te demande "liste les outils", "quels outils as-tu", "liste les fonctions IA", réponds directement avec la liste de tes 24 outils disponibles (factures, paiements, recherche, gestion utilisateurs, etc.) SANS appeler de fonction
 3. **SYNTHÈSE** - Réponds en 2-4 phrases (sauf pour les listes explicites)
 4. **FORMAT NATUREL** - Parle comme un humain
@@ -1629,22 +1638,31 @@ RÈGLES IMPORTANTES:
    - Après add_user() ou remove_user(), tu DOIS rappeler list_users() pour afficher la liste mise à jour
    - TOUJOURS utiliser les données RÉELLES retournées par les outils, JAMAIS ta mémoire ou imagination
 
-EXEMPLES D'UTILISATION DES OUTILS:
-Question: "Combien de factures en décembre ?"
-→ APPELLE: get_monthly_invoices() ou get_invoices_by_month("décembre")
-→ RÉPONDS: "8 factures en décembre pour 19 250,67 €"
+EXEMPLES D'UTILISATION CORRECTE DES OUTILS:
+✅ Question: "Combien de factures en décembre ?"
+   → APPELLE: get_invoices_by_month("décembre")
+   → RÉPONDS: "8 factures en décembre pour 19 250,67 €"
 
-Question: "Liste les factures de novembre"
-→ APPELLE: get_invoices_by_month("novembre")
-→ RÉPONDS: Liste détaillée
+✅ Question: "Liste des utilisateurs"
+   → APPELLE: list_users()
+   → RÉPONDS avec la liste RÉELLE retournée par l'outil
 
-Question: "Combien j'ai gagné ce mois ?"
-→ APPELLE: get_monthly_credits()
-→ RÉPONDS: Total avec détails
+✅ Question: "Combien j'ai gagné ce mois ?"
+   → APPELLE: get_monthly_credits()
+   → RÉPONDS avec le total RÉEL retourné
 
-Question: "Tous les salaires de Soufiane Madidi"
-→ APPELLE: get_employee_salaries({employee_name: "Soufiane Madidi"})
-→ RÉPONDS: Liste de tous les paiements sur l'année
+❌ EXEMPLES DE CE QU'IL NE FAUT JAMAIS FAIRE:
+❌ Question: "Combien de factures en décembre ?"
+   → NE PAS RÉPONDRE: "Il y a environ 10 factures" (INVENTION!)
+   → NE PAS utiliser ta mémoire ou estimation
+
+❌ Question: "Liste des utilisateurs"
+   → NE PAS RÉPONDRE sans appeler list_users()
+   → NE JAMAIS inventer: "Il y a Hassan, Soufiane, Loubna, et un 4ème" (FAUX!)
+
+❌ Question: "Balance du mois"
+   → NE PAS RÉPONDRE: "Environ 5000 €" (INVENTION!)
+   → APPELLE get_monthly_balance() pour obtenir le montant EXACT
 
 Question: "Salaires de novembre"
 → APPELLE: get_employee_salaries({employee_name: "Jamhoun Mokhlis", month: "novembre"})
