@@ -1512,16 +1512,20 @@ export class AIAgentServiceV2 {
               break;
             }
 
-            // Formatage optimisé pour Telegram (avec code blocks pour l'alignement)
+            // Formatage simple et cohérent pour Telegram (sans backticks, sans astérisques)
             const employeesList = employees.map((emp, index) => {
-              const num = String(index + 1).padStart(2);
+              const num = String(index + 1).padStart(2, ' ');
               const name = emp.name;
               const position = emp.position || 'Employé';
-              const chatId = emp.chat_id || 'N/A';
+              const chatId = emp.chat_id;
 
-              // Utiliser code block pour chaque ligne pour monospace
-              return `\`${num}. ${name}\`\n   └─ ${position} ${chatId !== 'N/A' ? `│ ID: ${chatId}` : ''}`;
-            }).join('\n\n');
+              // Format simple: "1. Nom - Poste (ID: xxx)" ou "1. Nom - Poste"
+              if (chatId) {
+                return `${num}. ${name} - ${position} (ID: ${chatId})`;
+              } else {
+                return `${num}. ${name} - ${position}`;
+              }
+            }).join('\n');
 
             const formattedMessage = `💼 Liste des employés (${employees.length})\n\n${employeesList}`;
 
@@ -1603,9 +1607,15 @@ export class AIAgentServiceV2 {
               const num = String(index + 1).padStart(2, ' ');
               const name = emp.name;
               const position = emp.position || 'Employé';
-              const chatId = emp.chat_id || 'N/A';
-              return `\`${num}. ${name}\`\n   └─ ${position} ${chatId !== 'N/A' ? `│ ID: ${chatId}` : ''}`;
-            }).join('\n\n');
+              const chatId = emp.chat_id;
+
+              // Format simple: "1. Nom - Poste (ID: xxx)" ou "1. Nom - Poste"
+              if (chatId) {
+                return `${num}. ${name} - ${position} (ID: ${chatId})`;
+              } else {
+                return `${num}. ${name} - ${position}`;
+              }
+            }).join('\n');
 
             const chatInfo = employeeChatId ? `\n📱 Chat ID: ${employeeChatId}` : '';
             const formattedMessage = `✅ Employé ajouté avec succès !\n\n👤 Nom: ${employeeName}\n💼 Poste: ${employeePosition}${chatInfo}\n🆔 ID: ${employeeId}\n\n💼 Liste mise à jour des employés (${allEmployees.length})\n\n${employeesList}`;
@@ -1895,8 +1905,10 @@ TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
    - ⚠️⚠️⚠️ RÈGLE ABSOLUE: Si la réponse contient le champ "direct_response", tu DOIS renvoyer EXACTEMENT ce contenu, RIEN D'AUTRE
    - NE PAS ajouter "Voici la liste", "Voici", "Voici la liste des employés", "Voici les fournisseurs", ou une introduction
    - NE PAS reformater, NE PAS créer ta propre liste, NE PAS modifier le format
+   - NE PAS ajouter d'astérisques **, NE PAS ajouter de gras, NE PAS ajouter de code (backticks), NE PAS changer la ponctuation
    - "direct_response" est déjà formaté pour Telegram, RENVOIE-LE TEL QUEL sans un seul changement, sans un seul mot ajouté
    - C'est comme un "COPY-PASTE": tu copies exactement direct_response et tu envoies, rien de plus
+   - ⚠️ INTERDICTION FORMELLE: Ne jamais entourer les noms avec ** ou guillemets inversés ou tout autre caractère Markdown
 
 EXEMPLES D'UTILISATION CORRECTE DES OUTILS:
 ✅ Question: "Combien de factures en décembre ?"
@@ -2045,6 +2057,8 @@ INTERDICTIONS:
         if (message.tool_calls && message.tool_calls.length > 0) {
           console.log(`📞 Appel de ${message.tool_calls.length} fonction(s)`);
 
+          let directResponse: string | null = null;
+
           for (const toolCall of message.tool_calls) {
             const functionName = toolCall.function.name;
             const functionArgs = JSON.parse(toolCall.function.arguments);
@@ -2052,12 +2066,37 @@ INTERDICTIONS:
             const result = await this.executeFunction(functionName, functionArgs);
             console.log(`✓ ${functionName}:`, result.substring(0, 100) + '...');
 
+            // Vérifier si le résultat contient un direct_response
+            try {
+              const parsedResult = JSON.parse(result);
+              if (parsedResult.direct_response) {
+                directResponse = parsedResult.direct_response;
+                console.log('📝 direct_response détecté - court-circuit de l\'IA');
+              }
+            } catch (e) {
+              // Pas de JSON valide, ignorer
+            }
+
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
               content: result,
             });
           }
+
+          // Si on a un direct_response, le retourner immédiatement
+          if (directResponse) {
+            this.conversationHistory.push(
+              { role: 'user', content: question },
+              { role: 'assistant', content: directResponse }
+            );
+            if (this.conversationHistory.length > this.MAX_HISTORY) {
+              this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY);
+            }
+            this.saveConversationState();
+            return directResponse;
+          }
+
           continue;
         }
 
