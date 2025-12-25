@@ -265,7 +265,11 @@ Le script détecte automatiquement votre branche et synchronise vers l'autre bot
 8. ✅ **Redémarrage** du bot cible (uniquement le bot spécifique, pas l'autre)
 9. ✅ **Retour** à votre branche de travail
 
-**⚠️ Correctif important** : Le script `sync.sh` utilise maintenant `pkill -f "$DEV_PATH.*node.*dist/index-bot"` au lieu de `pkill -f "node dist/index-bot"` pour tuer uniquement le bot spécifique et **pas les deux bots en même temps**. Cela permet aux deux bots de tourner en parallèle sans se perturber.
+**⚠️ Correctif important** : Le script `sync.sh` utilise maintenant `pgrep` + `pwdx` pour identifier précisément les processus à tuer en fonction de leur répertoire de travail. Cette approche :
+- Trouve tous les PIDs de `node dist/index-bot`
+- Vérifie le répertoire de travail avec `pwdx`
+- Tue uniquement les processus qui tournent dans le répertoire cible
+- **Évite les doublons** et permet aux deux bots de tourner en parallèle sans se perturber
 
 ### 📋 Exemple d'utilisation
 
@@ -504,9 +508,10 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 - Plusieurs instances du bot tournent
 - Solution: `pkill -9 -f "npm run start:bot"` puis redémarrer
 
-**Les deux bots s'arrêtent quand on en démarre un**:
-- Correctif appliqué dans commit 9924383
-- Le script `sync.sh` tue maintenant uniquement le bot spécifique avec `pkill -f "$DEV_PATH.*node.*dist/index-bot"`
+**Les deux bots s'arrêtent quand on en démarre un** ou **Doublons de processus**:
+- Correctif appliqué dans commit bd2555e
+- Le script `sync.sh` utilise `pgrep` + `pwdx` pour identifier le processus exact à tuer
+- Chaque processus est vérifié par son répertoire de travail avant d'être tué
 
 **Réponses vont au mauvais utilisateur**:
 - Bug multi-user corrigé dans commit 38d52a6
@@ -548,10 +553,15 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 
 ## Historique des versions récentes
 
+### Commit bd2555e (25 déc 2025)
+- **FIX**: Amélioration de la détection des processus bot avec `pgrep` + `pwdx`
+- Prévention des instances dupliquées lors de la synchronisation
+- Le script vérifie maintenant le répertoire de travail de chaque processus pour tuer uniquement le bot cible
+- **Plus de doublons** lors du redémarrage des bots
+
 ### Commit 9924383 (25 déc 2025)
-- **FIX**: Correction du script sync.sh pour ne tuer que le bot spécifique
-- Utilisation de `pkill -f "$DEV_PATH.*node.*dist/index-bot"` pour cibler uniquement le bot cible
-- Les deux bots (tonton202 et mustfood) peuvent maintenant tourner en parallèle sans se perturber
+- **FIX**: Première tentative de correction du script sync.sh
+- Utilisation de `pkill -f "$DEV_PATH.*node.*dist/index-bot"` (partiellement efficace)
 
 ### Commit 38d52a6 (24 déc 2025)
 - **FIX**: Support multi-utilisateur corrigé
