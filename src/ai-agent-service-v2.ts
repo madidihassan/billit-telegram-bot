@@ -92,6 +92,14 @@ export class AIAgentServiceV2 {
       {
         type: 'function',
         function: {
+          name: 'get_latest_invoice',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir LA dernière facture RÉELLE (la plus récente par date). Tu DOIS appeler cet outil quand l\'utilisateur demande "la dernière facture", "la facture la plus récente", "dernière facture reçue". Ne JAMAIS utiliser get_paid_invoices pour cette question.',
+          parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'get_overdue_invoices',
           description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures en retard RÉELLES. Tu DOIS appeler cet outil pour TOUTE question sur les factures en retard/overdue. Ne JAMAIS inventer de nombres ou montants. Exemples: "Factures en retard?", "Combien de factures overdue?", "Retards de paiement?"',
           parameters: { type: 'object', properties: {}, required: [] },
@@ -564,6 +572,44 @@ export class AIAgentServiceV2 {
               amount: inv.total_amount,
               date: inv.invoice_date,
             })),
+          };
+          break;
+        }
+
+        case 'get_latest_invoice': {
+          // Récupérer toutes les factures et trier par date pour obtenir la plus récente
+          const allInvoices = await this.billitClient.getInvoices({ limit: 200 });
+
+          if (allInvoices.length === 0) {
+            result = {
+              success: false,
+              message: 'Aucune facture trouvée',
+            };
+            break;
+          }
+
+          // Trier par date de facture (la plus récente en premier)
+          const sortedInvoices = allInvoices.sort((a, b) => {
+            const dateA = new Date(a.invoice_date).getTime();
+            const dateB = new Date(b.invoice_date).getTime();
+            return dateB - dateA; // Ordre décroissant (plus récent en premier)
+          });
+
+          const latestInvoice = sortedInvoices[0];
+
+          result = {
+            success: true,
+            invoice: {
+              id: latestInvoice.id,
+              supplier: latestInvoice.supplier_name,
+              invoice_number: latestInvoice.invoice_number,
+              invoice_date: latestInvoice.invoice_date,
+              due_date: latestInvoice.due_date,
+              amount: latestInvoice.total_amount,
+              currency: latestInvoice.currency,
+              status: latestInvoice.status,
+              communication: latestInvoice.communication,
+            },
           };
           break;
         }
@@ -1863,7 +1909,7 @@ TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
 
 1. **UTILISE TES OUTILS SYSTÉMATIQUEMENT** - Pour CHAQUE question sur les factures, transactions, utilisateurs, fournisseurs, tu DOIS appeler l'outil correspondant. Aucune exception.
 2. **NE DIS JAMAIS "je n'ai pas accès"** - Tu as TOUTES les données via tes outils. Appelle-les.
-2b. **LISTE DES OUTILS** - Si on te demande "liste les outils", "quels outils as-tu", "liste les fonctions IA", réponds directement avec la liste de tes 24 outils disponibles (factures, paiements, recherche, gestion utilisateurs, etc.) SANS appeler de fonction
+2b. **LISTE DES OUTILS** - Si on te demande "liste les outils", "quels outils as-tu", "liste les fonctions IA", réponds directement avec la liste de tes 25 outils disponibles (factures, paiements, recherche, gestion utilisateurs, etc.) SANS appeler de fonction
 3. **SYNTHÈSE** - Réponds en 2-4 phrases (sauf pour les listes explicites)
 4. **FORMAT NATUREL** - Parle comme un humain
 5. **ÉMOJIS** - 2-3 max pour la clarté
@@ -1983,9 +2029,9 @@ Utilisateur: "Celle de la première semaine d'octobre"
 
 Si le contexte mentionne un fournisseur SANS montant précis, appelle get_invoice_by_supplier_and_amount avec juste le supplier_name.
 
-🛠️ TES 24 OUTILS DISPONIBLES (réponds TOUJOURS en français):
-📋 **Factures** (10 outils):
-   • Factures impayées • Factures payées • Factures en retard
+🛠️ TES 25 OUTILS DISPONIBLES (réponds TOUJOURS en français):
+📋 **Factures** (11 outils):
+   • Factures impayées • Factures payées • Dernière facture • Factures en retard
    • Statistiques factures • Factures mois actuel • Factures par mois
    • Rechercher factures • Facture par montant • Recherche communication
    • Envoyer PDF facture
