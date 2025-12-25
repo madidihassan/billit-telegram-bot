@@ -579,7 +579,7 @@ export class AIAgentServiceV2 {
         case 'get_latest_invoice': {
           try {
             // Récupérer toutes les factures et trier par date pour obtenir la plus récente
-            const allInvoices = await this.billitClient.getInvoices({ limit: 200 });
+            const allInvoices = await this.billitClient.getInvoices({ limit: 100 });
 
             if (!allInvoices || allInvoices.length === 0) {
               result = {
