@@ -3,7 +3,9 @@
 # Script wrapper pour redémarrer automatiquement le bot
 # Le bot peut se redémarrer lui-même en faisant process.exit(0)
 
-cd /home/ubuntu/Billit/tonton202
+# Détecter automatiquement le répertoire du script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 echo "🚀 Démarrage du Billit Bot avec auto-redémarrage..."
 echo "📝 Le bot sera redémarré automatiquement s'il s'arrête avec le code 0"
