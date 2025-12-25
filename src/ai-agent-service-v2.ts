@@ -100,6 +100,23 @@ export class AIAgentServiceV2 {
       {
         type: 'function',
         function: {
+          name: 'get_recent_invoices',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les N dernières factures RÉELLES triées par date (les plus récentes en premier). Tu DOIS appeler cet outil pour: "les 5 dernières factures", "dernières factures", "factures récentes", "les 10 dernières". Cette fonction retourne TOUTES les factures (payées ET impayées) triées par date de facture.',
+          parameters: {
+            type: 'object',
+            properties: {
+              limit: {
+                type: 'number',
+                description: 'Nombre de factures à retourner (par défaut 5)',
+              },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'get_overdue_invoices',
           description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures en retard RÉELLES. Tu DOIS appeler cet outil pour TOUTE question sur les factures en retard/overdue. Ne JAMAIS inventer de nombres ou montants. Exemples: "Factures en retard?", "Combien de factures overdue?", "Retards de paiement?"',
           parameters: { type: 'object', properties: {}, required: [] },
@@ -188,13 +205,13 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_employee_salaries',
-          description: 'UTILISE CETTE FONCTION UNIQUEMENT pour les SALAIRES des EMPLOYÉS (Hassan, Jamhoun, Mokhlis, Soufiane Madidi, etc.). NE PAS utiliser pour les fournisseurs comme Foster, Coca-Cola, CIERS qui sont des factures, pas des salaires. Si l\'utilisateur demande "tous les salaires" ou "les salaires" sans période, utilise l\'année courante complète (ne passe PAS de paramètre month).',
+          description: '⚠️ IMPORTANT: Si l\'utilisateur demande "TOUS les salaires", NE PAS spécifier employee_name pour obtenir TOUS les employés en UN SEUL APPEL. UTILISE CETTE FONCTION UNIQUEMENT pour les SALAIRES des EMPLOYÉS (Hassan, Jamhoun, Mokhlis, Soufiane Madidi, etc.). NE PAS utiliser pour les fournisseurs comme Foster, Coca-Cola, CIERS qui sont des factures, pas des salaires.',
           parameters: {
             type: 'object',
             properties: {
               employee_name: {
                 type: 'string',
-                description: 'Nom de l\'employé (Hassan Madidi, Jamhoun Mokhlis, Soufiane Madidi, etc.) - PAS les fournisseurs',
+                description: '⚠️ OPTIONNEL: Nom de l\'employé (Hassan Madidi, Jamhoun Mokhlis, etc.). Si l\'utilisateur demande "TOUS les salaires", NE PAS spécifier ce paramètre pour obtenir TOUS les employés.',
               },
               month: {
                 type: 'string',
@@ -205,7 +222,7 @@ export class AIAgentServiceV2 {
                 description: 'Année (2025, 2024). Par défaut année en cours si non spécifié.',
               },
             },
-            required: ['employee_name'],
+            required: [],
           },
         },
       },
@@ -558,7 +575,7 @@ export class AIAgentServiceV2 {
         }
 
         case 'get_paid_invoices': {
-          const allInvoices = await this.billitClient.getInvoices({ limit: 100 });
+          const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
           const invoices = allInvoices.filter(inv =>
             inv.status.toLowerCase().includes('paid') || inv.status.toLowerCase().includes('payé')
           );
@@ -579,7 +596,7 @@ export class AIAgentServiceV2 {
         case 'get_latest_invoice': {
           try {
             // Récupérer toutes les factures et trier par date pour obtenir la plus récente
-            const allInvoices = await this.billitClient.getInvoices({ limit: 100 });
+            const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
 
             if (!allInvoices || allInvoices.length === 0) {
               result = {
@@ -631,6 +648,61 @@ export class AIAgentServiceV2 {
               success: false,
               error: 'api_error',
               message: `Erreur lors de la récupération de la dernière facture: ${error.message}`,
+            };
+          }
+          break;
+        }
+
+        case 'get_recent_invoices': {
+          try {
+            const limit = (args.limit as number) || 5;
+
+            // Récupérer toutes les factures (Max 120 pour l'API Billit)
+            const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+
+            if (!allInvoices || allInvoices.length === 0) {
+              result = {
+                success: false,
+                message: 'Aucune facture trouvée',
+              };
+              break;
+            }
+
+            console.log(`📊 get_recent_invoices: ${allInvoices.length} factures récupérées, demande de ${limit}`);
+
+            // Filtrer les factures avec une date valide et trier par date (la plus récente en premier)
+            const sortedInvoices = allInvoices
+              .filter(inv => inv.invoice_date && !isNaN(new Date(inv.invoice_date).getTime()))
+              .sort((a, b) => {
+                const dateA = new Date(a.invoice_date).getTime();
+                const dateB = new Date(b.invoice_date).getTime();
+                return dateB - dateA; // Ordre décroissant (plus récent en premier)
+              })
+              .slice(0, limit);
+
+            console.log(`📄 ${sortedInvoices.length} factures récentes retournées`);
+
+            result = {
+              success: true,
+              count: sortedInvoices.length,
+              invoices: sortedInvoices.map(inv => ({
+                id: inv.id,
+                supplier: inv.supplier_name,
+                invoice_number: inv.invoice_number,
+                invoice_date: inv.invoice_date,
+                due_date: inv.due_date,
+                amount: inv.total_amount,
+                currency: inv.currency || 'EUR',
+                status: inv.status,
+                communication: inv.communication || '',
+              })),
+            };
+          } catch (error: any) {
+            console.error('❌ Erreur get_recent_invoices:', error);
+            result = {
+              success: false,
+              error: 'api_error',
+              message: `Erreur lors de la récupération des factures récentes: ${error.message}`,
             };
           }
           break;
@@ -803,19 +875,57 @@ export class AIAgentServiceV2 {
           const credits = transactions.filter(tx => tx.type === 'Credit');
           const debits = transactions.filter(tx => tx.type === 'Debit');
 
+          const totalCredits = credits.reduce((sum, tx) => sum + tx.amount, 0);
+          const totalDebits = debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+          const balance = totalCredits - totalDebits;
+
+          // Générer la liste formatée des transactions
+          // Limiter à 30 transactions pour ne pas dépasser la limite Telegram (4096 caractères)
+          const sortedTransactions = transactions
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+          const maxTransactions = 30;
+          const transactionsToShow = sortedTransactions.slice(0, maxTransactions);
+          const hasMore = transactions.length > maxTransactions;
+
+          const transactionsList = transactionsToShow
+            .map((tx, index) => {
+              const num = String(index + 1).padStart(3, ' ');
+              const date = new Date(tx.date).toLocaleDateString('fr-BE');
+              const type = tx.type === 'Credit' ? '💰' : '💸';
+              const amount = tx.type === 'Credit'
+                ? `+${tx.amount.toFixed(2)}€`
+                : `-${Math.abs(tx.amount).toFixed(2)}€`;
+              const desc = (tx.description || 'Sans description').substring(0, 100); // Limiter la description
+              return `${num}. ${date} ${type} ${amount}\n     ${desc}`;
+            })
+            .join('\n\n');
+
+          const moreMessage = hasMore
+            ? `\n\n... et ${transactions.length - maxTransactions} autres transactions\n(Affichage limité aux ${maxTransactions} plus récentes)`
+            : '';
+
+          const directResponse = `📊 Transactions du ${startDate.toLocaleDateString('fr-BE')} au ${endDate.toLocaleDateString('fr-BE')}\n\n` +
+            `Total: ${transactions.length} transactions\n` +
+            `💰 Crédits: ${totalCredits.toFixed(2)}€ (${credits.length} tx)\n` +
+            `💸 Débits: ${totalDebits.toFixed(2)}€ (${debits.length} tx)\n` +
+            `📈 Balance: ${balance.toFixed(2)}€\n\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            transactionsList +
+            moreMessage;
+
           result = {
             period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
             total_transactions: transactions.length,
             credits: {
               count: credits.length,
-              total: credits.reduce((sum, tx) => sum + tx.amount, 0),
+              total: totalCredits,
             },
             debits: {
               count: debits.length,
-              total: debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0),
+              total: totalDebits,
             },
-            balance: credits.reduce((sum, tx) => sum + tx.amount, 0) -
-                    debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0),
+            balance: balance,
             currency: 'EUR',
             // 👇 AJOUT: Inclure les détails des transactions pour que l'IA puisse voir les descriptions
             transactions: transactions.map(tx => ({
@@ -825,6 +935,7 @@ export class AIAgentServiceV2 {
               description: tx.description, // ✅ Description incluse pour l'IA
               iban: tx.iban,
             })),
+            direct_response: directResponse,
           };
           break;
         }
@@ -872,17 +983,51 @@ export class AIAgentServiceV2 {
 
           let transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
 
-          // Filtrer par employé
-          const { matchesSupplier } = await import('./supplier-aliases');
-          const salaryTransactions = transactions.filter(tx =>
-            tx.type === 'Debit' &&
-            matchesSupplier(tx.description || '', args.employee_name)
-          );
+          // Filtrer par employé (si spécifié)
+          const { getAllEmployees } = await import('./database');
+          const employees = getAllEmployees();
+          let salaryTransactions: any[];
+
+          // Fonction stricte pour matcher un nom d'employé dans une description
+          const matchesEmployeeName = (description: string, employeeName: string): boolean => {
+            const desc = description.toLowerCase();
+            const name = employeeName.toLowerCase();
+
+            // Découper le nom en parties (prénom/nom)
+            const nameParts = name.split(' ').filter(p => p.length > 2);
+
+            // Vérifier si TOUS les mots significatifs du nom sont présents
+            return nameParts.every(part => desc.includes(part));
+          };
+
+          // Fonction pour vérifier si c'est un virement de salaire
+          const isSalaryTransaction = (description: string): boolean => {
+            if (!description) return false;
+            const desc = description.toLowerCase();
+            return desc.includes('salaire');
+          };
+
+          if (args.employee_name) {
+            // Filtrer pour un employé spécifique
+            salaryTransactions = transactions.filter(tx => {
+              if (tx.type !== 'Debit' || !tx.description) return false;
+              // Accepter si: contient "salaire" OU si le nom de l'employé correspond
+              return isSalaryTransaction(tx.description) || matchesEmployeeName(tx.description, args.employee_name);
+            });
+          } else {
+            // Obtenir TOUS les salaires
+            salaryTransactions = transactions.filter(tx => {
+              if (tx.type !== 'Debit' || !tx.description) return false;
+              // Accepter si: contient "salaire" OU si correspond à un nom d'employé
+              return isSalaryTransaction(tx.description) ||
+                     employees.some(emp => matchesEmployeeName(tx.description, emp.name));
+            });
+          }
 
           const totalPaid = salaryTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
           result = {
-            employee_name: args.employee_name,
+            employee_name: args.employee_name || 'Tous les employés',
             period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
             total_paid: totalPaid,
             payment_count: salaryTransactions.length,
@@ -1038,7 +1183,7 @@ export class AIAgentServiceV2 {
           const { matchesSupplier } = await import('./supplier-aliases');
 
           // Récupérer toutes les factures
-          const allInvoices = await this.billitClient.getInvoices({ limit: 100 });
+          const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
 
           // Filtrer par fournisseur
           const supplierInvoices = allInvoices.filter(inv =>
@@ -1148,7 +1293,7 @@ export class AIAgentServiceV2 {
         }
 
         case 'get_monthly_invoices': {
-          const allInvoices = await this.billitClient.getInvoices({ limit: 100 });
+          const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
           const now = new Date();
           const monthInvoices = allInvoices.filter(inv => {
             const invDate = new Date(inv.invoice_date);
@@ -1207,7 +1352,7 @@ export class AIAgentServiceV2 {
 
           const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
 
-          const allInvoices = await this.billitClient.getInvoices({ limit: 100 }); // Max 100 pour Billit API
+          const allInvoices = await this.billitClient.getInvoices({ limit: 120 }); // Max 100 pour Billit API
           const monthInvoices = allInvoices.filter(inv => {
             const invDate = new Date(inv.invoice_date);
             return invDate.getMonth() === targetMonth && invDate.getFullYear() === targetYear;
@@ -1256,7 +1401,7 @@ export class AIAgentServiceV2 {
 
           // Si on a seulement le numéro de facture, chercher l'ID
           if (!invoiceId && args.invoice_number) {
-            const allInvoices = await this.billitClient.getInvoices({ limit: 100 });
+            const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
             const invoice = allInvoices.find(inv =>
               inv.invoice_number === args.invoice_number
             );
@@ -2088,7 +2233,7 @@ INTERDICTIONS:
       ];
 
       let iteration = 0;
-      const MAX_ITERATIONS = 5;
+      const MAX_ITERATIONS = 10;
 
       while (iteration < MAX_ITERATIONS) {
         iteration++;
@@ -2162,7 +2307,8 @@ INTERDICTIONS:
               this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY);
             }
             this.saveConversationState();
-            return directResponse;
+            // Supprimer tous les ** du texte
+            return directResponse.replace(/\*\*/g, '');
           }
 
           continue;
@@ -2181,7 +2327,8 @@ INTERDICTIONS:
           }
           // Sauvegarder l'état sur disque
           this.saveConversationState();
-          return message.content;
+          // Supprimer tous les ** du texte
+          return message.content.replace(/\*\*/g, '');
         }
 
         break;

@@ -9,6 +9,16 @@
       "aboukhalid"
     ]
   },
+  "administration communale molenbeek": {
+    "aliases": [
+      "administration communale molenbeek",
+      "administration",
+      "administration communale"
+    ],
+    "patterns": [
+      "administrationcommunalemolenbeek"
+    ]
+  },
   "afkir": {
     "aliases": [
       "afkir oumnya",
@@ -333,6 +343,16 @@
     ],
     "patterns": [
       "hubert"
+    ]
+  },
+  "indigo p docks": {
+    "aliases": [
+      "indigo p docks",
+      "indigo",
+      "indigo p"
+    ],
+    "patterns": [
+      "indigopdocks"
     ]
   },
   "it copy services": {
@@ -683,14 +703,6 @@
     ],
     "patterns": [
       "teamprecompteprof"
-    ]
-  },
-  "test": {
-    "aliases": [
-      "test"
-    ],
-    "patterns": [
-      "test"
     ]
   },
   "tontonchami": {

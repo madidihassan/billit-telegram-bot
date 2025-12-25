@@ -128,6 +128,9 @@ export class TelegramBotInteractive {
         if (command === 'menu') {
           this.waitingForInput = null;
           response = await this.commandHandler.handleCommand('help', []);
+        } else if (command === 'ai_tools') {
+          this.waitingForInput = null;
+          response = await this.getAIToolsList();
         } else if (command === 'search_prompt') {
           this.waitingForInput = 'search';
           response = '🔍 <b>Recherche</b>\n\nTapez votre terme de recherche (nom de fournisseur, numéro de facture, etc.)';
@@ -369,10 +372,64 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
         ],
         [
           { text: '🔍 Rechercher', callback_data: 'search_prompt' },
-          { text: '🏠 Menu principal', callback_data: 'menu' }
+          { text: '🤖 Outils IA', callback_data: 'ai_tools' }
+        ],
+        [
+          { text: '❓ Aide', callback_data: 'menu' }
         ]
       ]
     };
+  }
+
+  /**
+   * Génère la liste des outils IA disponibles
+   */
+  private async getAIToolsList(): Promise<string> {
+    let response = '🤖 <b>Outils IA disponibles (30 outils)</b>\n\n';
+
+    response += '<b>📋 FACTURES</b>\n';
+    response += '  🔍 Factures impayées\n';
+    response += '  💳 Factures payées\n';
+    response += '  📄 Dernière facture\n';
+    response += '  📋 Factures récentes (N dernières)\n';
+    response += '  ⚠️ Factures en retard\n';
+    response += '  📊 Statistiques factures\n';
+    response += '  🔎 Recherche facture\n';
+    response += '  📝 Rechercher factures\n';
+    response += '  📆 Factures mensuelles\n';
+    response += '  📋 Factures par mois\n';
+    response += '  🏪 Factures par fournisseur\n';
+    response += '  🔄 Marquer facture payée\n';
+    response += '  📧 Rappel facture\n\n';
+
+    response += '<b>💰 FINANCES</b>\n';
+    response += '  💰 Balance mensuelle\n';
+    response += '  📈 Crédits mensuels\n';
+    response += '  📉 Débits mensuels\n';
+    response += '  📅 Transactions période\n';
+    response += '  💼 Salaires employés\n';
+    response += '  🏢 Paiements fournisseurs\n';
+    response += '  💸 Paiements reçus\n\n';
+
+    response += '<b>👥 EMPLOYÉS</b>\n';
+    response += '  👥 Lister employés\n';
+    response += '  ➕ Ajouter employé\n';
+    response += '  🗑️ Supprimer employé\n';
+    response += '  👤 Employé par nom\n\n';
+
+    response += '<b>🏷️ FOURNISSEURS</b>\n';
+    response += '  🏷️ Lister fournisseurs\n';
+    response += '  🔍 Rechercher fournisseur\n\n';
+
+    response += '<b>⚙️ ADMINISTRATION</b>\n';
+    response += '  📱 Lister utilisateurs\n';
+    response += '  ➕ Ajouter utilisateur\n';
+    response += '  ❌ Supprimer utilisateur\n';
+    response += '  🔧 Redémarrer le bot\n';
+
+    response += '\n💡 <i>Posez simplement votre question en langage naturel, l\'IA utilisera automatiquement les bons outils!</i>';
+
+    return response;
   }
 
   /**

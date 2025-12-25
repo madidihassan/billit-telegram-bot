@@ -31,6 +31,8 @@ export class InvoiceMonitoringService {
   private config: MonitoringConfig;
   private intervalId: NodeJS.Timeout | null = null;
   private processedInvoices: Set<string> = new Set();
+  private notifiedOverdueInvoices: Map<string, number> = new Map(); // ID facture -> timestamp dernière notification
+  private readonly REMINDER_INTERVAL_DAYS = 7; // Rappel tous les 7 jours
   private stats: NotificationStats = {
     lastCheck: new Date(),
     totalChecked: 0,
@@ -58,6 +60,7 @@ export class InvoiceMonitoringService {
 
     // Charger les factures déjà traitées
     await this.loadProcessedInvoices();
+    await this.loadNotifiedOverdueInvoices();
 
     // Lancer le polling
     this.intervalId = setInterval(
@@ -113,6 +116,9 @@ export class InvoiceMonitoringService {
         console.log('✅ Aucun nouveau document');
       }
 
+      // Vérifier les factures en retard
+      await this.checkForOverdueInvoices();
+
       this.logStats();
     } catch (error) {
       this.stats.errors++;
@@ -125,6 +131,118 @@ export class InvoiceMonitoringService {
    */
   private filterNewInvoices(invoices: BillitInvoice[]): BillitInvoice[] {
     return invoices.filter(invoice => !this.processedInvoices.has(invoice.id));
+  }
+
+  /**
+   * Vérifie les factures impayées dont l'échéance est dépassée
+   */
+  private async checkForOverdueInvoices(): Promise<void> {
+    try {
+      console.log('⏰ Vérification des factures en retard...');
+
+      // Récupérer les factures impayées
+      const overdueInvoices = await this.billitClient.getOverdueInvoices();
+
+      if (overdueInvoices.length === 0) {
+        console.log('✅ Aucune facture en retard');
+        return;
+      }
+
+      const now = Date.now();
+      const invoicesToNotify: any[] = [];
+
+      // Vérifier chaque facture en retard
+      for (const invoice of overdueInvoices) {
+        const lastNotified = this.notifiedOverdueInvoices.get(invoice.id);
+
+        if (!lastNotified) {
+          // Jamais notifiée - première notification
+          invoicesToNotify.push({ invoice, isReminder: false });
+        } else {
+          // Déjà notifiée - vérifier si rappel nécessaire (7 jours)
+          const daysSinceLastNotif = (now - lastNotified) / (1000 * 60 * 60 * 24);
+
+          if (daysSinceLastNotif >= this.REMINDER_INTERVAL_DAYS) {
+            // Rappel hebdomadaire
+            invoicesToNotify.push({ invoice, isReminder: true });
+          }
+        }
+      }
+
+      if (invoicesToNotify.length === 0) {
+        console.log(`✅ ${overdueInvoices.length} facture(s) en retard (déjà notifiées, rappels non dus)`);
+        return;
+      }
+
+      const newCount = invoicesToNotify.filter(i => !i.isReminder).length;
+      const reminderCount = invoicesToNotify.filter(i => i.isReminder).length;
+
+      console.log(`⚠️ ${newCount} nouvelle(s) facture(s) en retard + ${reminderCount} rappel(s) hebdomadaire(s)`);
+
+      // Envoyer les notifications
+      for (const { invoice, isReminder } of invoicesToNotify) {
+        await this.notifyOverdueInvoice(invoice, isReminder);
+        this.notifiedOverdueInvoices.set(invoice.id, now);
+        this.stats.notificationsSent++;
+      }
+
+      // Sauvegarder les timestamps
+      await this.saveNotifiedOverdueInvoices();
+    } catch (error) {
+      console.error('❌ Erreur lors de la vérification des factures en retard:', error);
+    }
+  }
+
+  /**
+   * Envoie une notification pour une facture en retard
+   */
+  private async notifyOverdueInvoice(invoice: BillitInvoice, isReminder: boolean = false): Promise<void> {
+    const today = new Date();
+    const dueDate = new Date(invoice.due_date);
+    const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    let message: string;
+
+    if (isReminder) {
+      // Message de rappel hebdomadaire
+      message = `
+🔔 <b>RAPPEL - FACTURE EN RETARD</b>
+
+🏢 <b>Fournisseur:</b> ${this.escapeHtml(invoice.supplier_name)}
+📄 <b>N° Facture:</b> ${this.escapeHtml(invoice.invoice_number)}
+💰 <b>Montant:</b> ${invoice.total_amount.toFixed(2)} ${invoice.currency}
+📅 <b>Date facture:</b> ${new Date(invoice.invoice_date).toLocaleDateString('fr-FR')}
+⏰ <b>Date d'échéance:</b> ${dueDate.toLocaleDateString('fr-FR')}
+
+🔴 <b>Retard: ${daysOverdue} jour(s)</b>
+
+⚠️ Cette facture est toujours impayée
+🔔 Rappel hebdomadaire
+      `.trim();
+    } else {
+      // Première notification de retard
+      message = `
+⚠️ <b>FACTURE EN RETARD</b>
+
+🏢 <b>Fournisseur:</b> ${this.escapeHtml(invoice.supplier_name)}
+📄 <b>N° Facture:</b> ${this.escapeHtml(invoice.invoice_number)}
+💰 <b>Montant:</b> ${invoice.total_amount.toFixed(2)} ${invoice.currency}
+📅 <b>Date facture:</b> ${new Date(invoice.invoice_date).toLocaleDateString('fr-FR')}
+⏰ <b>Date d'échéance:</b> ${dueDate.toLocaleDateString('fr-FR')}
+
+🔴 <b>Retard: ${daysOverdue} jour(s)</b>
+
+⚠️ Cette facture aurait dû être payée avant le ${dueDate.toLocaleDateString('fr-FR')}
+      `.trim();
+    }
+
+    try {
+      await this.bot.broadcastMessage(message);
+      const notifType = isReminder ? 'Rappel hebdomadaire' : 'Alerte retard';
+      console.log(`📤 ${notifType} envoyé: ${invoice.invoice_number} (${invoice.supplier_name}) - ${daysOverdue}j de retard`);
+    } catch (error) {
+      console.error(`❌ Erreur lors de l'envoi de l'alerte de retard:`, error);
+    }
   }
 
   /**
@@ -229,6 +347,51 @@ ${isPaid ? '✨ Cette facture a été réglée' : '⚠️ Cette facture est en a
       await fs.writeFile(filePath, JSON.stringify(ids, null, 2), 'utf-8');
     } catch (error) {
       console.error('❌ Erreur lors de la sauvegarde des factures traitées:', error);
+    }
+  }
+
+  /**
+   * Charge les IDs de factures en retard déjà notifiées avec leurs timestamps
+   */
+  private async loadNotifiedOverdueInvoices(): Promise<void> {
+    try {
+      const filePath = this.config.storageFile.replace('.json', '-overdue.json');
+      const content = await fs.readFile(filePath, 'utf-8');
+      const data = JSON.parse(content);
+
+      // Convertir l'objet en Map
+      if (Array.isArray(data)) {
+        // Ancien format (Set) - convertir en Map avec timestamp actuel
+        this.notifiedOverdueInvoices = new Map(data.map((id: string) => [id, Date.now()]));
+      } else {
+        // Nouveau format (Map avec timestamps)
+        this.notifiedOverdueInvoices = new Map(Object.entries(data));
+      }
+
+      console.log(`📂 ${this.notifiedOverdueInvoices.size} facture(s) en retard déjà notifiée(s) chargée(s)`);
+    } catch (error) {
+      // Fichier n'existe pas - c'est normal pour la première exécution
+      console.log('📂 Aucune facture en retard notifiée précédemment');
+      this.notifiedOverdueInvoices = new Map();
+    }
+  }
+
+  /**
+   * Sauvegarde les IDs de factures en retard notifiées avec leurs timestamps
+   */
+  private async saveNotifiedOverdueInvoices(): Promise<void> {
+    try {
+      const filePath = this.config.storageFile.replace('.json', '-overdue.json');
+      const dir = path.dirname(filePath);
+
+      // Créer le dossier si nécessaire
+      await fs.mkdir(dir, { recursive: true });
+
+      // Convertir la Map en objet pour JSON
+      const data = Object.fromEntries(this.notifiedOverdueInvoices);
+      await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (error) {
+      console.error('❌ Erreur lors de la sauvegarde des factures en retard notifiées:', error);
     }
   }
 

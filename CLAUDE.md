@@ -23,6 +23,14 @@ Bot Telegram interactif pour gérer les factures Billit avec IA autonome, reconn
 - **API**: Billit API, Telegram Bot API, OpenRouter/Groq (IA)
 - **Déploiement**: VPS Linux (Ubuntu), PM2 ou scripts manuels
 
+## ⚠️ CONTRAINTES API BILLIT
+
+### Limite de pagination
+- **Maximum 120 factures par requête** : L'API Billit accepte un maximum de `limit: 120` dans les appels `getInvoices()`
+- ⚠️ **NE JAMAIS dépasser cette limite** sous peine d'erreur 400
+- Tous les appels à `billitClient.getInvoices()` doivent utiliser `{ limit: 120 }` maximum
+- Pour récupérer plus de 120 factures, utiliser la pagination (voir `bank-client.ts` pour exemple)
+
 ## Commandes essentielles
 
 ### Développement
