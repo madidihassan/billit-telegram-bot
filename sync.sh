@@ -176,7 +176,7 @@ if [ -d "$DEV_PATH" ]; then
     echo "────────────────────────────────────────────────────────────"
     
     info "Arrêt de l'ancien processus..."
-    pkill -f "node dist/index-bot" || true
+    pkill -f "$DEV_PATH.*node.*dist/index-bot" || true
     sleep 2
     
     info "Démarrage du nouveau bot..."
