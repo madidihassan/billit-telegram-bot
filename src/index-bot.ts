@@ -5,6 +5,7 @@ import { TelegramBotInteractive } from './telegram-bot';
 import { CommandHandler } from './command-handler';
 import { Storage } from './storage';
 import { BillitInvoice } from './types';
+import { BankBalanceUpdater } from './bank-balance-updater';
 
 class BillitNotifierWithBot {
   private billitClient: BillitClient;
@@ -12,6 +13,7 @@ class BillitNotifierWithBot {
   private telegramBot: TelegramBotInteractive;
   private commandHandler: CommandHandler;
   private storage: Storage;
+  private bankBalanceUpdater: BankBalanceUpdater;
   private isRunning: boolean = false;
   private intervalId: NodeJS.Timeout | null = null;
 
@@ -21,6 +23,7 @@ class BillitNotifierWithBot {
     this.commandHandler = new CommandHandler(this.billitClient, this.telegramClient);
     this.telegramBot = new TelegramBotInteractive(this.commandHandler);
     this.storage = new Storage();
+    this.bankBalanceUpdater = new BankBalanceUpdater(10); // Mise à jour toutes les 10 minutes
   }
 
   /**
@@ -140,6 +143,9 @@ class BillitNotifierWithBot {
 
     // Démarrer le nouveau service de monitoring des factures
     await this.telegramBot.startMonitoring();
+
+    // Démarrer le service de mise à jour automatique des soldes bancaires
+    this.bankBalanceUpdater.start();
   }
 
   /**
@@ -151,6 +157,7 @@ class BillitNotifierWithBot {
       this.intervalId = null;
     }
     this.telegramBot.stop();
+    this.bankBalanceUpdater.stop();
     this.isRunning = false;
     console.log('\n👋 Arrêt du système...');
   }

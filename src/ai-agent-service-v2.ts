@@ -174,6 +174,14 @@ export class AIAgentServiceV2 {
       {
         type: 'function',
         function: {
+          name: 'get_bank_balances',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les soldes RÉELS actuels de TOUS les comptes bancaires (Europabank, BNP Paribas Fortis, ING). Tu DOIS appeler cet outil pour TOUTE question sur: "solde des comptes", "combien sur les comptes", "total en banque", "argent disponible", "soldes bancaires", "combien d\'argent". Ne JAMAIS inventer de montants. Retourne les soldes de CHAQUE compte + le total.',
+          parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'get_period_transactions',
           description: 'Obtenir les transactions bancaires pour une période donnée (générique)',
           parameters: {
@@ -839,6 +847,35 @@ export class AIAgentServiceV2 {
             transaction_count: monthDebits.length,
             currency: 'EUR',
             top_expenses: this.getTopExpenses(monthDebits),
+          };
+          break;
+        }
+
+        case 'get_bank_balances': {
+          const balanceService = this.commandHandler.getBankBalanceService();
+          const balances = balanceService.getBalances();
+
+          if (!balances) {
+            return JSON.stringify({
+              error: 'Les soldes ne sont pas encore initialisés',
+              message: 'Demande à l\'utilisateur d\'utiliser /init_balances pour initialiser les soldes'
+            });
+          }
+
+          const accounts = Object.values(balances.accounts).map(account => ({
+            name: account.name,
+            iban: account.iban,
+            balance: account.balance,
+            last_update: account.lastUpdate
+          }));
+
+          const total = balanceService.getTotalBalance();
+
+          result = {
+            accounts,
+            total_balance: total,
+            last_global_update: balances.lastUpdate,
+            currency: 'EUR'
           };
           break;
         }
