@@ -1502,46 +1502,49 @@ Utilisation: <code>/deletesupplier [clé]</code>
    */
   private async handleInitBalances(args: string[]): Promise<string> {
     try {
-      // Données des comptes (selon les informations fournies)
-      const accounts = [
-        {
-          iban: 'BE07671870399966',
-          name: 'Europabank',
-          balance: 80075.06
-        },
-        {
-          iban: 'BE12001745766792',
-          name: 'BNP Paribas Fortis',
-          balance: 17565.13
-        },
-        {
-          iban: 'BE13363151562439',
-          name: 'ING',
-          balance: 6714.29
-        }
-      ];
+      // Lire les comptes depuis les variables d'environnement
+      const bankAccountsEnv = process.env.BANK_ACCOUNTS;
+
+      if (!bankAccountsEnv) {
+        return `❌ Configuration manquante !
+
+Les comptes bancaires ne sont pas configurés dans le fichier .env
+
+Ajoutez la variable BANK_ACCOUNTS dans votre .env :
+BANK_ACCOUNTS=IBAN|Nom|Solde;IBAN|Nom|Solde
+
+Exemple :
+BANK_ACCOUNTS=BE07671870399966|Europabank|80075.06;BE12001745766792|BNP Paribas Fortis|17565.13`;
+      }
+
+      // Parser les comptes depuis la variable d'environnement
+      const accounts = bankAccountsEnv.split(';').map(account => {
+        const [iban, name, balance] = account.split('|');
+        return {
+          iban: iban.trim(),
+          name: name.trim(),
+          balance: parseFloat(balance)
+        };
+      });
 
       await this.bankBalanceService.initializeBalances(accounts);
 
-      return `✅ **Soldes bancaires initialisés !**
+      // Construire le message de confirmation dynamiquement
+      let message = '✅ **Soldes bancaires initialisés !**\n\n';
 
-🏦 **Europabank**
-   BE07 6718 7039 9966
-   €${accounts[0].balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+      for (const account of accounts) {
+        const formattedIban = account.iban.match(/.{1,4}/g)?.join(' ') || account.iban;
+        message += `🏦 **${account.name}**\n`;
+        message += `   ${formattedIban}\n`;
+        message += `   €${account.balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}\n\n`;
+      }
 
-🏦 **BNP Paribas Fortis**
-   BE12 0017 4576 6792
-   €${accounts[1].balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+      const total = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+      message += `**Total**: €${total.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}\n\n`;
+      message += '💡 Les soldes seront maintenant automatiquement mis à jour avec les nouvelles transactions.\n\n';
+      message += 'Utilisez /balances pour consulter les soldes à tout moment.';
 
-🏦 **ING**
-   BE13 3631 5156 2439
-   €${accounts[2].balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
-
-**Total**: €${(accounts[0].balance + accounts[1].balance + accounts[2].balance).toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
-
-💡 Les soldes seront maintenant automatiquement mis à jour avec les nouvelles transactions.
-
-Utilisez /balances pour consulter les soldes à tout moment.`;
+      return message;
     } catch (error: any) {
       console.error('Erreur lors de l\'initialisation des soldes:', error);
       return `❌ Erreur lors de l'initialisation des soldes: ${error.message}`;
