@@ -40,7 +40,7 @@ export class TelegramClient {
 <b>Montant:</b> ${amount}
 <b>Date:</b> ${invoiceDate}
 <b>Échéance:</b> ${dueDate}
-<b>Statut:</b> ${this.getStatusEmoji(invoice.status)} ${this.escapeHtml(invoice.status)}
+<b>Statut:</b> ${this.getStatusEmoji(invoice.status)} ${this.translateStatus(invoice.status)}
 
 🔗 <a href="https://my.billit.eu/invoices/${invoice.id}">Voir la facture</a>
     `.trim();
@@ -64,7 +64,37 @@ export class TelegramClient {
     if (statusLower.includes('paid') || statusLower.includes('payé')) return '✅';
     if (statusLower.includes('pending') || statusLower.includes('attente')) return '⏳';
     if (statusLower.includes('overdue') || statusLower.includes('retard')) return '⚠️';
+    if (statusLower.includes('topay')) return '📄';
     return '📄';
+  }
+
+  /**
+   * Traduit le statut de la facture en français
+   */
+  private translateStatus(status: string): string {
+    const statusLower = status.toLowerCase();
+
+    // Mapping des statuts Billit vers français
+    const translations: { [key: string]: string } = {
+      'topay': 'À Payer',
+      'paid': 'Payée',
+      'pending': 'En attente',
+      'overdue': 'En retard',
+      'draft': 'Brouillon',
+      'cancelled': 'Annulée',
+      'payé': 'Payée',
+      'payée': 'Payée'
+    };
+
+    // Chercher une correspondance exacte (insensible à la casse)
+    for (const [key, value] of Object.entries(translations)) {
+      if (statusLower === key) {
+        return value;
+      }
+    }
+
+    // Si aucune correspondance, retourner le statut original avec première lettre en majuscule
+    return status.charAt(0).toUpperCase() + status.slice(1);
   }
 
   /**
