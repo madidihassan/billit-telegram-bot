@@ -200,7 +200,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_period_transactions',
-          description: 'Obtenir les transactions bancaires pour une période donnée (générique)',
+          description: 'Obtenir les transactions bancaires pour une période donnée. ⚠️ IMPORTANT: Si l\'utilisateur mentionne un fournisseur spécifique (ex: "paiements à Foster", "loyer d\'Alkhoomsy"), tu DOIS utiliser le paramètre supplier_name pour filtrer. Ne retourne PAS toutes les transactions si un fournisseur est mentionné.',
           parameters: {
             type: 'object',
             properties: {
@@ -219,7 +219,7 @@ export class AIAgentServiceV2 {
               },
               supplier_name: {
                 type: 'string',
-                description: 'Nom du fournisseur ou employé pour filtrer (optionnel)',
+                description: 'Nom du fournisseur ou employé pour filtrer. ⚠️ UTILISE CE PARAMÈTRE quand l\'utilisateur mentionne un fournisseur spécifique (ex: Foster, Alkhoomsy, Engie) ou un terme générique comme "loyer", "électricité" (après avoir demandé le nom du fournisseur).',
               },
             },
             required: ['start_date', 'end_date'],
@@ -2191,6 +2191,16 @@ TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
 9. **TOUS LES SALAIRES** - Quand on demande "tous les salaires" ou "les salaires" sans période spécifique, utilise get_employee_salaries SANS paramètre month (couvre toute l'année)
 
 10. **ZERO RÉSULTAT FOURNISSEUR/EMPLOYÉ = DEMANDE ORTHOGRAPHE** - UNIQUEMENT pour get_supplier_payments, get_supplier_received_payments, get_employee_salaries: Si le résultat est 0 (payment_count: 0, total: 0), demande l'orthographe: "🔍 Je ne trouve pas de fournisseur/employé nommé 'X'. Pourriez-vous vérifier l'orthographe ?" MAIS pour les autres fonctions (recettes_mois, get_period_transactions, etc.), réponds normalement avec les montants, même si c'est 0 €.
+
+10b. ⚠️ **MOTS-CLÉS GÉNÉRIQUES = DEMANDE DE PRÉCISION** - CRITIQUE:
+   - Si l'utilisateur utilise des termes génériques comme "loyer", "électricité", "gaz", "eau", "internet", "téléphone" SANS mentionner un nom de fournisseur spécifique:
+   - Tu DOIS demander le nom du fournisseur: "🔍 Pourriez-vous préciser le nom du fournisseur pour le [loyer/électricité/etc.] ? Par exemple, [suggérer quelques fournisseurs possibles si connus]"
+   - NE PAS utiliser get_period_transactions sans supplier_name pour ces termes génériques
+   - EXCEPTION: Si le contexte de conversation précédent mentionne déjà le fournisseur, utilise ce contexte
+   - Exemples:
+     * "Combien j'ai payé de loyer ?" → Demande: "Quel est le nom du propriétaire/agence ?"
+     * "Loyer des 3 derniers mois" → Demande: "À qui payez-vous le loyer ?"
+     * "Factures électricité" → Demande: "Quel est votre fournisseur d'électricité ? (ex: Engie, Luminus)"
 
 11. ⚠️ **GESTION DES UTILISATEURS - NE JAMAIS INVENTER** - CRITIQUE:
    - Pour TOUTE question sur les utilisateurs, tu DOIS appeler list_users() AVANT de répondre
