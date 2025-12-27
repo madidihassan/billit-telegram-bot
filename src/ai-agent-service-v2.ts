@@ -125,6 +125,23 @@ export class AIAgentServiceV2 {
       {
         type: 'function',
         function: {
+          name: 'get_upcoming_due_invoices',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures impayées dont l\'échéance arrive bientôt (dans les X prochains jours). Tu DOIS appeler cet outil pour TOUTE question sur les factures à échéance prochaine. Exemples: "Factures dont l\'échéance arrive bientôt?", "Factures à payer cette semaine?", "Échéances à venir?"',
+          parameters: {
+            type: 'object',
+            properties: {
+              days: {
+                type: 'number',
+                description: 'Nombre de jours dans le futur pour vérifier les échéances (par défaut: 7 jours)',
+              },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'mark_invoice_as_paid',
           description: 'Marquer une facture comme payée. Utilisez le numéro de facture exact.',
           parameters: {
@@ -728,6 +745,45 @@ export class AIAgentServiceV2 {
               amount: inv.total_amount,
               days_overdue: Math.floor(
                 (new Date().getTime() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24)
+              ),
+            })),
+          };
+          break;
+        }
+
+        case 'get_upcoming_due_invoices': {
+          const daysAhead = (args.days as number) || 7; // Par défaut 7 jours
+          const now = new Date();
+          const futureDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+
+          // Récupérer toutes les factures impayées
+          const unpaidInvoices = await this.billitClient.getUnpaidInvoices();
+
+          // Filtrer celles dont la date d'échéance est dans les X prochains jours
+          const upcomingInvoices = unpaidInvoices.filter(inv => {
+            const dueDate = new Date(inv.due_date);
+            return dueDate >= now && dueDate <= futureDate;
+          });
+
+          // Trier par date d'échéance (la plus proche en premier)
+          upcomingInvoices.sort((a, b) =>
+            new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+          );
+
+          const total = upcomingInvoices.reduce((sum, inv) => sum + inv.total_amount, 0);
+
+          result = {
+            count: upcomingInvoices.length,
+            total_amount: total,
+            currency: 'EUR',
+            days_ahead: daysAhead,
+            invoices: upcomingInvoices.map(inv => ({
+              supplier: inv.supplier_name,
+              invoice_number: inv.invoice_number,
+              amount: inv.total_amount,
+              due_date: inv.due_date,
+              days_until_due: Math.ceil(
+                (new Date(inv.due_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
               ),
             })),
           };
