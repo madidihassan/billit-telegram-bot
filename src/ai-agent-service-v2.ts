@@ -32,6 +32,7 @@ export class AIAgentServiceV2 {
   private bankClient: BankClient;
   private telegramBot: any | null = null; // Bot Telegram pour envoyer des fichiers
   private chatId: string | null = null; // Chat ID actuel pour envoyer les PDFs
+  private currentQuestion: string = ''; // Question actuelle de l'utilisateur
   private tools: any[];
   private conversationHistory: Array<{ role: string; content: string }> = [];
   private readonly MAX_HISTORY = 20; // Garder les 10 derniers échanges (20 messages)
@@ -230,7 +231,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_employee_salaries',
-          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\nRÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. ⚠️ Si "TOUS les [NOM_FAMILLE]" (ex: "tous les Madidi") → FAIRE UN SEUL APPEL avec le nom de famille seul {employee_name: "Madidi"}. NE PAS faire d\'appels supplémentaires pour chaque employé individuel ⚠️\n3. Si "TOUS les salaires" (sans précision) → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → UN SEUL APPEL: {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → UN SEUL APPEL: {employee_name: "Madidi"} (trouvera automatiquement Hassan, Soufiane, Jawad)\n- "Tous les salaires des Madidi de novembre" → UN SEUL APPEL: {employee_name: "Madidi", month: "novembre"}\n- "Salaires de Hassan en décembre" → UN SEUL APPEL: {employee_name: "Hassan Madidi", month: "décembre"}\n- "Tous les salaires" → UN SEUL APPEL: {}',
+          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\nRÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. ⚠️ Si "TOUS les [NOM_FAMILLE]" (ex: "tous les Madidi") → FAIRE UN SEUL APPEL avec le nom de famille seul {employee_name: "Madidi"}. NE PAS faire d\'appels supplémentaires pour chaque employé individuel ⚠️\n3. Si "TOUS les salaires" (sans précision) → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n6. ⚠️ Si utilisateur demande "LA LISTE" explicitement → METTRE include_details: true\n\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → UN SEUL APPEL: {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → UN SEUL APPEL: {employee_name: "Madidi"} (trouvera automatiquement Hassan, Soufiane, Jawad)\n- "Tous les salaires des Madidi de novembre" → UN SEUL APPEL: {employee_name: "Madidi", month: "novembre"}\n- "Salaires de Hassan en décembre" → UN SEUL APPEL: {employee_name: "Hassan Madidi", month: "décembre"}\n- "Donne-moi LA LISTE de tous les salaires" → UN SEUL APPEL: {include_details: true}\n- "Tous les salaires" → UN SEUL APPEL: {}',
           parameters: {
             type: 'object',
             properties: {
@@ -245,6 +246,10 @@ export class AIAgentServiceV2 {
               year: {
                 type: 'string',
                 description: 'Année (2025, 2024). Défaut: année en cours.',
+              },
+              include_details: {
+                type: 'boolean',
+                description: 'Mettre à true si l\'utilisateur demande EXPLICITEMENT "la liste", "liste détaillée", "détails". Par défaut: false (affiche seulement l\'analyse).',
               },
             },
             required: [],
@@ -1129,27 +1134,45 @@ export class AIAgentServiceV2 {
 
           const totalPaid = salaryTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
-          // 🔍 RECHERCHE FLOUE: Si aucun résultat et un nom d'employé était spécifié, chercher un nom similaire
+          // 🔍 RECHERCHE FLOUE: Si aucun résultat et un nom d'employé était spécifié, chercher des noms similaires
           let suggestionMessage = '';
-          if (args.employee_name && totalPaid === 0 && args.employee_name.includes(' ')) {
+          if (args.employee_name && totalPaid === 0) {
             console.log(`🔍 Recherche floue pour "${args.employee_name}" (0 résultats trouvés)...`);
-            const closestMatch = await this.findClosestEmployee(args.employee_name);
 
-            if (closestMatch) {
-              console.log(`✨ Employé similaire trouvé: "${closestMatch.employee.name}" (distance: ${closestMatch.distance})`);
+            // Si le nom contient un espace, chercher une correspondance exacte avec autocorrection
+            if (args.employee_name.includes(' ')) {
+              const closestMatch = await this.findClosestEmployee(args.employee_name);
 
-              // Réessayer la recherche avec le nom corrigé
-              const correctedTransactions = transactions.filter(tx => {
-                if (tx.type !== 'Debit' || !tx.description) return false;
-                return isSalaryTransaction(tx.description) && matchesEmployeeName(tx.description, closestMatch.employee.name);
-              });
+              if (closestMatch) {
+                console.log(`✨ Employé similaire trouvé: "${closestMatch.employee.name}" (distance: ${closestMatch.distance})`);
 
-              if (correctedTransactions.length > 0) {
-                salaryTransactions = correctedTransactions;
-                suggestionMessage = `\n\n💡 Aucun employé trouvé pour "${args.employee_name}". Résultats affichés pour "${closestMatch.employee.name}" à la place.`;
+                // Réessayer la recherche avec le nom corrigé
+                const correctedTransactions = transactions.filter(tx => {
+                  if (tx.type !== 'Debit' || !tx.description) return false;
+                  return isSalaryTransaction(tx.description) && matchesEmployeeName(tx.description, closestMatch.employee.name);
+                });
+
+                if (correctedTransactions.length > 0) {
+                  salaryTransactions = correctedTransactions;
+                  suggestionMessage = `\n\n💡 Aucun employé trouvé pour "${args.employee_name}". Résultats affichés pour "${closestMatch.employee.name}" à la place.`;
+                }
               }
             } else {
-              console.log(`❌ Aucun employé similaire trouvé pour "${args.employee_name}"`);
+              // Si c'est un nom partiel (sans espace), proposer des suggestions
+              const suggestions = await this.findSimilarEmployees(args.employee_name, 5);
+
+              if (suggestions.length > 0) {
+                console.log(`💡 ${suggestions.length} suggestion(s) trouvée(s) pour "${args.employee_name}"`);
+
+                suggestionMessage = `\n\n❓ Aucun employé trouvé pour "${args.employee_name}".\n\n`;
+                suggestionMessage += `Vouliez-vous dire :\n`;
+                suggestions.forEach((s, i) => {
+                  suggestionMessage += `${i + 1}. ${s.employee.name}\n`;
+                });
+                suggestionMessage += `\nVeuillez préciser le nom complet de l'employé.`;
+              } else {
+                console.log(`❌ Aucun employé similaire trouvé pour "${args.employee_name}"`);
+              }
             }
           }
 
@@ -1211,6 +1234,110 @@ export class AIAgentServiceV2 {
             }
           });
 
+          // 📊 ANALYSE MENSUELLE ET PAR EMPLOYÉ: si période > 1 mois OU si "analyse" demandée
+          let monthlyAnalysis = '';
+          const questionLower = this.currentQuestion.toLowerCase();
+          const userAsksForAnalysis = questionLower.includes('analyse') || questionLower.includes('top');
+          const isMultiMonthPeriod = (!args.month && !args.employee_name && salaryTransactions.length > 0) || userAsksForAnalysis;
+
+          if (isMultiMonthPeriod) {
+            // ========== ANALYSE PAR EMPLOYÉ ==========
+            const employeeTotals: { [key: string]: { total: number; count: number } } = {};
+
+            salaryTransactions.forEach(tx => {
+              const descLower = (tx.description || '').toLowerCase();
+
+              // Extraire le nom de l'employé
+              employees.forEach(emp => {
+                const nameParts = emp.name.toLowerCase().split(' ');
+                if (nameParts.every(part => descLower.includes(part))) {
+                  if (!employeeTotals[emp.name]) {
+                    employeeTotals[emp.name] = { total: 0, count: 0 };
+                  }
+                  employeeTotals[emp.name].total += Math.abs(tx.amount);
+                  employeeTotals[emp.name].count++;
+                }
+              });
+            });
+
+            // Trier les employés par total décroissant
+            const sortedEmployees = Object.entries(employeeTotals)
+              .map(([name, data]) => ({ name, ...data }))
+              .sort((a, b) => b.total - a.total);
+
+            // ========== ANALYSE PAR MOIS ==========
+            const monthlyTotals: { [key: string]: { total: number; count: number; employees: Set<string> } } = {};
+
+            salaryTransactions.forEach(tx => {
+              const txDate = new Date(tx.date);
+              const monthKey = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
+
+              if (!monthlyTotals[monthKey]) {
+                monthlyTotals[monthKey] = { total: 0, count: 0, employees: new Set() };
+              }
+
+              monthlyTotals[monthKey].total += Math.abs(tx.amount);
+              monthlyTotals[monthKey].count++;
+
+              // Extraire le nom de l'employé
+              const descLower = (tx.description || '').toLowerCase();
+              employees.forEach(emp => {
+                const nameParts = emp.name.toLowerCase().split(' ');
+                if (nameParts.every(part => descLower.includes(part))) {
+                  monthlyTotals[monthKey].employees.add(emp.name);
+                }
+              });
+            });
+
+            // Convertir en tableau et trier par total décroissant
+            const sortedMonths = Object.entries(monthlyTotals)
+              .map(([key, data]) => {
+                const [year, month] = key.split('-');
+                const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                const monthName = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                return {
+                  monthName,
+                  ...data,
+                  employeesList: Array.from(data.employees)
+                };
+              })
+              .sort((a, b) => b.total - a.total);
+
+            // ========== GÉNÉRATION DU TEXTE D'ANALYSE ==========
+            if (sortedEmployees.length > 0) {
+              const topEmployee = sortedEmployees[0];
+              monthlyAnalysis = `\n\n📊 ANALYSE DES SALAIRES\n\n`;
+              monthlyAnalysis += `👤 Employé avec le plus de salaires perçus:\n`;
+              monthlyAnalysis += `   🥇 ${topEmployee.name}: ${topEmployee.total.toFixed(2)}€ (${topEmployee.count} paiements)\n\n`;
+
+              // Top des employés (détection automatique de "top X" dans la question)
+              const currentQuestionLower = this.currentQuestion.toLowerCase();
+              const topMatch = currentQuestionLower.match(/top\s*(\d+)/);
+              const topN = topMatch ? Math.min(parseInt(topMatch[1]), sortedEmployees.length) : Math.min(5, sortedEmployees.length);
+
+              if (sortedEmployees.length > 1) {
+                monthlyAnalysis += `\n📊 Top ${topN} des employés:\n`;
+                sortedEmployees.slice(0, topN).forEach((emp, i) => {
+                  const icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                  monthlyAnalysis += `${icon} ${emp.name}: ${emp.total.toFixed(2)}€\n`;
+                });
+              }
+            }
+
+            if (sortedMonths.length > 1) {
+              const topMonth = sortedMonths[0];
+              monthlyAnalysis += `\n\n📅 Mois avec le plus de salaires payés:\n`;
+              monthlyAnalysis += `   🥇 ${topMonth.monthName}: ${topMonth.total.toFixed(2)}€ (${topMonth.count} paiements)\n`;
+              monthlyAnalysis += `   Employés: ${topMonth.employeesList.length} personnes\n\n`;
+
+              monthlyAnalysis += `📈 Répartition par mois:\n`;
+              sortedMonths.forEach((m, i) => {
+                const icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '  ';
+                monthlyAnalysis += `${icon} ${m.monthName}: ${m.total.toFixed(2)}€ (${m.count} paiements)\n`;
+              });
+            }
+          }
+
           // Formatter la liste complète des salaires pour Telegram
           const salaryList = salaryTransactions.map((tx, index) => {
             const num = String(index + 1).padStart(2, ' ');
@@ -1256,12 +1383,155 @@ export class AIAgentServiceV2 {
             }
           }
 
-          const directResponse = `💰 Salaires de ${periodTitle}\n\n` +
-            `Total: ${finalTotalPaid.toFixed(2)}€ (${salaryTransactions.length} paiements)\n\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            salaryList +
-            autoLearnNote +
-            suggestionMessage;
+          // Décider si on inclut la liste détaillée
+          // 1. Si l'utilisateur demande explicitement la liste (include_details: true OU mot "liste" dans la question)
+          // 2. Si recherche spécifique (employé ou mois particulier)
+          // 3. Si peu de transactions (≤ 10)
+          const userAsksForList = questionLower.includes('liste') || questionLower.includes('détail');
+          const userWantsDetails = args.include_details === true || userAsksForList;
+          const includeDetailedList = userWantsDetails || !isMultiMonthPeriod || salaryTransactions.length <= 10;
+
+          // 📊 DÉTECTION DES QUESTIONS SUR MIN/MAX
+          let minMaxAnalysis = '';
+          const userAsksForMin = questionLower.includes('plus bas') || questionLower.includes('minimum') || questionLower.includes('moins payé') || questionLower.includes('le moins');
+          const userAsksForMax = questionLower.includes('plus haut') || questionLower.includes('plus élevé') || questionLower.includes('maximum') || questionLower.includes('le plus') || questionLower.includes('mieux payé');
+
+          // 📊 DÉTECTION DES QUESTIONS DE COMPARAISON/CLASSEMENT
+          const userAsksForRanking = questionLower.includes('se situe') || questionLower.includes('position') ||
+                                      questionLower.includes('rang') || questionLower.includes('classement') ||
+                                      questionLower.includes('par rapport') || questionLower.includes('comparé');
+
+          if (salaryTransactions.length > 0 && (userAsksForMin || userAsksForMax)) {
+            // Trouver min et max
+            let minTx = salaryTransactions[0];
+            let maxTx = salaryTransactions[0];
+
+            salaryTransactions.forEach(tx => {
+              const amount = Math.abs(tx.amount);
+              if (amount < Math.abs(minTx.amount)) minTx = tx;
+              if (amount > Math.abs(maxTx.amount)) maxTx = tx;
+            });
+
+            // Extraire les noms d'employés
+            const { getAllEmployees } = await import('./database');
+            const employees = getAllEmployees();
+
+            const extractEmployeeName = (description: string): string => {
+              const descLower = description.toLowerCase();
+              for (const emp of employees) {
+                const nameParts = emp.name.toLowerCase().split(' ');
+                if (nameParts.every(part => descLower.includes(part))) {
+                  return emp.name;
+                }
+              }
+              return 'Inconnu';
+            };
+
+            minMaxAnalysis = '\n\n📊 ANALYSE MIN/MAX\n\n';
+
+            if (userAsksForMin) {
+              const minEmployee = extractEmployeeName(minTx.description || '');
+              const minDate = new Date(minTx.date).toLocaleDateString('fr-BE');
+              minMaxAnalysis += `💵 SALAIRE LE PLUS BAS:\n`;
+              minMaxAnalysis += `   ${Math.abs(minTx.amount).toFixed(2)}€ - ${minEmployee} (${minDate})\n`;
+            }
+
+            if (userAsksForMax) {
+              const maxEmployee = extractEmployeeName(maxTx.description || '');
+              const maxDate = new Date(maxTx.date).toLocaleDateString('fr-BE');
+              if (userAsksForMin) minMaxAnalysis += '\n';
+              minMaxAnalysis += `💰 SALAIRE LE PLUS HAUT:\n`;
+              minMaxAnalysis += `   ${Math.abs(maxTx.amount).toFixed(2)}€ - ${maxEmployee} (${maxDate})\n`;
+            }
+          }
+
+          // 📊 ANALYSE DE CLASSEMENT (si employé spécifique demandé)
+          let rankingAnalysis = '';
+          if (args.employee_name && userAsksForRanking && salaryTransactions.length > 0) {
+            // Récupérer TOUS les salaires de TOUS les employés pour comparaison
+            const allTransactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
+            const { getAllEmployees } = await import('./database');
+            const allEmployees = getAllEmployees();
+
+            // Grouper par employé
+            const employeeTotals: { [name: string]: number } = {};
+
+            allTransactions.forEach(tx => {
+              if (tx.type !== 'Debit' || !tx.description) return;
+              const desc = tx.description.toLowerCase();
+              if (!desc.includes('salaire')) return;
+
+              // Trouver l'employé correspondant
+              for (const emp of allEmployees) {
+                const nameParts = emp.name.toLowerCase().split(' ');
+                if (nameParts.every(part => desc.includes(part))) {
+                  if (!employeeTotals[emp.name]) {
+                    employeeTotals[emp.name] = 0;
+                  }
+                  employeeTotals[emp.name] += Math.abs(tx.amount);
+                  break;
+                }
+              }
+            });
+
+            // Trier par total décroissant
+            const ranking = Object.entries(employeeTotals)
+              .map(([name, total]) => ({ name, total }))
+              .sort((a, b) => b.total - a.total);
+
+            // Trouver la position de l'employé demandé
+            const targetEmployeeName = args.employee_name.toLowerCase();
+            let employeeRank = -1;
+            let employeeName = '';
+            let employeeTotal = 0;
+
+            for (let i = 0; i < ranking.length; i++) {
+              const rankName = ranking[i].name.toLowerCase();
+              if (rankName.includes(targetEmployeeName) || targetEmployeeName.includes(rankName.split(' ')[0])) {
+                employeeRank = i + 1;
+                employeeName = ranking[i].name;
+                employeeTotal = ranking[i].total;
+                break;
+              }
+            }
+
+            if (employeeRank > 0 && ranking.length > 0) {
+              // Calculer la médiane
+              const sortedTotals = ranking.map(r => r.total).sort((a, b) => a - b);
+              const medianIndex = Math.floor(sortedTotals.length / 2);
+              const median = sortedTotals.length % 2 === 0
+                ? (sortedTotals[medianIndex - 1] + sortedTotals[medianIndex]) / 2
+                : sortedTotals[medianIndex];
+
+              rankingAnalysis = '\n\n📊 CLASSEMENT PARMI LES EMPLOYÉS\n\n';
+              rankingAnalysis += `${employeeName} se situe:\n`;
+              rankingAnalysis += `   📍 Position: ${employeeRank}${employeeRank === 1 ? 'er' : 'ème'} sur ${ranking.length} employés\n`;
+              rankingAnalysis += `   💰 Total perçu: ${employeeTotal.toFixed(2)}€\n\n`;
+
+              rankingAnalysis += `Comparaison:\n`;
+              rankingAnalysis += `   🥇 1er: ${ranking[0].name} (${ranking[0].total.toFixed(2)}€)\n`;
+              rankingAnalysis += `   📊 Médiane: ${median.toFixed(2)}€\n`;
+
+              const comparison = employeeTotal > median ? 'au-dessus' : employeeTotal < median ? 'en-dessous' : 'à';
+              rankingAnalysis += `   📍 ${employeeName}: ${employeeTotal.toFixed(2)}€ (${comparison} de la médiane)\n`;
+
+              if (ranking.length > 1) {
+                rankingAnalysis += `   📉 Dernier: ${ranking[ranking.length - 1].name} (${ranking[ranking.length - 1].total.toFixed(2)}€)\n`;
+              }
+            }
+          }
+
+          let directResponse = `💰 Salaires de ${periodTitle}\n\n` +
+            `Total: ${finalTotalPaid.toFixed(2)}€ (${salaryTransactions.length} paiements)` +
+            monthlyAnalysis +
+            minMaxAnalysis +
+            rankingAnalysis;
+
+          if (includeDetailedList) {
+            directResponse += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` + salaryList;
+          }
+
+          directResponse += autoLearnNote + suggestionMessage;
 
           result = {
             employee_name: args.employee_name || 'Tous les employés',
@@ -2331,6 +2601,48 @@ export class AIAgentServiceV2 {
   }
 
   /**
+   * Trouve plusieurs employés similaires à un nom donné (fuzzy matching)
+   * Retourne jusqu'à 5 suggestions triées par pertinence
+   */
+  private async findSimilarEmployees(searchName: string, maxResults: number = 5): Promise<Array<{ employee: any; distance: number }>> {
+    const { getAllEmployees } = await import('./database');
+    const employees = getAllEmployees();
+
+    if (employees.length === 0) {
+      return [];
+    }
+
+    const searchLower = searchName.toLowerCase();
+    const matches: Array<{ employee: any; distance: number }> = [];
+
+    for (const emp of employees) {
+      const empNameLower = emp.name.toLowerCase();
+
+      // Calculer la distance pour le nom complet
+      let distance = this.levenshteinDistance(searchLower, empNameLower);
+
+      // Vérifier aussi si le terme de recherche correspond à une partie du nom
+      const nameParts = empNameLower.split(' ');
+      for (const part of nameParts) {
+        const partDistance = this.levenshteinDistance(searchLower, part);
+        distance = Math.min(distance, partDistance);
+      }
+
+      // Accepter si la distance est raisonnable
+      const maxDistance = Math.max(4, Math.floor(searchLower.length * 0.4));
+
+      if (distance <= maxDistance) {
+        matches.push({ employee: emp, distance });
+      }
+    }
+
+    // Trier par distance (plus proche en premier) et limiter le nombre de résultats
+    return matches
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, maxResults);
+  }
+
+  /**
    * Traite une question
    */
   async processQuestion(question: string, chatId?: string): Promise<string> {
@@ -2339,6 +2651,9 @@ export class AIAgentServiceV2 {
       if (chatId) {
         this.chatId = chatId;
       }
+
+      // Stocker la question actuelle pour la détection automatique de "liste"
+      this.currentQuestion = question;
 
       console.log('🤖 Question V2:', question);
 
