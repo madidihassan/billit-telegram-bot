@@ -575,6 +575,123 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 
 ## Historique des versions récentes
 
+### Commit 1065e25 (28 déc 2025) - Analyse complète mois unique
+- **FEAT**: Analyse complète pour mois unique quand "analyse" demandée
+- Quand l'utilisateur demande "analyse les salaires du mois de X", affiche l'analyse complète (top employés, stats)
+- Différence : "salaires de décembre" → concis vs "analyse salaires décembre" → détaillé
+- **Fichiers modifiés** : `ai-agent-service-v2.ts` (3 insertions, 2 suppressions)
+
+### Commit 5ef75d3 (28 déc 2025) - Détection "top X" améliorée
+- **REFINE**: Amélioration détection "top X" pour variantes de formulation
+- Support de : "top 10", "les 10 employés", "les 10 employés les mieux payés"
+- Pattern regex amélioré pour extraire le nombre dans toutes les formulations
+- **Tests validés** : "les 10 employés les mieux payés" → affiche Top 10 ✅
+- **Fichiers modifiés** : `ai-agent-service-v2.ts` (9 insertions, 7 suppressions)
+
+### Commit 7cdbbde (28 déc 2025) - 7 corrections majeures salaires
+- **FEAT**: Advanced salary query improvements with 7 major fixes
+- **185 lignes de code ajoutées** pour améliorer l'intelligence du système
+
+#### 🎯 Les 7 corrections majeures :
+
+1. **✅ Fuzzy matching avec ordre inversé des noms**
+   - "Mokhlis Jamhoun" trouve maintenant "Jamhoun Mokhlis"
+   - Appliqué dans `findClosestEmployee()`, `findSimilarEmployees()`, et `compare_employee_salaries`
+   - Utilise l'algorithme de Levenshtein avec test d'ordre inversé
+
+2. **✅ Recherche partielle prioritaire sur base de données**
+   - "lina" affiche uniquement Tag Lina (pas El Jaouhari ni Ben Yamoune)
+   - Cherche d'abord dans les noms d'employés BDD avant les descriptions de transactions
+   - Évite les faux positifs comme "Sa**lina**"
+
+3. **✅ Liste détaillée masquée pour mois unique >10 transactions**
+   - "analyse salaires de décembre" affiche juste le total (26611.52€, 22 paiements)
+   - Ne surcharge plus avec 22 lignes de détails
+   - Condition : `isSingleMonthManyTransactions`
+
+4. **✅ Support natif des périodes multi-mois**
+   - Nouveaux paramètres : `start_month` et `end_month`
+   - "salaires entre octobre et décembre" affiche les 3 mois avec titre "octobre à décembre 2025"
+   - Total : 74044.20€ (69 paiements) pour la période exacte
+
+5. **✅ Détection de comparaison sans mot "salaire"**
+   - "compare kalide chami et mokhlis jamhoun" fonctionne maintenant
+   - Pattern de détection amélioré (suppression de la condition `includes('salaire')`)
+
+6. **✅ Détection de classement ("où se situe X")**
+   - "où se situe mokhlis jamhoun par rapport aux autres employés" détecté
+   - Nouveau pattern regex pour questions de classement
+   - Affiche position, médiane, et comparaison
+
+7. **✅ Top N sans liste détaillée**
+   - "top 3 des employés" affiche juste le top 3 (pas 72 transactions)
+   - Condition : `userAsksForTopOnly` détecte les requêtes "top X" sans "liste"
+
+#### 📊 Tests validés (15/15) :
+- ✅ Fuzzy matching : "khalid chami" → "Kalide Chami"
+- ✅ Recherche partielle : "lina" → Tag Lina uniquement
+- ✅ Décembre sans liste : Total uniquement
+- ✅ Top 10 détecté : Variantes de formulation
+- ✅ MIN/MAX : Salaires extrêmes identifiés
+- ✅ Nom inversé : "mokhlis jamhoun" → "Jamhoun Mokhlis"
+- ✅ Comparaisons : Multiples employés
+- ✅ Période multi-mois : oct-déc = 3 mois exactement
+
+#### 🔧 Fonctions modifiées :
+- `findClosestEmployee()` : Ajout test ordre inversé
+- `findSimilarEmployees()` : Ajout test ordre inversé
+- `get_employee_salaries` : Nouveaux paramètres start_month/end_month + recherche prioritaire BDD
+- `compare_employee_salaries` : Fuzzy matching avec ordre inversé
+- `processQuestion()` : Hints IA améliorés (périodes multi-mois, classements)
+- Génération titre de période : Support "octobre à décembre 2025"
+
+---
+
+### 📋 TODO - Prochaine session (Fournisseurs)
+
+**Objectif** : Créer système d'analyse fournisseurs similaire au système salaires
+
+#### À implémenter :
+1. **Créer outil `analyze_supplier_expenses`** (complet)
+   - Top X fournisseurs par montant de dépenses
+   - Analyse détaillée d'un fournisseur spécifique
+   - Support périodes (mois unique, multi-mois, année)
+   - Affichage optimisé (avec/sans liste détaillée)
+
+2. **Ajouter outil `compare_supplier_expenses`**
+   - Comparaison entre 2-10 fournisseurs
+   - Classement par total, moyenne, fréquence
+   - Différence en € et %
+
+3. **Détections automatiques**
+   - "top 10 fournisseurs" → Top 10 par dépenses (pas liste complète)
+   - "analyse dépenses chez Sligro" → Analyse détaillée
+   - "compare Colruyt et Sligro" → Comparaison
+
+4. **Tests à créer**
+   - Top X fournisseurs (10, 5, 3)
+   - Analyse fournisseur spécifique
+   - Période multi-mois fournisseur
+   - Comparaison fournisseurs
+   - Fuzzy matching noms fournisseurs
+
+#### Exemple attendu :
+```
+Question: "top 10 fournisseurs"
+Réponse:
+💰 Dépenses de année 2025
+
+Total: 150000€ (250 paiements)
+
+📊 Top 10 des fournisseurs:
+🥇 Sligro: 45000€ (85 paiements)
+🥈 Colruyt: 32000€ (60 paiements)
+🥉 Foster: 28000€ (45 paiements)
+...
+```
+
+---
+
 ### Commit bd2555e (25 déc 2025)
 - **FIX**: Amélioration de la détection des processus bot avec `pgrep` + `pwdx`
 - Prévention des instances dupliquées lors de la synchronisation
@@ -614,9 +731,11 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 
 ---
 
-**Dernière mise à jour**: 25 décembre 2025
-**Version du bot**: 2.5 avec IA autonome + Système multi-bots
+**Dernière mise à jour**: 28 décembre 2025
+**Version du bot**: 2.6 avec analyse salaires avancée
 **Statut**: Production ✅
-**Nouveau**:
-- Synchronisation automatique avec commande `sync` 🔄
-- Correctif: Les deux bots peuvent tourner en parallèle sans se perturber 🔧
+**Nouveautés session 28 déc** :
+- ✅ 8 corrections majeures système salaires (fuzzy matching, périodes multi-mois, top X, etc.)
+- ✅ 3 commits pushés : 7cdbbde, 5ef75d3, 1065e25
+- ✅ 15/15 tests validés
+- 📋 TODO : Système analyse fournisseurs (prochaine session)
