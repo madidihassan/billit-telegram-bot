@@ -230,13 +230,13 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_employee_salaries',
-          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. RÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. Si "TOUS les salaires" → NE PAS spécifier employee_name\n3. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n4. Si MOIS PRÉCIS (ex: "décembre") → spécifier month\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de Hassan en décembre" → {employee_name: "Hassan Madidi", month: "décembre"}\n- "Tous les salaires" → {}',
+          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. RÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. Si NOM DE FAMILLE SEUL (ex: "Madidi", "El Barnoussi") → SPECIFIER juste le nom de famille (recherche partielle automatique)\n3. Si "TOUS les salaires" → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. Si MOIS PRÉCIS (ex: "décembre") → spécifier month\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → {employee_name: "Madidi"} (trouvera Hassan, Soufiane, Jawad Madidi)\n- "Salaires de Hassan en décembre" → {employee_name: "Hassan Madidi", month: "décembre"}\n- "Tous les salaires" → {}',
           parameters: {
             type: 'object',
             properties: {
               employee_name: {
                 type: 'string',
-                description: '⚠️ OBLIGATOIRE si nom mentionné: Nom complet (Soufiane Madidi, Hassan Madidi, Jamhoun Mokhlis). Si juste prénom donné, ajoute le nom de famille.',
+                description: '⚠️ Nom complet OU nom de famille seul. EXEMPLES: "Soufiane Madidi" (exact), "Madidi" (tous les Madidi), "Hassan Madidi" (exact). Recherche partielle automatique si pas d\'espace.',
               },
               month: {
                 type: 'string',
@@ -1101,11 +1101,21 @@ export class AIAgentServiceV2 {
           };
 
           if (args.employee_name) {
-            // Filtrer pour un employé spécifique
+            // Filtrer pour un employé spécifique ou recherche partielle (ex: "Madidi" pour tous les Madidi)
+            const searchTerm = args.employee_name.toLowerCase();
+
             salaryTransactions = transactions.filter(tx => {
               if (tx.type !== 'Debit' || !tx.description) return false;
-              // Accepter si: contient "salaire" ET le nom de l'employé correspond
-              return isSalaryTransaction(tx.description) && matchesEmployeeName(tx.description, args.employee_name);
+
+              // Si le terme de recherche est un nom de famille seul (pas d'espace), chercher partiellement
+              if (!searchTerm.includes(' ')) {
+                // Recherche partielle: vérifier si la description contient le terme ET "salaire"
+                const desc = tx.description.toLowerCase();
+                return desc.includes('salaire') && desc.includes(searchTerm);
+              } else {
+                // Recherche exacte: contient "salaire" ET le nom complet correspond
+                return isSalaryTransaction(tx.description) && matchesEmployeeName(tx.description, args.employee_name);
+              }
             });
           } else {
             // Obtenir TOUS les salaires
