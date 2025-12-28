@@ -83,6 +83,12 @@ const ADDITIONAL_KNOWN_SUPPLIERS: Array<{name: string; aliases: string[]; replac
     name: 'Sligro-MFS Belgium SA',
     aliases: ['sligro', 'sligro-mfs', 'sligromfs', 'sligro mfs', 'sligro belgium'],
     replaceAutoAliases: true
+  },
+  {
+    // OVERRIDE Uber Eats avec alias manuels (auto-generated "belgium" and "eats" are too generic)
+    name: 'Uber Eats Belgium SRL',
+    aliases: ['uber', 'uber eats', 'ubereats', 'uber eats belgium', 'ubereatsbelgium'],
+    replaceAutoAliases: true
   }
 ];
 
