@@ -101,6 +101,12 @@ const ADDITIONAL_KNOWN_SUPPLIERS: Array<{name: string; aliases: string[]; replac
     name: 'AHLAS PACK SRL',
     aliases: ['ahlas', 'ahlas pack', 'ahlaspacksrl', 'ahlas pack srl'],
     replaceAutoAliases: true
+  },
+  {
+    // OVERRIDE Belgian Shell SA avec alias manuels (auto-generated "belgian" is too generic)
+    name: 'Belgian Shell SA',
+    aliases: ['shell', 'belgian shell', 'belgian shell sa', 'belgianshellsa'],
+    replaceAutoAliases: true
   }
 ];
 
