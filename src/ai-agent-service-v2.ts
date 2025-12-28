@@ -1122,6 +1122,58 @@ export class AIAgentServiceV2 {
           // Trier par date décroissante (plus récent en premier)
           salaryTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+          // 🤖 AUTO-APPRENTISSAGE: Détecter et ajouter automatiquement les employés inconnus
+          const { addEmployee } = await import('./database');
+          const newEmployeesAdded: string[] = [];
+
+          salaryTransactions.forEach(tx => {
+            const desc = tx.description || '';
+            const descLower = desc.toLowerCase();
+
+            // Vérifier si l'employé est déjà connu
+            const isKnown = employees.some(emp => {
+              const nameParts = emp.name.toLowerCase().split(' ');
+              return nameParts.every(part => descLower.includes(part));
+            });
+
+            if (!isKnown && isSalaryTransaction(desc)) {
+              // Extraire le nom de la description
+              // Format: "VIREMENT EN FAVEUR DE [NOM] BE..."
+              const match = desc.match(/VIREMENT EN FAVEUR DE\s+([^B]+?)\s+BE/i);
+              if (match) {
+                const extractedName = match[1].trim();
+
+                // Vérifier qu'on n'a pas déjà ajouté ce nom
+                const alreadyAdded = newEmployeesAdded.some(name =>
+                  name.toLowerCase() === extractedName.toLowerCase()
+                );
+
+                if (!alreadyAdded) {
+                  // Vérifier que le nom n'existe pas déjà (double check)
+                  const existsInDb = employees.some(emp =>
+                    emp.name.toLowerCase() === extractedName.toLowerCase()
+                  );
+
+                  if (!existsInDb) {
+                    // Ajouter automatiquement à la base de données
+                    addEmployee(extractedName);
+                    employees.push({
+                      id: 0,
+                      name: extractedName,
+                      chat_id: null,
+                      position: null,
+                      hire_date: null,
+                      is_active: true,
+                      created_at: new Date().toISOString()
+                    });
+                    newEmployeesAdded.push(extractedName);
+                    console.log(`🤖 AUTO-APPRENTISSAGE: Nouvel employé ajouté automatiquement: "${extractedName}"`);
+                  }
+                }
+              }
+            }
+          });
+
           // Formatter la liste complète des salaires pour Telegram
           const salaryList = salaryTransactions.map((tx, index) => {
             const num = String(index + 1).padStart(2, ' ');
@@ -1142,11 +1194,18 @@ export class AIAgentServiceV2 {
             return `${num}. ${date} - ${amount}€ - ${employeeName}`;
           }).join('\n');
 
+          // Ajouter une note si de nouveaux employés ont été ajoutés
+          const autoLearnNote = newEmployeesAdded.length > 0
+            ? `\n\n🤖 ${newEmployeesAdded.length} nouvel(s) employé(s) ajouté(s) automatiquement:\n` +
+              newEmployeesAdded.map(name => `   • ${name}`).join('\n')
+            : '';
+
           const monthName = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
           const directResponse = `💰 Salaires de ${monthName}\n\n` +
             `Total: ${totalPaid.toFixed(2)}€ (${salaryTransactions.length} paiements)\n\n` +
             `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            salaryList;
+            salaryList +
+            autoLearnNote;
 
           result = {
             employee_name: args.employee_name || 'Tous les employés',
