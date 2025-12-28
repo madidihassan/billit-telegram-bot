@@ -1315,8 +1315,9 @@ export class AIAgentServiceV2 {
           const userAsksForAnalysis = questionLower.includes('analyse') || questionLower.includes('top');
           const isMultiMonthPeriod = (!args.month && !args.employee_name && salaryTransactions.length > 0) || userAsksForAnalysis;
 
-          // Ne montrer l'analyse par employé que si aucun employé spécifique n'est demandé ET pas un mois spécifique
-          const showEmployeeAnalysis = !args.employee_name && !args.month && isMultiMonthPeriod;
+          // Ne montrer l'analyse par employé que si aucun employé spécifique n'est demandé
+          // ET (pas un mois spécifique OU l'utilisateur demande explicitement "analyse")
+          const showEmployeeAnalysis = !args.employee_name && (!args.month || userAsksForAnalysis) && isMultiMonthPeriod;
 
           if (isMultiMonthPeriod) {
             // ========== ANALYSE PAR EMPLOYÉ (seulement si pas d'employé spécifique) ==========
