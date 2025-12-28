@@ -1104,8 +1104,8 @@ export class AIAgentServiceV2 {
             // Filtrer pour un employé spécifique
             salaryTransactions = transactions.filter(tx => {
               if (tx.type !== 'Debit' || !tx.description) return false;
-              // Accepter si: contient "salaire" OU si le nom de l'employé correspond
-              return isSalaryTransaction(tx.description) || matchesEmployeeName(tx.description, args.employee_name);
+              // Accepter si: contient "salaire" ET le nom de l'employé correspond
+              return isSalaryTransaction(tx.description) && matchesEmployeeName(tx.description, args.employee_name);
             });
           } else {
             // Obtenir TOUS les salaires
