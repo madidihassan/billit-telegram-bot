@@ -434,14 +434,67 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
 
   /**
    * Envoie un message avec les boutons de navigation
+   * Découpe automatiquement si > 4096 caractères (limite Telegram)
    */
   async sendMessageWithButtons(text: string): Promise<void> {
     try {
-      await this.bot.sendMessage(this.currentChatId, text, {
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-        reply_markup: this.getNavigationKeyboard()
-      });
+      const MAX_LENGTH = 4096;
+
+      // Si le message est court, l'envoyer tel quel
+      if (text.length <= MAX_LENGTH) {
+        await this.bot.sendMessage(this.currentChatId, text, {
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: this.getNavigationKeyboard()
+        });
+        return;
+      }
+
+      // Découper le message en plusieurs parties
+      console.log(`📝 Message trop long (${text.length} caractères), découpage en plusieurs messages...`);
+
+      const parts: string[] = [];
+      let currentPart = '';
+      const lines = text.split('\n');
+
+      for (const line of lines) {
+        // Si ajouter cette ligne dépasse la limite
+        if ((currentPart + line + '\n').length > MAX_LENGTH) {
+          // Sauvegarder la partie actuelle
+          if (currentPart) {
+            parts.push(currentPart.trim());
+          }
+          // Commencer une nouvelle partie avec cette ligne
+          currentPart = line + '\n';
+        } else {
+          currentPart += line + '\n';
+        }
+      }
+
+      // Ajouter la dernière partie
+      if (currentPart.trim()) {
+        parts.push(currentPart.trim());
+      }
+
+      console.log(`📨 Envoi de ${parts.length} messages...`);
+
+      // Envoyer toutes les parties
+      for (let i = 0; i < parts.length; i++) {
+        const isLast = i === parts.length - 1;
+        const partText = parts.length > 1 ? `${parts[i]}\n\n📄 (${i + 1}/${parts.length})` : parts[i];
+
+        await this.bot.sendMessage(this.currentChatId, partText, {
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          // N'afficher les boutons que sur le dernier message
+          reply_markup: isLast ? this.getNavigationKeyboard() : undefined
+        });
+
+        // Petite pause entre les messages pour éviter le rate limiting
+        if (!isLast) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
     } catch (error: any) {
       console.error('Erreur lors de l\'envoi du message:', error);
       throw error;

@@ -1119,6 +1119,35 @@ export class AIAgentServiceV2 {
 
           const totalPaid = salaryTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
+          // Trier par date décroissante (plus récent en premier)
+          salaryTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+          // Formatter la liste complète des salaires pour Telegram
+          const salaryList = salaryTransactions.map((tx, index) => {
+            const num = String(index + 1).padStart(2, ' ');
+            const date = new Date(tx.date).toLocaleDateString('fr-BE');
+            const amount = Math.abs(tx.amount).toFixed(2);
+            const desc = tx.description || 'Sans description';
+
+            // Extraire le nom de l'employé de la description
+            let employeeName = 'Inconnu';
+            const descLower = desc.toLowerCase();
+            employees.forEach(emp => {
+              const nameParts = emp.name.toLowerCase().split(' ');
+              if (nameParts.every(part => descLower.includes(part))) {
+                employeeName = emp.name;
+              }
+            });
+
+            return `${num}. ${date} - ${amount}€ - ${employeeName}`;
+          }).join('\n');
+
+          const monthName = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+          const directResponse = `💰 Salaires de ${monthName}\n\n` +
+            `Total: ${totalPaid.toFixed(2)}€ (${salaryTransactions.length} paiements)\n\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            salaryList;
+
           result = {
             employee_name: args.employee_name || 'Tous les employés',
             period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
@@ -1130,6 +1159,7 @@ export class AIAgentServiceV2 {
               description: tx.description,
             })),
             currency: 'EUR',
+            direct_response: directResponse,
           };
           break;
         }
