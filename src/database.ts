@@ -354,6 +354,30 @@ export function removeSupplier(supplierId: number): boolean {
 }
 
 /**
+ * Supprimer TOUS les fournisseurs (DELETE permanent)
+ * ⚠️ Cette action est irréversible
+ */
+export function deleteAllSuppliers(): number {
+  try {
+    // Supprimer d'abord tous les alias (CASCADE devrait le faire automatiquement, mais soyons sûrs)
+    const stmtAliases = db.prepare(`DELETE FROM supplier_aliases`);
+    const resultAliases = stmtAliases.run();
+
+    // Supprimer tous les fournisseurs
+    const stmtSuppliers = db.prepare(`DELETE FROM suppliers`);
+    const resultSuppliers = stmtSuppliers.run();
+
+    console.log(`🗑️  ${resultSuppliers.changes} fournisseur(s) supprimé(s) de la base de données`);
+    console.log(`🗑️  ${resultAliases.changes} alias supprimé(s) de la base de données`);
+
+    return resultSuppliers.changes;
+  } catch (error) {
+    console.error('Erreur lors de la suppression de tous les fournisseurs:', error);
+    return 0;
+  }
+}
+
+/**
  * Rechercher un fournisseur par nom ou alias
  */
 export function findSupplierByNameOrAlias(search: string): Supplier | null {

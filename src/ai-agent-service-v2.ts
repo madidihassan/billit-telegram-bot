@@ -2460,15 +2460,15 @@ export class AIAgentServiceV2 {
               break;
             }
 
-            // Formatage optimisé pour Telegram
+            // Formatage simple et cohérent pour Telegram (même format que les employés)
             const suppliersList = suppliers.map((sup, index) => {
-              const num = String(index + 1).padStart(2);
+              const num = String(index + 1).padStart(2, ' ');
               const name = sup.name;
               const type = sup.type || 'fournisseur';
-              const typeIcon = type === 'fournisseur' ? '📦' : type === 'partenaire' ? '🤝' : '👤';
 
-              return `\`${num}. ${name}\`\n   └─ ${typeIcon} ${type}`;
-            }).join('\n\n');
+              // Format simple: "1. Nom - Type"
+              return `${num}. ${name} - ${type}`;
+            }).join('\n');
 
             const formattedMessage = `📦 Liste des fournisseurs (${suppliers.length})\n\n${suppliersList}`;
 
