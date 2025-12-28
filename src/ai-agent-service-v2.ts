@@ -241,7 +241,15 @@ export class AIAgentServiceV2 {
               },
               month: {
                 type: 'string',
-                description: '⚠️ À OMETTRE si période annuelle: Mois (novembre, décembre, 11, 12). NE PAS spécifier si "année", "toute l\'année", "sur l\'année".',
+                description: '⚠️ À OMETTRE si période annuelle OU période multi-mois: Mois unique (novembre, décembre, 11, 12). NE PAS spécifier si "année", "entre X et Y".',
+              },
+              start_month: {
+                type: 'string',
+                description: '⚠️ Pour période multi-mois (ex: "entre octobre et décembre"): Mois de début (octobre, novembre, 10, 11). Utiliser avec end_month.',
+              },
+              end_month: {
+                type: 'string',
+                description: '⚠️ Pour période multi-mois (ex: "entre octobre et décembre"): Mois de fin (décembre, novembre, 12, 11). Utiliser avec start_month.',
               },
               year: {
                 type: 'string',
@@ -1065,32 +1073,48 @@ export class AIAgentServiceV2 {
         }
 
         case 'get_employee_salaries': {
-          // Gérer month/year ou start_date/end_date
+          // Gérer month/year ou start_month/end_month ou start_date/end_date
           let startDate: Date;
           let endDate: Date;
 
+          const monthMap: { [key: string]: number } = {
+            'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
+            'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
+            'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
+          };
+
+          const parseMonth = (monthInput: string): number => {
+            const lower = monthInput.toLowerCase();
+            if (monthMap[lower] !== undefined) {
+              return monthMap[lower];
+            } else if (!isNaN(parseInt(lower))) {
+              return parseInt(lower) - 1;
+            }
+            return -1;
+          };
+
           if (args.month) {
-            // Convertir le mois en dates
-            const monthMap: { [key: string]: number } = {
-              'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
-              'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
-              'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
-            };
-
-            let targetMonth: number;
-            const monthInput = args.month.toLowerCase();
-
-            if (monthMap[monthInput] !== undefined) {
-              targetMonth = monthMap[monthInput];
-            } else if (!isNaN(parseInt(monthInput))) {
-              targetMonth = parseInt(monthInput) - 1;
-            } else {
+            // Mois unique
+            const targetMonth = parseMonth(args.month);
+            if (targetMonth === -1) {
               return JSON.stringify({ error: `Mois invalide: ${args.month}` });
             }
 
             const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
             startDate = new Date(targetYear, targetMonth, 1);
             endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+          } else if (args.start_month && args.end_month) {
+            // Période multi-mois (ex: octobre à décembre)
+            const startMonth = parseMonth(args.start_month);
+            const endMonth = parseMonth(args.end_month);
+
+            if (startMonth === -1 || endMonth === -1) {
+              return JSON.stringify({ error: `Mois invalide: ${args.start_month} ou ${args.end_month}` });
+            }
+
+            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            startDate = new Date(targetYear, startMonth, 1);
+            endDate = new Date(targetYear, endMonth + 1, 0, 23, 59, 59);
           } else if (args.start_date && args.end_date) {
             startDate = BankClient.parseDate(args.start_date) || new Date();
             endDate = BankClient.parseDate(args.end_date) || new Date();
@@ -1136,19 +1160,43 @@ export class AIAgentServiceV2 {
             // Filtrer pour un employé spécifique ou recherche partielle (ex: "Madidi" pour tous les Madidi)
             const searchTerm = args.employee_name.toLowerCase();
 
-            salaryTransactions = transactions.filter(tx => {
-              if (tx.type !== 'Debit' || !tx.description) return false;
+            // 🔍 PRIORITÉ: Chercher d'abord dans les noms d'employés en base de données
+            let matchingEmployees: any[] = [];
 
-              // Si le terme de recherche est un nom de famille seul (pas d'espace), chercher partiellement
-              if (!searchTerm.includes(' ')) {
-                // Recherche partielle: vérifier si la description contient le terme ET "salaire"
-                const desc = tx.description.toLowerCase();
-                return desc.includes('salaire') && desc.includes(searchTerm);
-              } else {
-                // Recherche exacte: contient "salaire" ET le nom complet correspond
-                return isSalaryTransaction(tx.description) && matchesEmployeeName(tx.description, args.employee_name);
-              }
-            });
+            if (!searchTerm.includes(' ')) {
+              // Recherche partielle dans les noms d'employés
+              matchingEmployees = employees.filter(emp =>
+                emp.name.toLowerCase().includes(searchTerm)
+              );
+
+              console.log(`🔍 Recherche partielle "${searchTerm}": ${matchingEmployees.length} employé(s) trouvé(s) en BDD`);
+            }
+
+            // Si on a trouvé des employés en BDD, filtrer UNIQUEMENT sur ces noms
+            if (matchingEmployees.length > 0) {
+              salaryTransactions = transactions.filter(tx => {
+                if (tx.type !== 'Debit' || !tx.description) return false;
+                if (!isSalaryTransaction(tx.description)) return false;
+
+                // Vérifier si la transaction correspond à un des employés trouvés
+                return matchingEmployees.some(emp => matchesEmployeeName(tx.description, emp.name));
+              });
+            } else {
+              // Sinon, recherche classique dans les descriptions
+              salaryTransactions = transactions.filter(tx => {
+                if (tx.type !== 'Debit' || !tx.description) return false;
+
+                // Si le terme de recherche est un nom de famille seul (pas d'espace), chercher partiellement
+                if (!searchTerm.includes(' ')) {
+                  // Recherche partielle: vérifier si la description contient le terme ET "salaire"
+                  const desc = tx.description.toLowerCase();
+                  return desc.includes('salaire') && desc.includes(searchTerm);
+                } else {
+                  // Recherche exacte: contient "salaire" ET le nom complet correspond
+                  return isSalaryTransaction(tx.description) && matchesEmployeeName(tx.description, args.employee_name);
+                }
+              });
+            }
           } else {
             // Obtenir TOUS les salaires
             salaryTransactions = transactions.filter(tx => {
@@ -1267,8 +1315,8 @@ export class AIAgentServiceV2 {
           const userAsksForAnalysis = questionLower.includes('analyse') || questionLower.includes('top');
           const isMultiMonthPeriod = (!args.month && !args.employee_name && salaryTransactions.length > 0) || userAsksForAnalysis;
 
-          // Ne montrer l'analyse par employé que si aucun employé spécifique n'est demandé
-          const showEmployeeAnalysis = !args.employee_name && isMultiMonthPeriod;
+          // Ne montrer l'analyse par employé que si aucun employé spécifique n'est demandé ET pas un mois spécifique
+          const showEmployeeAnalysis = !args.employee_name && !args.month && isMultiMonthPeriod;
 
           if (isMultiMonthPeriod) {
             // ========== ANALYSE PAR EMPLOYÉ (seulement si pas d'employé spécifique) ==========
@@ -1399,6 +1447,12 @@ export class AIAgentServiceV2 {
           if (args.month) {
             // Si un mois spécifique est demandé
             periodTitle = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+          } else if (args.start_month && args.end_month) {
+            // Si période multi-mois (ex: "octobre à décembre 2025")
+            const startMonthName = startDate.toLocaleDateString('fr-BE', { month: 'long' });
+            const endMonthName = endDate.toLocaleDateString('fr-BE', { month: 'long' });
+            const year = startDate.getFullYear();
+            periodTitle = `${startMonthName} à ${endMonthName} ${year}`;
           } else if (args.year) {
             // Si une année spécifique est demandée
             periodTitle = `année ${args.year}`;
@@ -1415,11 +1469,15 @@ export class AIAgentServiceV2 {
 
           // Décider si on inclut la liste détaillée
           // 1. Si l'utilisateur demande explicitement la liste (include_details: true OU mot "liste" dans la question)
-          // 2. Si recherche spécifique (employé ou mois particulier)
-          // 3. Si peu de transactions (≤ 10)
+          // 2. Si recherche spécifique d'UN employé avec peu de transactions (≤ 10)
+          // 3. SAUF si la question demande un "top X" sans le mot "liste" (dans ce cas, juste l'analyse suffit)
+          // 4. SAUF si mois unique avec beaucoup de transactions (> 10) sans demande explicite
           const userAsksForList = questionLower.includes('liste') || questionLower.includes('détail');
           const userWantsDetails = args.include_details === true || userAsksForList;
-          const includeDetailedList = userWantsDetails || !isMultiMonthPeriod || salaryTransactions.length <= 10;
+          const userAsksForTopOnly = /top\s*\d+/.test(questionLower) && !userAsksForList;
+          const isSpecificEmployeeSearch = args.employee_name && salaryTransactions.length <= 10;
+          const isSingleMonthManyTransactions = args.month && salaryTransactions.length > 10;
+          const includeDetailedList = !userAsksForTopOnly && !isSingleMonthManyTransactions && (userWantsDetails || isSpecificEmployeeSearch);
 
           // 📊 DÉTECTION DES QUESTIONS SUR MIN/MAX
           let minMaxAnalysis = '';
@@ -1631,8 +1689,22 @@ export class AIAgentServiceV2 {
             );
 
             if (!targetEmployee) {
+              const searchLower = employeeName.toLowerCase();
+              const searchParts = searchLower.split(' ');
+
               const closestMatch = employees.reduce((best: any, emp: any) => {
-                const distance = this.levenshteinDistance(employeeName.toLowerCase(), emp.name.toLowerCase());
+                const empNameLower = emp.name.toLowerCase();
+                const nameParts = empNameLower.split(' ');
+
+                let distance = this.levenshteinDistance(searchLower, empNameLower);
+
+                // 🔄 Tester aussi l'ordre inversé (ex: "Mokhlis Jamhoun" → "Jamhoun Mokhlis")
+                if (searchParts.length === 2 && nameParts.length === 2) {
+                  const reversedSearch = `${searchParts[1]} ${searchParts[0]}`;
+                  const reversedDistance = this.levenshteinDistance(reversedSearch, empNameLower);
+                  distance = Math.min(distance, reversedDistance);
+                }
+
                 if (!best || distance < best.distance) {
                   return { employee: emp, distance };
                 }
@@ -2767,13 +2839,22 @@ export class AIAgentServiceV2 {
     }
 
     const searchLower = searchName.toLowerCase();
+    const searchParts = searchLower.split(' ');
     let bestMatch: { employee: any; distance: number } | null = null;
 
     for (const emp of employees) {
       const empNameLower = emp.name.toLowerCase();
+      const nameParts = empNameLower.split(' ');
 
       // Calculer la distance pour le nom complet
-      const distance = this.levenshteinDistance(searchLower, empNameLower);
+      let distance = this.levenshteinDistance(searchLower, empNameLower);
+
+      // 🔄 NOUVEAU: Tester aussi l'ordre inversé (ex: "Mokhlis Jamhoun" → "Jamhoun Mokhlis")
+      if (searchParts.length === 2 && nameParts.length === 2) {
+        const reversedSearch = `${searchParts[1]} ${searchParts[0]}`;
+        const reversedDistance = this.levenshteinDistance(reversedSearch, empNameLower);
+        distance = Math.min(distance, reversedDistance);
+      }
 
       // Accepter seulement si la distance est raisonnable (max 3 caractères de différence)
       const maxDistance = Math.max(3, Math.floor(searchLower.length * 0.3));
@@ -2816,6 +2897,15 @@ export class AIAgentServiceV2 {
         distance = Math.min(distance, partDistance);
       }
 
+      // 🔄 NOUVEAU: Tester aussi l'ordre inversé (ex: "Mokhlis Jamhoun" → "Jamhoun Mokhlis")
+      const searchParts = searchLower.split(' ');
+      if (searchParts.length === 2 && nameParts.length === 2) {
+        // Inverser l'ordre du nom recherché
+        const reversedSearch = `${searchParts[1]} ${searchParts[0]}`;
+        const reversedDistance = this.levenshteinDistance(reversedSearch, empNameLower);
+        distance = Math.min(distance, reversedDistance);
+      }
+
       // Accepter si la distance est raisonnable
       const maxDistance = Math.max(4, Math.floor(searchLower.length * 0.4));
 
@@ -2844,6 +2934,57 @@ export class AIAgentServiceV2 {
       this.currentQuestion = question;
 
       console.log('🤖 Question V2:', question);
+
+      // 🔍 DÉTECTION SIMPLIFIÉE: Ajouter des hints pour guider l'IA
+      const questionLower = question.toLowerCase();
+
+      // Détection de comparaison entre employés
+      const isComparisonQuery =
+        (questionLower.includes('comparaison') ||
+         questionLower.includes('comparer') ||
+         questionLower.includes('compare') ||
+         questionLower.includes('différence') ||
+         questionLower.includes('vs')) &&
+        (questionLower.includes(' et ') || questionLower.includes(','));
+
+      if (isComparisonQuery) {
+        console.log('🔍 Détection: Question de comparaison de salaires - ajout d\'un hint pour l\'IA');
+        question = `[HINT: Cette question nécessite compare_employee_salaries, pas get_employee_salaries] ${question}`;
+      }
+
+      // Détection de période multi-mois (ex: "entre octobre et décembre")
+      const multiMonthPattern = /entre\s+(\w+)\s+et\s+(\w+)/i;
+      const multiMonthMatch = question.match(multiMonthPattern);
+      if (multiMonthMatch && questionLower.includes('salaire')) {
+        console.log('🔍 Détection: Période multi-mois - ajout d\'un hint pour l\'IA');
+        question = `[HINT: L'utilisateur demande une période de plusieurs mois (${multiMonthMatch[1]} à ${multiMonthMatch[2]}). Utiliser get_employee_salaries avec start_month="${multiMonthMatch[1]}" et end_month="${multiMonthMatch[2]}" (NE PAS utiliser month=).] ${question}`;
+      }
+
+      // Détection de "top X employés" sans le mot "salaire" (ex: "top 10 employés")
+      const topEmployeesPattern = /top\s*(\d+)\s+employ[eé]s/i;
+      const topEmployeesMatch = question.match(topEmployeesPattern);
+      if (topEmployeesMatch && !questionLower.includes('salaire')) {
+        console.log('🔍 Détection: Top X employés sans "salaire" - ajout d\'un hint pour l\'IA');
+        question = `[HINT: L'utilisateur demande le top ${topEmployeesMatch[1]} des employés les mieux payés. Utiliser get_employee_salaries sans employee_name ni month pour obtenir le classement des salaires.] ${question}`;
+      }
+
+      // Détection de "où se situe X" ou "position de X" ou "classement de X"
+      const rankingPattern = /(où se situe|position de|classement de|rang de|se classe)\s+([a-zàâäçèéêëìîïòôöùûü\s]+)\s+(par rapport|parmi|dans)/i;
+      const rankingMatch = question.match(rankingPattern);
+      if (rankingMatch) {
+        const employeeName = rankingMatch[2].trim();
+        console.log(`🔍 Détection: Question de classement pour "${employeeName}" - ajout d'un hint pour l'IA`);
+        question = `[HINT: L'utilisateur demande le classement de "${employeeName}" parmi tous les employés. Utiliser get_employee_salaries avec employee_name="${employeeName}" pour obtenir son classement.] ${question}`;
+      }
+
+      // Détection de nom partiel court (possiblement une recherche partielle)
+      // Ex: "lina" (4 chars), "hassan" (6 chars) sans contexte de phrase
+      const singleWordPattern = /^[a-zàâäçèéêëìîïòôöùûü]{3,15}$/i;
+      const isSingleShortName = singleWordPattern.test(question.trim());
+      if (isSingleShortName) {
+        console.log('🔍 Détection: Nom partiel court - ajout d\'un hint pour l\'IA');
+        question = `[HINT: "${question.trim()}" semble être un nom partiel. Utiliser get_employee_salaries avec employee_name="${question.trim()}" pour trouver les employés correspondants.] ${question}`;
+      }
 
       // Construire les messages avec l'historique de conversation
       // Date actuelle pour le contexte
