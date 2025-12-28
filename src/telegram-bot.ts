@@ -385,9 +385,9 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
    * Génère la liste des outils IA disponibles
    */
   private async getAIToolsList(): Promise<string> {
-    let response = '🤖 <b>Outils IA disponibles (30 outils)</b>\n\n';
+    let response = '🤖 <b>Outils IA disponibles (36 outils)</b>\n\n';
 
-    response += '<b>📋 FACTURES</b>\n';
+    response += '<b>📋 FACTURES (11 outils)</b>\n';
     response += '  🔍 Factures impayées\n';
     response += '  💳 Factures payées\n';
     response += '  📄 Dernière facture\n';
@@ -397,34 +397,42 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
     response += '  🔎 Recherche facture\n';
     response += '  📝 Rechercher factures\n';
     response += '  📆 Factures mensuelles\n';
-    response += '  📋 Factures par mois\n';
     response += '  🏪 Factures par fournisseur\n';
-    response += '  🔄 Marquer facture payée\n';
-    response += '  📧 Rappel facture\n\n';
+    response += '  📧 Envoyer PDF facture\n\n';
 
-    response += '<b>💰 FINANCES</b>\n';
+    response += '<b>💰 TRANSACTIONS (7 outils)</b>\n';
     response += '  💰 Balance mensuelle\n';
-    response += '  📈 Crédits mensuels\n';
-    response += '  📉 Débits mensuels\n';
+    response += '  📈 Recettes mensuelles\n';
+    response += '  📉 Dépenses mensuelles\n';
     response += '  📅 Transactions période\n';
     response += '  💼 Salaires employés\n';
-    response += '  🏢 Paiements fournisseurs\n';
-    response += '  💸 Paiements reçus\n\n';
+    response += '  🏢 Paiements fournisseur\n';
+    response += '  💸 Versements reçus\n\n';
 
-    response += '<b>👥 EMPLOYÉS</b>\n';
+    response += '<b>👥 EMPLOYÉS (5 outils)</b>\n';
     response += '  👥 Lister employés\n';
     response += '  ➕ Ajouter employé\n';
     response += '  🗑️ Supprimer employé\n';
-    response += '  👤 Employé par nom\n\n';
+    response += '  📊 Analyse salaires\n';
+    response += '  🔄 Comparaison salaires\n\n';
 
-    response += '<b>🏷️ FOURNISSEURS</b>\n';
+    response += '<b>🏢 FOURNISSEURS (9 outils)</b>\n';
     response += '  🏷️ Lister fournisseurs\n';
-    response += '  🔍 Rechercher fournisseur\n\n';
+    response += '  ➕ Ajouter fournisseur\n';
+    response += '  🗑️ Supprimer fournisseur\n';
+    response += '  📊 Analyse fournisseur\n';
+    response += '  🏆 Top fournisseurs\n';
+    response += '  🔄 Comparaison fournisseurs\n';
+    response += '  💸 Dépenses fournisseur\n';
+    response += '  💳 Paiements fournisseur\n';
+    response += '  🔍 Détecter nouveaux fournisseurs\n\n';
 
-    response += '<b>⚙️ ADMINISTRATION</b>\n';
+    response += '<b>👥 UTILISATEURS (3 outils)</b>\n';
     response += '  📱 Lister utilisateurs\n';
     response += '  ➕ Ajouter utilisateur\n';
-    response += '  ❌ Supprimer utilisateur\n';
+    response += '  ❌ Retirer utilisateur\n\n';
+
+    response += '<b>🔧 SYSTÈME (1 outil)</b>\n';
     response += '  🔧 Redémarrer le bot\n';
 
     response += '\n💡 <i>Posez simplement votre question en langage naturel, l\'IA utilisera automatiquement les bons outils!</i>';

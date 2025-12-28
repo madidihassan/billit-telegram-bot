@@ -3803,16 +3803,16 @@ Si le contexte mentionne un fournisseur SANS montant précis, appelle get_invoic
    • Liste employés • Ajouter employé • Supprimer employé
    • Analyse salaires • Comparaison salaires
 
-🏢 **Fournisseurs** (8 outils):
+🏢 **Fournisseurs** (9 outils):
    • Liste fournisseurs • Ajouter fournisseur • Supprimer fournisseur
    • Analyse fournisseur • Top fournisseurs • Comparaison fournisseurs
-   • Dépenses fournisseur • Paiements fournisseur
+   • Dépenses fournisseur • Paiements fournisseur • Détecter nouveaux fournisseurs
 
 👥 **Utilisateurs** (3 outils):
    • Ajouter utilisateur • Retirer utilisateur • Liste utilisateurs
 
-🔧 **Système** (2 outils):
-   • Détecter nouveaux fournisseurs • Redémarrer le bot
+🔧 **Système** (1 outil):
+   • Redémarrer le bot
 
 ⚠️ IMPORTANT: Quand on te demande "liste les outils", utilise UNIQUEMENT les noms en FRANÇAIS ci-dessus, JAMAIS les noms techniques (get_*, add_*, etc.)
 
