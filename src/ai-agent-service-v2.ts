@@ -230,7 +230,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_employee_salaries',
-          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. RÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. Si NOM DE FAMILLE SEUL (ex: "Madidi", "El Barnoussi") → SPECIFIER juste le nom de famille (recherche partielle automatique)\n3. Si "TOUS les salaires" → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. Si MOIS PRÉCIS (ex: "décembre") → spécifier month\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → {employee_name: "Madidi"} (trouvera Hassan, Soufiane, Jawad Madidi)\n- "Salaires de Hassan en décembre" → {employee_name: "Hassan Madidi", month: "décembre"}\n- "Tous les salaires" → {}',
+          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. RÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. Si NOM DE FAMILLE SEUL (ex: "Madidi", "El Barnoussi") → SPECIFIER juste le nom de famille (recherche partielle automatique)\n3. Si "TOUS les salaires" → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → {employee_name: "Madidi"} (trouvera Hassan, Soufiane, Jawad Madidi)\n- "Salaires de Hassan en décembre" → {employee_name: "Hassan Madidi", month: "décembre"}\n- "Salaires des Madidi du mois de novembre" → {employee_name: "Madidi", month: "novembre"}\n- "Tous les salaires" → {}',
           parameters: {
             type: 'object',
             properties: {
@@ -1210,8 +1210,26 @@ export class AIAgentServiceV2 {
               newEmployeesAdded.map(name => `   • ${name}`).join('\n')
             : '';
 
-          const monthName = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
-          const directResponse = `💰 Salaires de ${monthName}\n\n` +
+          // Générer le titre de période approprié
+          let periodTitle: string;
+          if (args.month) {
+            // Si un mois spécifique est demandé
+            periodTitle = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+          } else if (args.year) {
+            // Si une année spécifique est demandée
+            periodTitle = `année ${args.year}`;
+          } else {
+            // Période personnalisée ou année en cours
+            const isCurrentYear = startDate.getFullYear() === new Date().getFullYear() &&
+                                 endDate.getFullYear() === new Date().getFullYear();
+            if (isCurrentYear) {
+              periodTitle = `année ${startDate.getFullYear()}`;
+            } else {
+              periodTitle = `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`;
+            }
+          }
+
+          const directResponse = `💰 Salaires de ${periodTitle}\n\n` +
             `Total: ${totalPaid.toFixed(2)}€ (${salaryTransactions.length} paiements)\n\n` +
             `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
             salaryList +
