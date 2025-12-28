@@ -107,6 +107,46 @@ const ADDITIONAL_KNOWN_SUPPLIERS: Array<{name: string; aliases: string[]; replac
     name: 'Belgian Shell SA',
     aliases: ['shell', 'belgian shell', 'belgian shell sa', 'belgianshellsa'],
     replaceAutoAliases: true
+  },
+  {
+    name: 'AXA',
+    aliases: ['axa', 'axa assurance', 'axa insurance', 'recouvrement europeen axa']
+  },
+  {
+    name: 'BNP Paribas Lease Group',
+    aliases: ['bnp paribas lease', 'bnp lease', 'bnpparibaslease', 'bnp paribas lease group', 'bnpparibasleasegroupnv']
+  },
+  {
+    name: 'Claude AI',
+    aliases: ['claude', 'claude ai', 'claude.ai', 'anthropic claude', 'claudeai', 'claudeaisubscription']
+  },
+  {
+    name: 'Anthropic',
+    aliases: ['anthropic', 'anthropic.com', 'anthropic api', 'anthropiccom']
+  },
+  {
+    name: 'Parking Botanique',
+    aliases: ['parking botanique', 'parkingbotanique', 'botanique parking', 'botanique']
+  },
+  {
+    name: 'Cotisation Bancaire',
+    aliases: ['cotisation mensuelle', 'cotisation pack', 'pack mensuel', 'cotisation mensuelle pack']
+  },
+  {
+    name: 'Lotfisco',
+    aliases: ['lotfisco', 'lot fisco', 'lotfi sco']
+  },
+  {
+    name: 'Fonds Social et Horeca',
+    aliases: ['fonds social', 'fonds social et horeca', 'fondssocial', 'horeca']
+  },
+  {
+    name: 'ES Company',
+    aliases: ['es company', 'escompany', 'e.s. company']
+  },
+  {
+    name: 'Perso Project',
+    aliases: ['perso project', 'persoproject', 'perso projet']
   }
 ];
 

@@ -203,8 +203,9 @@ node verify-all-aliases.js
 
 ## Configuration Finale
 
-### Fournisseurs avec Alias Manuels (7)
+### Fournisseurs avec Alias Manuels (17)
 
+**Fournisseurs commerciaux avec alias corrigés (7)** :
 1. Coca-Cola EUROPACIFIC PARTNERS BELGIUM SRL
 2. Foster Fast Food SA
 3. Sligro-MFS Belgium SA
@@ -212,6 +213,18 @@ node verify-all-aliases.js
 5. Wibra België
 6. AHLAS PACK SRL
 7. Belgian Shell SA
+
+**Fournisseurs de services ajoutés (10)** :
+8. AXA
+9. BNP Paribas Lease Group
+10. Claude AI
+11. Anthropic
+12. Parking Botanique
+13. Cotisation Bancaire
+14. Lotfisco
+15. Fonds Social et Horeca
+16. ES Company
+17. Perso Project
 
 ### Fournisseurs avec Alias Auto (18)
 
@@ -234,6 +247,8 @@ Les 18 autres fournisseurs utilisent des alias auto-générés car leurs noms ne
 - Makro
 - Metro
 - Transgourmet
+
+**TOTAL : 35 fournisseurs** (17 manuels + 18 auto)
 
 ---
 
@@ -278,10 +293,54 @@ node verify-all-aliases.js
 
 ---
 
+## Ajout des Fournisseurs de Services (28 Décembre 2025 - Suite)
+
+Après correction des 7 fournisseurs problématiques, le script `detect-new-suppliers.ts` a identifié **10 nouveaux fournisseurs de services** dans les transactions bancaires qui n'étaient pas encore dans la base de données.
+
+### Fournisseurs de Services Ajoutés (10)
+
+1. **AXA** (163€) - Assurance
+   - Aliases: `axa`, `axa assurance`, `recouvrement europeen axa`
+
+2. **BNP Paribas Lease Group** (67€) - Leasing
+   - Aliases: `bnp paribas lease`, `bnp lease`, `bnpparibaslease`, `bnpparibasleasegroupnv`
+
+3. **Claude AI** (18€) - Abonnement IA
+   - Aliases: `claude`, `claude ai`, `claude.ai`, `claudeaisubscription`
+
+4. **Anthropic** (11€) - API IA
+   - Aliases: `anthropic`, `anthropic.com`, `anthropic api`
+
+5. **Parking Botanique** (4.50€) - Service de parking
+   - Aliases: `parking botanique`, `parkingbotanique`, `botanique`
+
+6. **Cotisation Bancaire** (3.50€) - Frais bancaires
+   - Aliases: `cotisation mensuelle`, `cotisation pack`, `pack mensuel`
+
+7. **Lotfisco** (968€) - Service comptable/fiscal
+   - Aliases: `lotfisco`, `lot fisco`
+
+8. **Fonds Social et Horeca** (809€) - Fonds social obligatoire
+   - Aliases: `fonds social`, `fonds social et horeca`, `horeca`
+
+9. **ES Company** (1936€) - Service d'entreprise
+   - Aliases: `es company`, `escompany`
+
+10. **Perso Project** (859€) - Projet personnel
+    - Aliases: `perso project`, `persoproject`, `perso projet`
+
+### Résultat
+
+✅ **0 transactions non matchées** après ajout de ces fournisseurs
+✅ Tous les services payés sont maintenant reconnus et catégorisés
+
+---
+
 ## Résultats Finaux
 
-✅ **25 fournisseurs** chargés dans la base de données
+✅ **35 fournisseurs** chargés dans la base de données (25 → 35, +10 services)
 ✅ **0 alias problématiques** détectés
+✅ **0 transactions non matchées** (100% de couverture)
 ✅ **~5 310€** de faux positifs éliminés
 ✅ **Précision maximale** pour l'analyse des dépenses
 
