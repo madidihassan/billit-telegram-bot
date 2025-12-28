@@ -230,21 +230,21 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_employee_salaries',
-          description: '⚠️ IMPORTANT: Si l\'utilisateur demande "TOUS les salaires", NE PAS spécifier employee_name pour obtenir TOUS les employés en UN SEUL APPEL. UTILISE CETTE FONCTION UNIQUEMENT pour les SALAIRES des EMPLOYÉS (Hassan, Jamhoun, Mokhlis, Soufiane Madidi, etc.). NE PAS utiliser pour les fournisseurs comme Foster, Coca-Cola, CIERS qui sont des factures, pas des salaires.',
+          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. RÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. Si "TOUS les salaires" → NE PAS spécifier employee_name\n3. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n4. Si MOIS PRÉCIS (ex: "décembre") → spécifier month\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de Hassan en décembre" → {employee_name: "Hassan Madidi", month: "décembre"}\n- "Tous les salaires" → {}',
           parameters: {
             type: 'object',
             properties: {
               employee_name: {
                 type: 'string',
-                description: '⚠️ OPTIONNEL: Nom de l\'employé (Hassan Madidi, Jamhoun Mokhlis, etc.). Si l\'utilisateur demande "TOUS les salaires", NE PAS spécifier ce paramètre pour obtenir TOUS les employés.',
+                description: '⚠️ OBLIGATOIRE si nom mentionné: Nom complet (Soufiane Madidi, Hassan Madidi, Jamhoun Mokhlis). Si juste prénom donné, ajoute le nom de famille.',
               },
               month: {
                 type: 'string',
-                description: 'Mois en français (novembre, décembre) ou numéro (11, 12). NE PAS spéficier si l\'utilisateur demande "tous les salaires" sans mentionner un mois précis.',
+                description: '⚠️ À OMETTRE si période annuelle: Mois (novembre, décembre, 11, 12). NE PAS spécifier si "année", "toute l\'année", "sur l\'année".',
               },
               year: {
                 type: 'string',
-                description: 'Année (2025, 2024). Par défaut année en cours si non spécifié.',
+                description: 'Année (2025, 2024). Défaut: année en cours.',
               },
             },
             required: [],
