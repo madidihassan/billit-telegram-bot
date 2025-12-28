@@ -1388,10 +1388,10 @@ export class AIAgentServiceV2 {
               monthlyAnalysis += `👤 Employé avec le plus de salaires perçus:\n`;
               monthlyAnalysis += `   🥇 ${topEmployee.name}: ${topEmployee.total.toFixed(2)}€ (${topEmployee.count} paiements)\n\n`;
 
-              // Top des employés (détection automatique de "top X" dans la question)
+              // Top des employés (détection automatique de "top X" ou "les X employés" dans la question)
               const currentQuestionLower = this.currentQuestion.toLowerCase();
-              const topMatch = currentQuestionLower.match(/top\s*(\d+)/);
-              const topN = topMatch ? Math.min(parseInt(topMatch[1]), sortedEmployees.length) : Math.min(5, sortedEmployees.length);
+              const topMatch = currentQuestionLower.match(/(?:top\s*(\d+)|les?\s+(\d+)\s+employ)/);
+              const topN = topMatch ? Math.min(parseInt(topMatch[1] || topMatch[2]), sortedEmployees.length) : Math.min(5, sortedEmployees.length);
 
               if (sortedEmployees.length > 1) {
                 monthlyAnalysis += `\n📊 Top ${topN} des employés:\n`;
@@ -2960,12 +2960,14 @@ export class AIAgentServiceV2 {
         question = `[HINT: L'utilisateur demande une période de plusieurs mois (${multiMonthMatch[1]} à ${multiMonthMatch[2]}). Utiliser get_employee_salaries avec start_month="${multiMonthMatch[1]}" et end_month="${multiMonthMatch[2]}" (NE PAS utiliser month=).] ${question}`;
       }
 
-      // Détection de "top X employés" sans le mot "salaire" (ex: "top 10 employés")
-      const topEmployeesPattern = /top\s*(\d+)\s+employ[eé]s/i;
+      // Détection de "top X employés" ou "les X employés les mieux payés"
+      const topEmployeesPattern = /(top\s*(\d+)\s+employ[eé]s|les?\s+(\d+)\s+employ[eé]s\s+(les\s+)?(mieux|plus)\s+pay[eé]s)/i;
       const topEmployeesMatch = question.match(topEmployeesPattern);
       if (topEmployeesMatch && !questionLower.includes('salaire')) {
-        console.log('🔍 Détection: Top X employés sans "salaire" - ajout d\'un hint pour l\'IA');
-        question = `[HINT: L'utilisateur demande le top ${topEmployeesMatch[1]} des employés les mieux payés. Utiliser get_employee_salaries sans employee_name ni month pour obtenir le classement des salaires.] ${question}`;
+        // Extraire le nombre (peut être dans le groupe 2 ou 3)
+        const topNumber = topEmployeesMatch[2] || topEmployeesMatch[3];
+        console.log(`🔍 Détection: Top ${topNumber} employés - ajout d'un hint pour l'IA`);
+        question = `[HINT: L'utilisateur demande le top ${topNumber} des employés les mieux payés. Utiliser get_employee_salaries sans employee_name ni month pour obtenir le classement des salaires.] ${question}`;
       }
 
       // Détection de "où se situe X" ou "position de X" ou "classement de X"
