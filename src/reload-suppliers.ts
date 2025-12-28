@@ -89,6 +89,12 @@ const ADDITIONAL_KNOWN_SUPPLIERS: Array<{name: string; aliases: string[]; replac
     name: 'Uber Eats Belgium SRL',
     aliases: ['uber', 'uber eats', 'ubereats', 'uber eats belgium', 'ubereatsbelgium'],
     replaceAutoAliases: true
+  },
+  {
+    // OVERRIDE Wibra België avec alias manuels (auto-generated "belgi" is too generic, matches belgium/belgian)
+    name: 'Wibra België',
+    aliases: ['wibra', 'wibra belgië', 'wibra belgie', 'wibrabelgie'],
+    replaceAutoAliases: true
   }
 ];
 
