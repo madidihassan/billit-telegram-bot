@@ -71,6 +71,18 @@ const ADDITIONAL_KNOWN_SUPPLIERS: Array<{name: string; aliases: string[]; replac
     name: 'COCA-COLA EUROPACIFIC PARTNERS BELGIUM SRL',
     aliases: ['coca-cola', 'cocacola', 'coca cola', 'coca-cola europacific', 'cocacolaeuropacific'],
     replaceAutoAliases: true  // Remplacer les alias auto-générés
+  },
+  {
+    // OVERRIDE Foster avec alias manuels (auto-generated "fast" and "food" are too generic)
+    name: 'FOSTER FAST FOOD SA',
+    aliases: ['foster', 'foster fast food', 'fosterfastfood', 'foster fast food sa', 'fosterfastfoodsa'],
+    replaceAutoAliases: true
+  },
+  {
+    // OVERRIDE Sligro avec alias manuels (auto-generated "belgium" is too generic)
+    name: 'Sligro-MFS Belgium SA',
+    aliases: ['sligro', 'sligro-mfs', 'sligromfs', 'sligro mfs', 'sligro belgium'],
+    replaceAutoAliases: true
   }
 ];
 
