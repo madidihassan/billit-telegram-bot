@@ -95,6 +95,12 @@ const ADDITIONAL_KNOWN_SUPPLIERS: Array<{name: string; aliases: string[]; replac
     name: 'Wibra België',
     aliases: ['wibra', 'wibra belgië', 'wibra belgie', 'wibrabelgie'],
     replaceAutoAliases: true
+  },
+  {
+    // OVERRIDE AHLAS PACK SRL avec alias manuels (auto-generated "pack" is too generic)
+    name: 'AHLAS PACK SRL',
+    aliases: ['ahlas', 'ahlas pack', 'ahlaspacksrl', 'ahlas pack srl'],
+    replaceAutoAliases: true
   }
 ];
 
