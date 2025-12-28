@@ -1129,6 +1129,33 @@ export class AIAgentServiceV2 {
 
           const totalPaid = salaryTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
+          // 🔍 RECHERCHE FLOUE: Si aucun résultat et un nom d'employé était spécifié, chercher un nom similaire
+          let suggestionMessage = '';
+          if (args.employee_name && totalPaid === 0 && args.employee_name.includes(' ')) {
+            console.log(`🔍 Recherche floue pour "${args.employee_name}" (0 résultats trouvés)...`);
+            const closestMatch = await this.findClosestEmployee(args.employee_name);
+
+            if (closestMatch) {
+              console.log(`✨ Employé similaire trouvé: "${closestMatch.employee.name}" (distance: ${closestMatch.distance})`);
+
+              // Réessayer la recherche avec le nom corrigé
+              const correctedTransactions = transactions.filter(tx => {
+                if (tx.type !== 'Debit' || !tx.description) return false;
+                return isSalaryTransaction(tx.description) && matchesEmployeeName(tx.description, closestMatch.employee.name);
+              });
+
+              if (correctedTransactions.length > 0) {
+                salaryTransactions = correctedTransactions;
+                suggestionMessage = `\n\n💡 Aucun employé trouvé pour "${args.employee_name}". Résultats affichés pour "${closestMatch.employee.name}" à la place.`;
+              }
+            } else {
+              console.log(`❌ Aucun employé similaire trouvé pour "${args.employee_name}"`);
+            }
+          }
+
+          // Recalculer le total après recherche floue
+          const finalTotalPaid = salaryTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
           // Trier par date décroissante (plus récent en premier)
           salaryTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -1230,15 +1257,16 @@ export class AIAgentServiceV2 {
           }
 
           const directResponse = `💰 Salaires de ${periodTitle}\n\n` +
-            `Total: ${totalPaid.toFixed(2)}€ (${salaryTransactions.length} paiements)\n\n` +
+            `Total: ${finalTotalPaid.toFixed(2)}€ (${salaryTransactions.length} paiements)\n\n` +
             `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
             salaryList +
-            autoLearnNote;
+            autoLearnNote +
+            suggestionMessage;
 
           result = {
             employee_name: args.employee_name || 'Tous les employés',
             period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
-            total_paid: totalPaid,
+            total_paid: finalTotalPaid,
             payment_count: salaryTransactions.length,
             payments: salaryTransactions.map(tx => ({
               date: tx.date,
@@ -2234,6 +2262,72 @@ export class AIAgentServiceV2 {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
+  }
+
+  /**
+   * Calcule la distance de Levenshtein entre deux chaînes
+   * (nombre minimum d'opérations pour transformer s1 en s2)
+   */
+  private levenshteinDistance(s1: string, s2: string): number {
+    const len1 = s1.length;
+    const len2 = s2.length;
+    const matrix: number[][] = [];
+
+    // Initialiser la matrice
+    for (let i = 0; i <= len1; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= len2; j++) {
+      matrix[0][j] = j;
+    }
+
+    // Remplir la matrice
+    for (let i = 1; i <= len1; i++) {
+      for (let j = 1; j <= len2; j++) {
+        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,      // suppression
+          matrix[i][j - 1] + 1,      // insertion
+          matrix[i - 1][j - 1] + cost // substitution
+        );
+      }
+    }
+
+    return matrix[len1][len2];
+  }
+
+  /**
+   * Trouve l'employé le plus proche d'un nom donné (fuzzy matching)
+   * Retourne null si aucune correspondance acceptable
+   */
+  private async findClosestEmployee(searchName: string): Promise<{ employee: any; distance: number } | null> {
+    const { getAllEmployees } = await import('./database');
+    const employees = getAllEmployees();
+
+    if (employees.length === 0) {
+      return null;
+    }
+
+    const searchLower = searchName.toLowerCase();
+    let bestMatch: { employee: any; distance: number } | null = null;
+
+    for (const emp of employees) {
+      const empNameLower = emp.name.toLowerCase();
+
+      // Calculer la distance pour le nom complet
+      const distance = this.levenshteinDistance(searchLower, empNameLower);
+
+      // Accepter seulement si la distance est raisonnable (max 3 caractères de différence)
+      const maxDistance = Math.max(3, Math.floor(searchLower.length * 0.3));
+
+      if (distance <= maxDistance) {
+        if (!bestMatch || distance < bestMatch.distance) {
+          bestMatch = { employee: emp, distance };
+        }
+      }
+    }
+
+    return bestMatch;
   }
 
   /**
