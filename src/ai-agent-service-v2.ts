@@ -500,6 +500,69 @@ export class AIAgentServiceV2 {
       {
         type: 'function',
         function: {
+          name: 'analyze_supplier_expenses',
+          description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro") → SPECIFIER supplier_name\n2. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n3. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n6. ⚠️ Si utilisateur demande "LA LISTE" explicitement → METTRE include_details: true\n7. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {}\n- "Dépenses de novembre" → {month: "novembre"}',
+          parameters: {
+            type: 'object',
+            properties: {
+              supplier_name: {
+                type: 'string',
+                description: '⚠️ Nom du fournisseur (ex: "Colruyt", "Sligro"). Si omis, affiche le classement de tous les fournisseurs.',
+              },
+              month: {
+                type: 'string',
+                description: '⚠️ À OMETTRE si période annuelle OU période multi-mois: Mois unique (novembre, décembre, 11, 12). NE PAS spécifier si "année", "entre X et Y".',
+              },
+              start_month: {
+                type: 'string',
+                description: '⚠️ Pour période multi-mois (ex: "entre octobre et décembre"): Mois de début (octobre, novembre, 10, 11). Utiliser avec end_month.',
+              },
+              end_month: {
+                type: 'string',
+                description: '⚠️ Pour période multi-mois (ex: "entre octobre et décembre"): Mois de fin (décembre, novembre, 12, 11). Utiliser avec start_month.',
+              },
+              year: {
+                type: 'string',
+                description: 'Année (2025, 2024). Défaut: année en cours.',
+              },
+              include_details: {
+                type: 'boolean',
+                description: 'Mettre à true si l\'utilisateur demande EXPLICITEMENT "la liste", "liste détaillée", "détails". Par défaut: false (affiche seulement l\'analyse).',
+              },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'compare_supplier_expenses',
+          description: '⚠️⚠️⚠️ APPEL PRIORITAIRE si les mots "comparaison", "comparer", "entre X et Y", "X, Y et Z", "vs", "différence" sont présents (pour fournisseurs) ⚠️⚠️⚠️\n\nUtiliser pour comparer les dépenses entre 2 OU PLUSIEURS fournisseurs.\n\nEXEMPLES OBLIGATOIRES:\n- "Compare Colruyt et Sligro" → {supplier_names: ["Colruyt", "Sligro"]}\n- "Comparaison entre Colruyt, Sligro et Metro" → {supplier_names: ["Colruyt", "Sligro", "Metro"]}\n- "Différence entre Makro et Metro" → {supplier_names: ["Makro", "Metro"]}\n\n⚠️ NE PAS utiliser analyze_supplier_expenses pour ces questions ⚠️',
+          parameters: {
+            type: 'object',
+            properties: {
+              supplier_names: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Liste des noms de fournisseurs à comparer (minimum 2, maximum 10). Exemples: ["Colruyt", "Sligro"], ["Makro", "Metro", "Transgourmet"]',
+              },
+              month: {
+                type: 'string',
+                description: 'Mois à analyser (optionnel). Si omis, analyse l\'année entière.',
+              },
+              year: {
+                type: 'string',
+                description: 'Année (2025, 2024). Défaut: année en cours.',
+              },
+            },
+            required: ['supplier_names'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'add_user',
           description: '⚠️ Ajoute un utilisateur à la liste blanche. Tu DOIS appeler list_users() après l\'ajout pour confirmer. Ne JAMAIS inventer de Chat IDs. Utilise cette fonction pour: "Ajoute 123456789", "Autorise ce Chat ID", "Donne accès à", "Ajoute cette personne".',
           parameters: {
@@ -1810,6 +1873,369 @@ export class AIAgentServiceV2 {
           break;
         }
 
+        case 'analyze_supplier_expenses': {
+          // Gérer month/year ou start_month/end_month
+          let startDate: Date;
+          let endDate: Date;
+
+          const monthMap: { [key: string]: number } = {
+            'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
+            'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
+            'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
+          };
+
+          const parseMonth = (monthInput: string): number => {
+            const lower = monthInput.toLowerCase();
+            if (monthMap[lower] !== undefined) {
+              return monthMap[lower];
+            } else if (!isNaN(parseInt(lower))) {
+              return parseInt(lower) - 1;
+            }
+            return -1;
+          };
+
+          if (args.month) {
+            // Mois unique
+            const targetMonth = parseMonth(args.month);
+            if (targetMonth === -1) {
+              return JSON.stringify({ error: `Mois invalide: ${args.month}` });
+            }
+
+            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            startDate = new Date(targetYear, targetMonth, 1);
+            endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+          } else if (args.start_month && args.end_month) {
+            // Période multi-mois (ex: octobre à décembre)
+            const startMonth = parseMonth(args.start_month);
+            const endMonth = parseMonth(args.end_month);
+
+            if (startMonth === -1 || endMonth === -1) {
+              return JSON.stringify({ error: `Mois invalide: ${args.start_month} ou ${args.end_month}` });
+            }
+
+            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            startDate = new Date(targetYear, startMonth, 1);
+            endDate = new Date(targetYear, endMonth + 1, 0, 23, 59, 59);
+          } else {
+            // Par défaut: année courante complète
+            const currentYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            startDate = new Date(currentYear, 0, 1);
+            endDate = new Date();
+          }
+
+          if (!startDate || !endDate) {
+            return JSON.stringify({ error: 'Format de date invalide' });
+          }
+
+          // Récupérer les transactions
+          let transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
+
+          // Importer les fonctions de fournisseur
+          const { matchesSupplier, SUPPLIER_ALIASES } = await import('./supplier-aliases');
+          const suppliers = Object.keys(SUPPLIER_ALIASES);
+
+          // Filtrer les dépenses vers fournisseurs (débits uniquement)
+          let supplierExpenses: any[];
+
+          if (args.supplier_name) {
+            // Filtrer pour un fournisseur spécifique
+            const searchTerm = args.supplier_name.toLowerCase();
+
+            // Recherche floue de fournisseur
+            let matchingSuppliers = suppliers.filter((sup: any) =>
+              sup.toLowerCase().includes(searchTerm) ||
+              matchesSupplier(sup, searchTerm)
+            );
+
+            console.log(`🔍 Recherche fournisseur "${searchTerm}": ${matchingSuppliers.length} fournisseur(s) trouvé(s)`);
+
+            if (matchingSuppliers.length > 0) {
+              supplierExpenses = transactions.filter(tx => {
+                if (tx.type !== 'Debit') return false;
+                // Vérifier si la transaction correspond à un des fournisseurs trouvés
+                return matchingSuppliers.some((sup: string) => matchesSupplier(tx.description || '', sup));
+              });
+            } else {
+              // Recherche directe dans les descriptions
+              supplierExpenses = transactions.filter(tx =>
+                tx.type === 'Debit' &&
+                matchesSupplier(tx.description || '', args.supplier_name)
+              );
+            }
+          } else {
+            // Obtenir TOUTES les dépenses vers fournisseurs connus
+            supplierExpenses = transactions.filter(tx => {
+              if (tx.type !== 'Debit') return false;
+              // Vérifier si correspond à un fournisseur connu
+              return suppliers.some((sup: string) => matchesSupplier(tx.description || '', sup));
+            });
+          }
+
+          const totalSpent = supplierExpenses.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+          // Trier par date décroissante
+          supplierExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+          // 📊 ANALYSE PAR FOURNISSEUR
+          const questionLower = this.currentQuestion.toLowerCase();
+          const userAsksForAnalysis = questionLower.includes('analyse') || questionLower.includes('top');
+          const isMultiSupplierQuery = !args.supplier_name && supplierExpenses.length > 0;
+
+          let analysisText = '';
+          const showSupplierAnalysis = !args.supplier_name && isMultiSupplierQuery;
+
+          if (showSupplierAnalysis) {
+            // Grouper par fournisseur
+            const supplierTotals: { [key: string]: { total: number; count: number } } = {};
+
+            supplierExpenses.forEach(tx => {
+              const desc = tx.description || '';
+
+              // Identifier le fournisseur
+              for (const supplier of suppliers) {
+                if (matchesSupplier(desc, supplier)) {
+                  if (!supplierTotals[supplier]) {
+                    supplierTotals[supplier] = { total: 0, count: 0 };
+                  }
+                  supplierTotals[supplier].total += Math.abs(tx.amount);
+                  supplierTotals[supplier].count++;
+                  break; // Un seul fournisseur par transaction
+                }
+              }
+            });
+
+            // Trier par total décroissant
+            const sortedSuppliers = Object.entries(supplierTotals)
+              .map(([name, data]) => ({ name, ...data }))
+              .sort((a, b) => b.total - a.total);
+
+            if (sortedSuppliers.length > 0) {
+              // Détection de "top X" dans la question
+              const topMatch = questionLower.match(/(?:top\s*(\d+)|les?\s+(\d+)\s+fournisseurs)/);
+              const topN = topMatch ? Math.min(parseInt(topMatch[1] || topMatch[2]), sortedSuppliers.length) : Math.min(5, sortedSuppliers.length);
+
+              analysisText = `\n\n📊 ANALYSE DES DÉPENSES FOURNISSEURS\n\n`;
+              analysisText += `🏪 Top ${topN} des fournisseurs par dépenses:\n`;
+              sortedSuppliers.slice(0, topN).forEach((sup, i) => {
+                const icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                analysisText += `${icon} ${sup.name}: ${sup.total.toFixed(2)}€ (${sup.count} paiements)\n`;
+              });
+
+              // Statistiques globales
+              const totalSuppliers = sortedSuppliers.length;
+              const avgPerSupplier = totalSpent / totalSuppliers;
+              analysisText += `\n📈 Statistiques:\n`;
+              analysisText += `   • Nombre de fournisseurs: ${totalSuppliers}\n`;
+              analysisText += `   • Dépense moyenne par fournisseur: ${avgPerSupplier.toFixed(2)}€\n`;
+              analysisText += `   • Total dépensé: ${totalSpent.toFixed(2)}€\n`;
+            }
+          }
+
+          // Formatter la liste des dépenses
+          const expenseList = supplierExpenses.map((tx, index) => {
+            const num = String(index + 1).padStart(2, ' ');
+            const date = new Date(tx.date).toLocaleDateString('fr-BE');
+            const amount = Math.abs(tx.amount).toFixed(2);
+            const desc = tx.description || 'Sans description';
+
+            // Identifier le fournisseur
+            let supplierName = 'Inconnu';
+            for (const supplier of suppliers) {
+              if (matchesSupplier(desc, supplier)) {
+                supplierName = supplier;
+                break;
+              }
+            }
+
+            return `${num}. ${date} - ${amount}€ - ${supplierName}`;
+          }).join('\n');
+
+          // Générer le titre de période
+          let periodTitle: string;
+          if (args.month) {
+            periodTitle = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+          } else if (args.start_month && args.end_month) {
+            const startMonthName = startDate.toLocaleDateString('fr-BE', { month: 'long' });
+            const endMonthName = endDate.toLocaleDateString('fr-BE', { month: 'long' });
+            const year = startDate.getFullYear();
+            periodTitle = `${startMonthName} à ${endMonthName} ${year}`;
+          } else if (args.year) {
+            periodTitle = `année ${args.year}`;
+          } else {
+            periodTitle = `année ${startDate.getFullYear()}`;
+          }
+
+          // Décider si on inclut la liste détaillée
+          const userAsksForList = questionLower.includes('liste') || questionLower.includes('détail');
+          const userWantsDetails = args.include_details === true || userAsksForList;
+          const userAsksForTopOnly = /top\s*\d+/.test(questionLower) && !userAsksForList;
+          const isSpecificSupplierSearch = args.supplier_name && supplierExpenses.length <= 10;
+          const isSingleMonthManyExpenses = args.month && supplierExpenses.length > 10;
+          const includeDetailedList = !userAsksForTopOnly && !isSingleMonthManyExpenses && (userWantsDetails || isSpecificSupplierSearch);
+
+          let directResponse = `💸 Dépenses fournisseurs de ${periodTitle}\n\n` +
+            `Total: ${totalSpent.toFixed(2)}€ (${supplierExpenses.length} paiements)` +
+            analysisText;
+
+          if (includeDetailedList) {
+            directResponse += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` + expenseList;
+          }
+
+          result = {
+            supplier_name: args.supplier_name || 'Tous les fournisseurs',
+            period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
+            total_spent: totalSpent,
+            expense_count: supplierExpenses.length,
+            expenses: supplierExpenses.map(tx => ({
+              date: tx.date,
+              amount: Math.abs(tx.amount),
+              description: tx.description,
+            })),
+            currency: 'EUR',
+            direct_response: directResponse,
+          };
+          break;
+        }
+
+        case 'compare_supplier_expenses': {
+          // Validation: au moins 2 fournisseurs
+          if (!args.supplier_names || args.supplier_names.length < 2) {
+            result = {
+              error: 'Au moins 2 fournisseurs sont requis pour une comparaison',
+              direct_response: '❌ Veuillez spécifier au moins 2 fournisseurs à comparer.'
+            };
+            break;
+          }
+
+          // Déterminer la période
+          let startDate: Date;
+          let endDate: Date;
+
+          if (args.month) {
+            const monthMap: { [key: string]: number } = {
+              'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
+              'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
+              'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11
+            };
+
+            let targetMonth = -1;
+            const monthInput = args.month.toLowerCase();
+
+            if (monthMap[monthInput] !== undefined) {
+              targetMonth = monthMap[monthInput];
+            } else if (!isNaN(parseInt(monthInput))) {
+              targetMonth = parseInt(monthInput) - 1;
+            }
+
+            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            startDate = new Date(targetYear, targetMonth, 1);
+            endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+          } else {
+            const currentYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            startDate = new Date(currentYear, 0, 1);
+            endDate = new Date();
+          }
+
+          // Récupérer toutes les transactions
+          const transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
+          const { matchesSupplier } = await import('./supplier-aliases');
+
+          // Fonction pour extraire les dépenses d'un fournisseur
+          const getSupplierExpenses = (supplierName: string) => {
+            const expenses = transactions.filter(tx =>
+              tx.type === 'Debit' &&
+              matchesSupplier(tx.description || '', supplierName)
+            );
+
+            const total = expenses.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+            const sortedExpenses = expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            const max = sortedExpenses.length > 0 ? sortedExpenses.reduce((m, tx) => Math.max(m, Math.abs(tx.amount)), 0) : 0;
+            const maxTx = sortedExpenses.find(tx => Math.abs(tx.amount) === max);
+
+            return {
+              name: supplierName,
+              total,
+              count: expenses.length,
+              avg: expenses.length > 0 ? total / expenses.length : 0,
+              max,
+              maxDate: maxTx ? new Date(maxTx.date) : null,
+              transactions: sortedExpenses,
+              found: expenses.length > 0
+            };
+          };
+
+          // Récupérer les données de tous les fournisseurs
+          const suppliersData = args.supplier_names.map(getSupplierExpenses);
+
+          // Vérifier si tous ont des dépenses
+          const notFound = suppliersData.filter((s: any) => !s.found);
+          if (notFound.length === args.supplier_names.length) {
+            result = {
+              error: 'Aucune dépense trouvée pour ces fournisseurs',
+              direct_response: `❌ Aucune dépense trouvée pour: ${notFound.map((s: any) => s.name).join(', ')}`
+            };
+            break;
+          }
+
+          // Filtrer uniquement les fournisseurs trouvés
+          const foundSuppliers = suppliersData.filter((s: any) => s.found);
+
+          // Trier par total décroissant
+          const sorted = foundSuppliers.sort((a: any, b: any) => b.total - a.total);
+
+          // Générer le titre de période
+          let periodTitle: string;
+          if (args.month) {
+            periodTitle = startDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+          } else {
+            periodTitle = `année ${startDate.getFullYear()}`;
+          }
+
+          // Générer la réponse comparative
+          let directResponse = `📊 COMPARAISON DE DÉPENSES FOURNISSEURS\n\n`;
+          directResponse += `${sorted.map((s: any) => s.name).join(' vs ')} (${periodTitle})\n\n`;
+          directResponse += `💸 Classement par total dépensé:\n`;
+          sorted.forEach((sup: any, i: number) => {
+            const icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+            directResponse += `   ${icon} ${sup.name}: ${sup.total.toFixed(2)}€ (${sup.count} paiements)\n`;
+          });
+
+          if (sorted.length === 2) {
+            const diff = sorted[0].total - sorted[1].total;
+            const percentage = ((diff / sorted[1].total) * 100).toFixed(1);
+            directResponse += `\n📈 Différence: ${Math.abs(diff).toFixed(2)}€ (+${percentage}%) en faveur de ${sorted[0].name}\n`;
+          }
+
+          directResponse += `\n📊 Dépense moyenne par paiement:\n`;
+          sorted.forEach((sup: any, i: number) => {
+            const icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+            directResponse += `   ${icon} ${sup.name}: ${sup.avg.toFixed(2)}€\n`;
+          });
+
+          directResponse += `\n🏆 Plus hauts paiements individuels:\n`;
+          sorted.forEach((sup: any) => {
+            directResponse += `   • ${sup.name}: ${sup.max.toFixed(2)}€${sup.maxDate ? ` (${sup.maxDate.toLocaleDateString('fr-BE')})` : ''}\n`;
+          });
+
+          // Ajouter avertissement si certains fournisseurs n'ont pas de dépenses
+          if (notFound.length > 0) {
+            directResponse += `\n⚠️ Aucune dépense pour: ${notFound.map((s: any) => s.name).join(', ')}`;
+          }
+
+          result = {
+            suppliers: sorted.map((s: any) => ({
+              name: s.name,
+              total: s.total,
+              count: s.count,
+              avg: s.avg,
+              max: s.max
+            })),
+            winner: sorted[0].name,
+            direct_response: directResponse
+          };
+          break;
+        }
+
         case 'get_supplier_payments': {
           // Gérer month/year
           let startDate: Date;
@@ -2987,6 +3413,53 @@ export class AIAgentServiceV2 {
       if (isSingleShortName) {
         console.log('🔍 Détection: Nom partiel court - ajout d\'un hint pour l\'IA');
         question = `[HINT: "${question.trim()}" semble être un nom partiel. Utiliser get_employee_salaries avec employee_name="${question.trim()}" pour trouver les employés correspondants.] ${question}`;
+      }
+
+      // ========== DÉTECTIONS POUR LES FOURNISSEURS ==========
+
+      // Liste des fournisseurs connus (noms courants)
+      const knownSuppliers = ['foster', 'coca-cola', 'cocacola', 'engie', 'vivaqua', 'shell', 'edenred', 'pluxee',
+                              'colruyt', 'sligro', 'makro', 'metro', 'transgourmet', 'alkhoomsy', 'turbatu'];
+
+      // Détecter si la question mentionne des noms de fournisseurs connus
+      const mentionsSuppliers = knownSuppliers.some(supplier => questionLower.includes(supplier));
+
+      // Détection de comparaison entre fournisseurs (améliorée)
+      const isSupplierComparisonQuery =
+        (questionLower.includes('comparaison') ||
+         questionLower.includes('comparer') ||
+         questionLower.includes('compare') ||
+         questionLower.includes('différence') ||
+         questionLower.includes('vs')) &&
+        (questionLower.includes('fournisseur') || questionLower.includes('supplier') || mentionsSuppliers) &&
+        (questionLower.includes(' et ') || questionLower.includes(','));
+
+      if (isSupplierComparisonQuery) {
+        console.log('🔍 Détection: Question de comparaison de fournisseurs - ajout d\'un hint pour l\'IA');
+        question = `[HINT: Cette question nécessite compare_supplier_expenses, pas compare_employee_salaries ou analyze_supplier_expenses. Les noms mentionnés sont des FOURNISSEURS.] ${question}`;
+      }
+
+      // Détection de "top X fournisseurs" ou "les X fournisseurs les plus chers" (case-insensitive)
+      const topSuppliersPattern = /(top\s*(\d+)\s+fournisseurs?|les?\s+(\d+)\s+fournisseurs?\s+(les\s+)?(plus|mieux|chers)?|top\s*(\d+).*fournisseurs?.*novembre|top\s*(\d+).*fournisseurs?.*décembre|top\s*(\d+).*fournisseurs?.*octobre)/i;
+      const topSuppliersMatch = question.match(topSuppliersPattern);
+      if (topSuppliersMatch) {
+        const topNumber = topSuppliersMatch[2] || topSuppliersMatch[3] || topSuppliersMatch[6] || topSuppliersMatch[7] || topSuppliersMatch[8];
+        console.log(`🔍 Détection: Top ${topNumber} fournisseurs - ajout d'un hint pour l'IA`);
+        question = `[HINT: L'utilisateur demande le top ${topNumber} des fournisseurs par dépenses. Utiliser analyze_supplier_expenses sans supplier_name pour obtenir le classement des fournisseurs. NE PAS utiliser get_period_transactions.] ${question}`;
+      }
+
+      // Détection de période multi-mois pour fournisseurs (ex: "dépenses entre octobre et décembre")
+      if (multiMonthMatch && (questionLower.includes('fournisseur') || questionLower.includes('dépense') || questionLower.includes('dépenses'))) {
+        console.log('🔍 Détection: Période multi-mois pour fournisseurs - ajout d\'un hint pour l\'IA');
+        question = `[HINT: L'utilisateur demande une période de plusieurs mois (${multiMonthMatch[1]} à ${multiMonthMatch[2]}) pour les fournisseurs/dépenses. Utiliser analyze_supplier_expenses avec start_month="${multiMonthMatch[1]}" et end_month="${multiMonthMatch[2]}" (NE PAS utiliser month= ni get_period_transactions).] ${question}`;
+      }
+
+      // Détection de "analyse dépenses fournisseurs"
+      const analyzeExpensesPattern = /analyse.*(dépenses?|fournisseurs?)|dépenses?.*(analyse|fournisseurs?)/i;
+      const analyzeExpensesMatch = question.match(analyzeExpensesPattern);
+      if (analyzeExpensesMatch) {
+        console.log('🔍 Détection: Analyse de dépenses fournisseurs - ajout d\'un hint pour l\'IA');
+        question = `[HINT: L'utilisateur demande une analyse des dépenses fournisseurs. Utiliser analyze_supplier_expenses pour obtenir l'analyse complète avec statistiques.] ${question}`;
       }
 
       // Construire les messages avec l'historique de conversation
