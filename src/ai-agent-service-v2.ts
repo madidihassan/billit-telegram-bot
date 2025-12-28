@@ -663,6 +663,18 @@ export class AIAgentServiceV2 {
       {
         type: 'function',
         function: {
+          name: 'detect_new_suppliers',
+          description: '⚠️ APPEL OBLIGATOIRE: Détecter les nouveaux fournisseurs RÉELS dans les transactions bancaires qui ne sont pas encore dans la base de données. Tu DOIS appeler cet outil quand l\'utilisateur demande: "Détecte les nouveaux fournisseurs", "Nouveaux fournisseurs?", "Y a-t-il de nouveaux fournisseurs?", "Cherche nouveaux fournisseurs", "Scan fournisseurs". Cette fonction analyse TOUTES les transactions bancaires et filtre automatiquement les salaires, taxes, et paiements récurrents.',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'restart_bot',
           description: 'Redémarre le bot Telegram. Utilise cette fonction quand l\'utilisateur demande: "Redémarre le bot", "Relance le bot", "Reboot le bot", "Redémarrage". Attention: le bot sera temporairement indisponible pendant quelques secondes.',
           parameters: {
@@ -3128,6 +3140,148 @@ export class AIAgentServiceV2 {
           break;
         }
 
+        case 'detect_new_suppliers': {
+          try {
+            // Importer les fonctions nécessaires
+            const { matchesSupplier } = await import('./supplier-aliases');
+            const { normalizeSearchTerm } = await import('./utils/string-utils');
+            const { extractPotentialSupplierNames } = await import('./supplier-aliases');
+
+            // Récupérer toutes les transactions bancaires
+            const transactions = await this.bankClient.getAllTransactions();
+
+            // Mots-clés à exclure (salaires, taxes, paiements récurrents)
+            const EXCLUDED_KEYWORDS = [
+              'salaire', 'salary', 'avance', 'solde salaire',
+              'onss', 'tva', 'precompte', 'fiscal', 'impot',
+              'loyer', 'rent', 'ordre permanent', 'standing order',
+              'tonton chami', 'bureau', 'compte',
+              'indexation', 'sogle', 'team precompte'
+            ];
+
+            // Récupérer tous les fournisseurs connus
+            const suppliers = getAllSuppliers();
+            const supplierNames = suppliers.map(s => s.name);
+
+            // Filtrer les transactions Debit qui ne matchent aucun fournisseur connu
+            const unmatchedTransactions = transactions.filter((tx: any) => {
+              if (tx.type !== 'Debit') return false;
+
+              const description = tx.description || '';
+              const descLower = description.toLowerCase();
+
+              // Ignorer les transactions vides ou trop courtes
+              if (description.length < 10) return false;
+
+              // Ignorer les mots-clés exclus
+              if (EXCLUDED_KEYWORDS.some(keyword => descLower.includes(keyword))) {
+                return false;
+              }
+
+              // Vérifier si matche un fournisseur connu
+              const matchesKnownSupplier = supplierNames.some(supplier =>
+                matchesSupplier(description, supplier)
+              );
+
+              return !matchesKnownSupplier;
+            });
+
+            if (unmatchedTransactions.length === 0) {
+              result = {
+                success: true,
+                count: 0,
+                message: '✅ Toutes les transactions correspondent à des fournisseurs connus !\n\n🎯 Couverture: 100%\n📊 Fournisseurs en base: ' + suppliers.length,
+              };
+            } else {
+              // Regrouper les transactions par description similaire
+              const grouped = new Map<string, any>();
+
+              unmatchedTransactions.forEach((tx: any) => {
+                const description = tx.description || '';
+                const normalized = normalizeSearchTerm(description);
+                const potentialNames = extractPotentialSupplierNames(description);
+
+                const key = normalized.substring(0, 30);
+
+                if (grouped.has(key)) {
+                  const existing = grouped.get(key);
+                  existing.count++;
+                  existing.totalAmount += Math.abs(tx.amount);
+                  existing.transactions.push({
+                    date: tx.date,
+                    amount: Math.abs(tx.amount),
+                    description: description
+                  });
+                } else {
+                  grouped.set(key, {
+                    description: description,
+                    normalizedDescription: normalized,
+                    potentialNames: potentialNames,
+                    count: 1,
+                    totalAmount: Math.abs(tx.amount),
+                    transactions: [{
+                      date: tx.date,
+                      amount: Math.abs(tx.amount),
+                      description: description
+                    }]
+                  });
+                }
+              });
+
+              // Convertir en tableau et trier par montant total décroissant
+              const unknownSuppliers = Array.from(grouped.values())
+                .sort((a, b) => b.totalAmount - a.totalAmount);
+
+              // Formater le message
+              let message = `🔍 DÉTECTION DE NOUVEAUX FOURNISSEURS\n\n`;
+              message += `📊 ${unmatchedTransactions.length} transaction(s) non matchée(s)\n`;
+              message += `📋 ${unknownSuppliers.length} fournisseur(s) potentiel(s) détecté(s)\n\n`;
+              message += `${'='.repeat(40)}\n\n`;
+
+              unknownSuppliers.slice(0, 10).forEach((supplier, index) => {
+                message += `${index + 1}. 💰 ${supplier.totalAmount.toFixed(2)}€ (${supplier.count} transaction${supplier.count > 1 ? 's' : ''})\n`;
+                message += `   📝 ${supplier.description.substring(0, 60)}${supplier.description.length > 60 ? '...' : ''}\n`;
+
+                if (supplier.potentialNames.length > 0) {
+                  message += `   🏷️  ${supplier.potentialNames.slice(0, 3).join(', ')}\n`;
+                }
+
+                message += `   📅 ${supplier.transactions[0].date}: ${supplier.transactions[0].amount.toFixed(2)}€\n`;
+
+                if (supplier.transactions.length > 1) {
+                  message += `   ... et ${supplier.transactions.length - 1} autre(s)\n`;
+                }
+
+                message += `\n`;
+              });
+
+              if (unknownSuppliers.length > 10) {
+                message += `... et ${unknownSuppliers.length - 10} autre(s)\n\n`;
+              }
+
+              message += `💡 Pour ajouter ces fournisseurs:\n`;
+              message += `1. Modifier src/reload-suppliers.ts\n`;
+              message += `2. Ajouter à ADDITIONAL_KNOWN_SUPPLIERS\n`;
+              message += `3. Exécuter: npm run build && node dist/reload-suppliers.js`;
+
+              result = {
+                success: true,
+                count: unknownSuppliers.length,
+                unmatched_transactions: unmatchedTransactions.length,
+                suppliers: unknownSuppliers,
+                message: message,
+              };
+            }
+          } catch (error: any) {
+            result = {
+              success: false,
+              error: 'detection_error',
+              message: `❌ Erreur lors de la détection: ${error.message}`,
+            };
+          }
+          break;
+        }
+
         case 'restart_bot': {
           // Redémarrer le bot
           result = {
@@ -3651,8 +3805,8 @@ Si le contexte mentionne un fournisseur SANS montant précis, appelle get_invoic
 👥 **Utilisateurs** (3 outils):
    • Ajouter utilisateur • Retirer utilisateur • Liste utilisateurs
 
-🔧 **Système** (1 outil):
-   • Redémarrer le bot
+🔧 **Système** (2 outils):
+   • Détecter nouveaux fournisseurs • Redémarrer le bot
 
 ⚠️ IMPORTANT: Quand on te demande "liste les outils", utilise UNIQUEMENT les noms en FRANÇAIS ci-dessus, JAMAIS les noms techniques (get_*, add_*, etc.)
 
