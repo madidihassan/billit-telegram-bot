@@ -10,10 +10,10 @@ const config = require('./dist/config');
 
     const items = response.data.Items || response.data.items || response.data || [];
 
-    // Chercher les transactions contenant 'chami' ou 'tariq'
+    // Chercher les transactions contenant 'mokhlis'
     const matches = items.filter(tx => {
       const desc = (tx.Description || '').toLowerCase();
-      return desc.includes('chami') || desc.includes('tariq') || desc.includes('khalid') || desc.includes('kalide');
+      return desc.includes('mokhlis') && desc.includes('salaire');
     });
 
     console.log('Transactions trouvées:', matches.length);
