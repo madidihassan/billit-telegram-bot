@@ -230,7 +230,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_employee_salaries',
-          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. RÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. Si NOM DE FAMILLE SEUL (ex: "Madidi", "El Barnoussi") → SPECIFIER juste le nom de famille (recherche partielle automatique)\n3. Si "TOUS les salaires" → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → {employee_name: "Madidi"} (trouvera Hassan, Soufiane, Jawad Madidi)\n- "Salaires de Hassan en décembre" → {employee_name: "Hassan Madidi", month: "décembre"}\n- "Salaires des Madidi du mois de novembre" → {employee_name: "Madidi", month: "novembre"}\n- "Tous les salaires" → {}',
+          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\nRÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. ⚠️ Si "TOUS les [NOM_FAMILLE]" (ex: "tous les Madidi") → FAIRE UN SEUL APPEL avec le nom de famille seul {employee_name: "Madidi"}. NE PAS faire d\'appels supplémentaires pour chaque employé individuel ⚠️\n3. Si "TOUS les salaires" (sans précision) → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → UN SEUL APPEL: {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → UN SEUL APPEL: {employee_name: "Madidi"} (trouvera automatiquement Hassan, Soufiane, Jawad)\n- "Tous les salaires des Madidi de novembre" → UN SEUL APPEL: {employee_name: "Madidi", month: "novembre"}\n- "Salaires de Hassan en décembre" → UN SEUL APPEL: {employee_name: "Hassan Madidi", month: "décembre"}\n- "Tous les salaires" → UN SEUL APPEL: {}',
           parameters: {
             type: 'object',
             properties: {
@@ -2502,10 +2502,11 @@ INTERDICTIONS:
             const result = await this.executeFunction(functionName, functionArgs);
             console.log(`✓ ${functionName}:`, result.substring(0, 100) + '...');
 
-            // Vérifier si le résultat contient un direct_response
+            // Vérifier si le résultat contient un direct_response (ne prendre que le premier)
             try {
               const parsedResult = JSON.parse(result);
-              if (parsedResult.direct_response) {
+              if (parsedResult.direct_response && !directResponse) {
+                // Prendre seulement le PREMIER direct_response, ignorer les suivants
                 directResponse = parsedResult.direct_response;
                 console.log('📝 direct_response détecté - court-circuit de l\'IA');
               }
