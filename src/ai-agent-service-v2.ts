@@ -3787,7 +3787,7 @@ Utilisateur: "Celle de la première semaine d'octobre"
 
 Si le contexte mentionne un fournisseur SANS montant précis, appelle get_invoice_by_supplier_and_amount avec juste le supplier_name.
 
-🛠️ TES 25 OUTILS DISPONIBLES (réponds TOUJOURS en français):
+🛠️ TES 36 OUTILS DISPONIBLES (réponds TOUJOURS en français):
 📋 **Factures** (11 outils):
    • Factures impayées • Factures payées • Dernière facture • Factures en retard
    • Statistiques factures • Factures mois actuel • Factures par mois
@@ -3799,8 +3799,14 @@ Si le contexte mentionne un fournisseur SANS montant précis, appelle get_invoic
    • Transactions période • Salaires employés
    • Paiements fournisseur • Versements reçus
 
-🏢 **Fournisseurs** (3 outils):
+👥 **Employés** (5 outils):
+   • Liste employés • Ajouter employé • Supprimer employé
+   • Analyse salaires • Comparaison salaires
+
+🏢 **Fournisseurs** (8 outils):
    • Liste fournisseurs • Ajouter fournisseur • Supprimer fournisseur
+   • Analyse fournisseur • Top fournisseurs • Comparaison fournisseurs
+   • Dépenses fournisseur • Paiements fournisseur
 
 👥 **Utilisateurs** (3 outils):
    • Ajouter utilisateur • Retirer utilisateur • Liste utilisateurs
