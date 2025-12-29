@@ -41,7 +41,7 @@ fi
 nohup ./start-bot-wrapper.sh > "$LOG_FILE" 2>&1 &
 WRAPPER_PID=$!
 
-sleep 8
+sleep 15
 
 # 4. Vérifier que le bot a bien démarré
 echo "⏳ Attente du démarrage complet..."
