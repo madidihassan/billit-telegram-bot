@@ -163,9 +163,19 @@ if [ -d "$DEV_PATH" ]; then
 
     cp package.json tsconfig.json start-bot-safe.sh start-bot-wrapper.sh "$DEV_PATH/" 2>/dev/null || true
     chmod +x "$DEV_PATH/start-bot-safe.sh" "$DEV_PATH/start-bot-wrapper.sh" 2>/dev/null || true
-    
+
     cd "$DEV_PATH"
-    npm run build > /dev/null 2>&1
+    info "Compilation du code TypeScript..."
+    if npm run build > /dev/null 2>&1; then
+        success "Build réussi"
+    else
+        error "Échec de la compilation TypeScript"
+        error "Le bot existant ne sera PAS arrêté pour éviter une interruption de service"
+        warning "Veuillez corriger les erreurs de compilation et relancer sync"
+        cd /home/ubuntu/Billit/tonton202
+        git checkout "$CURRENT_BRANCH"
+        exit 1
+    fi
     success "Développement ${TARGET_NAME} mis à jour"
     
     # ─────────────────────────────────────────────────────────────────
@@ -193,10 +203,15 @@ if [ -d "$DEV_PATH" ]; then
     
     info "Démarrage du nouveau bot avec start-bot-safe.sh..."
     cd "$DEV_PATH"
-    ./start-bot-safe.sh
-
-    # Le script start-bot-safe.sh gère déjà la vérification
-    success "Bot ${TARGET_NAME} redémarré (voir les détails ci-dessus)"
+    if ./start-bot-safe.sh; then
+        success "Bot ${TARGET_NAME} redémarré avec succès"
+    else
+        error "Échec du redémarrage du bot ${TARGET_NAME}"
+        error "Vérifiez les logs: tail -f $DEV_PATH/mustfood-bot.log"
+        cd /home/ubuntu/Billit/tonton202
+        git checkout "$CURRENT_BRANCH"
+        exit 1
+    fi
 else
     warning "Répertoire $DEV_PATH non trouvé - déploiement développement ignoré"
 fi

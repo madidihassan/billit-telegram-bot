@@ -59,10 +59,11 @@ for i in {1..15}; do
   sleep 1
 done
 
-echo "⚠️  Le bot n'a pas démarré dans les 15 secondes"
+echo "❌ Le bot n'a pas démarré dans les 15 secondes"
 if [ "$BOT_NAME" = "mustfood" ]; then
   echo "📝 Vérifiez les logs: tail -f $BOT_DIR/mustfood-bot.log"
 else
   echo "📝 Vérifiez les logs: tail -f $BOT_DIR/bot.log"
 fi
-exit 0  # Ne pas échouer, le bot peut encore démarrer
+echo "🛑 Échec du démarrage - code d'erreur retourné"
+exit 1  # Échouer pour que sync.sh sache que le démarrage a échoué
