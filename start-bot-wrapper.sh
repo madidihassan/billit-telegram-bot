@@ -8,7 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "🚀 Démarrage du Billit Bot avec auto-redémarrage..."
-echo "📝 Le bot sera redémarré automatiquement s'il s'arrête avec le code 0"
+echo "📝 Le bot sera redémarré automatiquement quel que soit le code de sortie"
+echo "📝 Pour arrêter définitivement : pkill -f 'start-bot-wrapper'"
 echo ""
 
 while true; do
@@ -18,18 +19,16 @@ while true; do
   npm run start:bot
   EXIT_CODE=$?
 
-  # Vérifier le code de sortie
+  echo ""
   if [ $EXIT_CODE -eq 0 ]; then
-    echo ""
     echo "✅ Bot arrêté proprement (exit code 0)"
-    echo "🔄 Redémarrage automatique dans 3 secondes..."
-    echo "----------------------------------------"
-    sleep 3
-    # Continuer la boucle = redémarrer
   else
-    echo ""
-    echo "❌ Bot arrêté avec erreur (exit code $EXIT_CODE)"
-    echo "🛑 Arrêt du script wrapper"
-    exit $EXIT_CODE
+    echo "⚠️  Bot arrêté avec code $EXIT_CODE"
   fi
+
+  echo "🔄 Redémarrage automatique dans 5 secondes..."
+  echo "   (Ctrl+C ou pkill pour arrêter définitivement)"
+  echo "----------------------------------------"
+  sleep 5
+  # Toujours redémarrer, peu importe le code de sortie
 done
