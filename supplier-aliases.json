@@ -28,6 +28,16 @@
       "afkir"
     ]
   },
+  "ahlas pack": {
+    "aliases": [
+      "ahlas pack",
+      "ahlas",
+      "ahlas pack"
+    ],
+    "patterns": [
+      "ahlaspack"
+    ]
+  },
   "alkhoomsy": {
     "aliases": [
       "alkhoomsy",
@@ -167,6 +177,36 @@
       "collectgo"
     ]
   },
+  "coolblue": {
+    "aliases": [
+      "coolblue"
+    ],
+    "patterns": [
+      "coolblue"
+    ]
+  },
+  "debrico": {
+    "aliases": [
+      "debrico sprl",
+      "debrico",
+      "debrico",
+      "debrico sprl"
+    ],
+    "patterns": [
+      "debricosprl"
+    ]
+  },
+  "deomatic": {
+    "aliases": [
+      "deomatic sprl",
+      "deomatic",
+      "deomatic",
+      "deomatic sprl"
+    ],
+    "patterns": [
+      "deomaticsprl"
+    ]
+  },
   "eblease": {
     "aliases": [
       "eb-lease",
@@ -254,6 +294,16 @@
       "mouden"
     ]
   },
+  "enes pack": {
+    "aliases": [
+      "enes pack",
+      "enes",
+      "enes pack"
+    ],
+    "patterns": [
+      "enespack"
+    ]
+  },
   "engie": {
     "aliases": [
       "engie",
@@ -282,6 +332,26 @@
     ],
     "patterns": [
       "escompany"
+    ]
+  },
+  "europabank montant de prelevement": {
+    "aliases": [
+      "europabank n v montant de prelevement",
+      "europabank",
+      "europabank n"
+    ],
+    "patterns": [
+      "europabanknvmontantdeprelevement"
+    ]
+  },
+  "first drink": {
+    "aliases": [
+      "first drink",
+      "first",
+      "first drink"
+    ],
+    "patterns": [
+      "firstdrink"
     ]
   },
   "flitsmeister parkeren": {
@@ -326,6 +396,14 @@
       "groupinduverbaloise"
     ]
   },
+  "heliadis": {
+    "aliases": [
+      "heliadis"
+    ],
+    "patterns": [
+      "heliadis"
+    ]
+  },
   "hfood": {
     "aliases": [
       "h-food",
@@ -333,6 +411,14 @@
     ],
     "patterns": [
       "hfood"
+    ]
+  },
+  "hobinvest": {
+    "aliases": [
+      "hobinvest"
+    ],
+    "patterns": [
+      "hobinvest"
     ]
   },
   "hubert": {
@@ -343,6 +429,14 @@
     ],
     "patterns": [
       "hubert"
+    ]
+  },
+  "idewe": {
+    "aliases": [
+      "idewe"
+    ],
+    "patterns": [
+      "idewe"
     ]
   },
   "indigo p docks": {
@@ -373,6 +467,14 @@
     ],
     "patterns": [
       "jamhounmokhlis2"
+    ]
+  },
+  "jfc": {
+    "aliases": [
+      "jfc"
+    ],
+    "patterns": [
+      "jfc"
     ]
   },
   "kalidechami": {
@@ -420,6 +522,14 @@
     ],
     "patterns": [
       "lahaye"
+    ]
+  },
+  "liantis": {
+    "aliases": [
+      "liantis"
+    ],
+    "patterns": [
+      "liantis"
     ]
   },
   "lotfisco": {
@@ -496,6 +606,14 @@
       "mediwet"
     ]
   },
+  "mega": {
+    "aliases": [
+      "mega"
+    ],
+    "patterns": [
+      "mega"
+    ]
+  },
   "messer belgium": {
     "aliases": [
       "messer belgium nv",
@@ -514,6 +632,17 @@
     ],
     "patterns": [
       "mrabet"
+    ]
+  },
+  "must food": {
+    "aliases": [
+      "must food srl",
+      "must food",
+      "must",
+      "must food"
+    ],
+    "patterns": [
+      "mustfoodsrl"
     ]
   },
   "office easy": {
@@ -599,6 +728,16 @@
       "ppropaymentservicessa"
     ]
   },
+  "proxy lhaize": {
+    "aliases": [
+      "proxy delhaize",
+      "proxy",
+      "proxy delhaize"
+    ],
+    "patterns": [
+      "proxydelhaize"
+    ]
+  },
   "qibouz": {
     "aliases": [
       "qibouz malak",
@@ -606,6 +745,14 @@
     ],
     "patterns": [
       "qibouz"
+    ]
+  },
+  "rentokil": {
+    "aliases": [
+      "rentokil"
+    ],
+    "patterns": [
+      "rentokil"
     ]
   },
   "restomax": {
@@ -623,6 +770,16 @@
     ],
     "patterns": [
       "samat"
+    ]
+  },
+  "satelliet belgium": {
+    "aliases": [
+      "satelliet belgium",
+      "satelliet",
+      "satelliet belgium"
+    ],
+    "patterns": [
+      "satellietbelgium"
     ]
   },
   "satti": {
@@ -643,6 +800,14 @@
     "patterns": [
       "belgianshell",
       "shell"
+    ]
+  },
+  "siamu": {
+    "aliases": [
+      "siamu"
+    ],
+    "patterns": [
+      "siamu"
     ]
   },
   "sligro": {
@@ -712,6 +877,16 @@
     ],
     "patterns": [
       "tontonchami"
+    ]
+  },
+  "top bedford co hot bed": {
+    "aliases": [
+      "top bedford co hot bed",
+      "top",
+      "top bedford"
+    ],
+    "patterns": [
+      "topbedfordcohotbed"
     ]
   },
   "turbatu": {

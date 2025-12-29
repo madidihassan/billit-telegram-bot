@@ -5,6 +5,7 @@ import { BillitInvoice } from './types';
 import { matchesSupplier, getSupplierDisplayName, normalizeSearchTerm as normalizeSupplierTerm, SUPPLIER_ALIASES, addSupplier, deleteSupplier, listSuppliers } from './supplier-aliases';
 import { normalizeSearchTerm } from './utils/string-utils';
 import { addAuthorizedUser, removeAuthorizedUser, getAllAuthorizedUsers, getUserByChatId, getAllEmployees } from './database';
+import { BankBalanceService } from './bank-balance-service';
 
 // Liste des employés (pour filtrer les salaires)
 const EMPLOYEE_KEYS = [
@@ -19,11 +20,13 @@ export class CommandHandler {
   private billitClient: BillitClient;
   private telegramClient: TelegramClient;
   private bankClient: BankClient;
+  private bankBalanceService: BankBalanceService;
 
   constructor(billitClient: BillitClient, telegramClient: TelegramClient) {
     this.billitClient = billitClient;
     this.telegramClient = telegramClient;
     this.bankClient = new BankClient();
+    this.bankBalanceService = new BankBalanceService();
   }
 
   /**
@@ -128,6 +131,23 @@ export class CommandHandler {
       case 'payinvoice':
         return this.handleMarkPaid(args);
 
+      // Commandes pour les soldes bancaires
+      case 'init_balances':
+      case 'init_soldes':
+        return this.handleInitBalances(args);
+
+      case 'balances':
+      case 'soldes':
+        return this.handleBalances();
+
+      case 'set_balance':
+      case 'modifier_solde':
+        return this.handleSetBalance(args);
+
+      case 'update_balances':
+      case 'maj_soldes':
+        return this.handleUpdateBalances();
+
       default:
         return `❌ Commande inconnue: /${command}\n\nTapez /help pour voir les commandes disponibles.`;
     }
@@ -171,6 +191,12 @@ export class CommandHandler {
 /adduser [chat_id] - Ajouter un utilisateur autorisé
 /removeuser [chat_id] - Supprimer un utilisateur autorisé
 /listusers - Liste tous les utilisateurs autorisés
+
+<b>💰 Soldes bancaires</b>
+/init_balances - Initialiser les soldes des comptes
+/balances - Voir les soldes actuels
+/update_balances - Mettre à jour avec les nouvelles transactions
+/set_balance [IBAN] [montant] - Modifier un solde manuellement
 
 <b>🤖 Agent IA</b>
 /tools - Liste tous les outils IA disponibles
@@ -1468,5 +1494,149 @@ Utilisation: <code>/deletesupplier [clé]</code>
     return EMPLOYEE_KEYS.some(employeeKey =>
       matchesSupplier(description, employeeKey)
     );
+  }
+
+  /**
+   * Initialise les soldes bancaires
+   * Utilise les soldes fournis par l'utilisateur comme point de départ
+   */
+  private async handleInitBalances(args: string[]): Promise<string> {
+    try {
+      // Lire les comptes depuis les variables d'environnement
+      const bankAccountsEnv = process.env.BANK_ACCOUNTS;
+
+      if (!bankAccountsEnv) {
+        return `❌ Configuration manquante !
+
+Les comptes bancaires ne sont pas configurés dans le fichier .env
+
+Ajoutez la variable BANK_ACCOUNTS dans votre .env :
+BANK_ACCOUNTS=IBAN|Nom|Solde;IBAN|Nom|Solde
+
+Exemple :
+BANK_ACCOUNTS=BE07671870399966|Europabank|80075.06;BE12001745766792|BNP Paribas Fortis|17565.13`;
+      }
+
+      // Parser les comptes depuis la variable d'environnement
+      const accounts = bankAccountsEnv.split(';').map(account => {
+        const [iban, name, balance] = account.split('|');
+        return {
+          iban: iban.trim(),
+          name: name.trim(),
+          balance: parseFloat(balance)
+        };
+      });
+
+      await this.bankBalanceService.initializeBalances(accounts);
+
+      // Construire le message de confirmation dynamiquement
+      let message = '✅ **Soldes bancaires initialisés !**\n\n';
+
+      for (const account of accounts) {
+        const formattedIban = account.iban.match(/.{1,4}/g)?.join(' ') || account.iban;
+        message += `🏦 **${account.name}**\n`;
+        message += `   ${formattedIban}\n`;
+        message += `   €${account.balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}\n\n`;
+      }
+
+      const total = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+      message += `**Total**: €${total.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}\n\n`;
+      message += '💡 Les soldes seront maintenant automatiquement mis à jour avec les nouvelles transactions.\n\n';
+      message += 'Utilisez /balances pour consulter les soldes à tout moment.';
+
+      return message;
+    } catch (error: any) {
+      console.error('Erreur lors de l\'initialisation des soldes:', error);
+      return `❌ Erreur lors de l'initialisation des soldes: ${error.message}`;
+    }
+  }
+
+  /**
+   * Affiche les soldes bancaires actuels
+   */
+  private handleBalances(): string {
+    try {
+      return this.bankBalanceService.formatBalances();
+    } catch (error: any) {
+      console.error('Erreur lors de la récupération des soldes:', error);
+      return `❌ Erreur: ${error.message}`;
+    }
+  }
+
+  /**
+   * Modifie manuellement le solde d'un compte
+   * Usage: /set_balance IBAN montant
+   */
+  private async handleSetBalance(args: string[]): Promise<string> {
+    try {
+      if (args.length < 2) {
+        return `❌ Usage: /set_balance IBAN montant
+
+Exemple: /set_balance BE07671870399966 80000.00`;
+      }
+
+      const iban = args[0].replace(/\s/g, '');
+      const balance = parseFloat(args[1].replace(',', '.'));
+
+      if (isNaN(balance)) {
+        return `❌ Montant invalide: ${args[1]}`;
+      }
+
+      await this.bankBalanceService.setBalance(iban, balance);
+
+      return `✅ Solde mis à jour !
+
+Nouveau solde: €${balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+
+Utilisez /balances pour voir tous les soldes.`;
+    } catch (error: any) {
+      console.error('Erreur lors de la modification du solde:', error);
+      return `❌ Erreur: ${error.message}`;
+    }
+  }
+
+  /**
+   * Met à jour les soldes avec les nouvelles transactions
+   */
+  private async handleUpdateBalances(): Promise<string> {
+    try {
+      const result = await this.bankBalanceService.updateBalances();
+
+      if (result.transactionsProcessed === 0) {
+        return `✓ Les soldes sont déjà à jour.
+
+Utilisez /balances pour les consulter.`;
+      }
+
+      let message = `✅ **Soldes mis à jour !**\n\n`;
+      message += `📊 ${result.transactionsProcessed} transaction(s) traitée(s)\n`;
+      message += `🏦 ${result.accountsUpdated.length} compte(s) mis à jour\n\n`;
+
+      for (const update of result.updates) {
+        const account = this.bankBalanceService.getBalance(update.iban);
+        if (account) {
+          const diff = update.newBalance - update.previousBalance;
+          const diffSign = diff >= 0 ? '+' : '';
+          message += `**${account.name}**\n`;
+          message += `  ${diffSign}€${diff.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}\n`;
+          message += `  €${update.previousBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} → €${update.newBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}\n\n`;
+        }
+      }
+
+      const totalBalance = this.bankBalanceService.getTotalBalance();
+      message += `**Total**: €${totalBalance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}`;
+
+      return message;
+    } catch (error: any) {
+      console.error('Erreur lors de la mise à jour des soldes:', error);
+      return `❌ Erreur: ${error.message}`;
+    }
+  }
+
+  /**
+   * Retourne le service de soldes bancaires (pour l'IA)
+   */
+  getBankBalanceService(): BankBalanceService {
+    return this.bankBalanceService;
   }
 }

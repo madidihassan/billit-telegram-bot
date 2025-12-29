@@ -1,6 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { config } from './config';
-import { isUserAuthorized } from './database';
+import { isUserAuthorized, getAllAuthorizedUsers } from './database';
 import { CommandHandler } from './command-handler';
 import { VoiceService } from './voice-service';
 import { IntentService } from './intent-service';
@@ -385,9 +385,9 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
    * Génère la liste des outils IA disponibles
    */
   private async getAIToolsList(): Promise<string> {
-    let response = '🤖 <b>Outils IA disponibles (30 outils)</b>\n\n';
+    let response = '🤖 <b>Outils IA disponibles (36 outils)</b>\n\n';
 
-    response += '<b>📋 FACTURES</b>\n';
+    response += '<b>📋 FACTURES (11 outils)</b>\n';
     response += '  🔍 Factures impayées\n';
     response += '  💳 Factures payées\n';
     response += '  📄 Dernière facture\n';
@@ -397,34 +397,42 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
     response += '  🔎 Recherche facture\n';
     response += '  📝 Rechercher factures\n';
     response += '  📆 Factures mensuelles\n';
-    response += '  📋 Factures par mois\n';
     response += '  🏪 Factures par fournisseur\n';
-    response += '  🔄 Marquer facture payée\n';
-    response += '  📧 Rappel facture\n\n';
+    response += '  📧 Envoyer PDF facture\n\n';
 
-    response += '<b>💰 FINANCES</b>\n';
+    response += '<b>💰 TRANSACTIONS (7 outils)</b>\n';
     response += '  💰 Balance mensuelle\n';
-    response += '  📈 Crédits mensuels\n';
-    response += '  📉 Débits mensuels\n';
+    response += '  📈 Recettes mensuelles\n';
+    response += '  📉 Dépenses mensuelles\n';
     response += '  📅 Transactions période\n';
     response += '  💼 Salaires employés\n';
-    response += '  🏢 Paiements fournisseurs\n';
-    response += '  💸 Paiements reçus\n\n';
+    response += '  🏢 Paiements fournisseur\n';
+    response += '  💸 Versements reçus\n\n';
 
-    response += '<b>👥 EMPLOYÉS</b>\n';
+    response += '<b>👥 EMPLOYÉS (5 outils)</b>\n';
     response += '  👥 Lister employés\n';
     response += '  ➕ Ajouter employé\n';
     response += '  🗑️ Supprimer employé\n';
-    response += '  👤 Employé par nom\n\n';
+    response += '  📊 Analyse salaires\n';
+    response += '  🔄 Comparaison salaires\n\n';
 
-    response += '<b>🏷️ FOURNISSEURS</b>\n';
+    response += '<b>🏢 FOURNISSEURS (9 outils)</b>\n';
     response += '  🏷️ Lister fournisseurs\n';
-    response += '  🔍 Rechercher fournisseur\n\n';
+    response += '  ➕ Ajouter fournisseur\n';
+    response += '  🗑️ Supprimer fournisseur\n';
+    response += '  📊 Analyse fournisseur\n';
+    response += '  🏆 Top fournisseurs\n';
+    response += '  🔄 Comparaison fournisseurs\n';
+    response += '  💸 Dépenses fournisseur\n';
+    response += '  💳 Paiements fournisseur\n';
+    response += '  🔍 Détecter nouveaux fournisseurs\n\n';
 
-    response += '<b>⚙️ ADMINISTRATION</b>\n';
+    response += '<b>👥 UTILISATEURS (3 outils)</b>\n';
     response += '  📱 Lister utilisateurs\n';
     response += '  ➕ Ajouter utilisateur\n';
-    response += '  ❌ Supprimer utilisateur\n';
+    response += '  ❌ Retirer utilisateur\n\n';
+
+    response += '<b>🔧 SYSTÈME (1 outil)</b>\n';
     response += '  🔧 Redémarrer le bot\n';
 
     response += '\n💡 <i>Posez simplement votre question en langage naturel, l\'IA utilisera automatiquement les bons outils!</i>';
@@ -434,14 +442,67 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
 
   /**
    * Envoie un message avec les boutons de navigation
+   * Découpe automatiquement si > 4096 caractères (limite Telegram)
    */
   async sendMessageWithButtons(text: string): Promise<void> {
     try {
-      await this.bot.sendMessage(this.currentChatId, text, {
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-        reply_markup: this.getNavigationKeyboard()
-      });
+      const MAX_LENGTH = 4096;
+
+      // Si le message est court, l'envoyer tel quel
+      if (text.length <= MAX_LENGTH) {
+        await this.bot.sendMessage(this.currentChatId, text, {
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: this.getNavigationKeyboard()
+        });
+        return;
+      }
+
+      // Découper le message en plusieurs parties
+      console.log(`📝 Message trop long (${text.length} caractères), découpage en plusieurs messages...`);
+
+      const parts: string[] = [];
+      let currentPart = '';
+      const lines = text.split('\n');
+
+      for (const line of lines) {
+        // Si ajouter cette ligne dépasse la limite
+        if ((currentPart + line + '\n').length > MAX_LENGTH) {
+          // Sauvegarder la partie actuelle
+          if (currentPart) {
+            parts.push(currentPart.trim());
+          }
+          // Commencer une nouvelle partie avec cette ligne
+          currentPart = line + '\n';
+        } else {
+          currentPart += line + '\n';
+        }
+      }
+
+      // Ajouter la dernière partie
+      if (currentPart.trim()) {
+        parts.push(currentPart.trim());
+      }
+
+      console.log(`📨 Envoi de ${parts.length} messages...`);
+
+      // Envoyer toutes les parties
+      for (let i = 0; i < parts.length; i++) {
+        const isLast = i === parts.length - 1;
+        const partText = parts.length > 1 ? `${parts[i]}\n\n📄 (${i + 1}/${parts.length})` : parts[i];
+
+        await this.bot.sendMessage(this.currentChatId, partText, {
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          // N'afficher les boutons que sur le dernier message
+          reply_markup: isLast ? this.getNavigationKeyboard() : undefined
+        });
+
+        // Petite pause entre les messages pour éviter le rate limiting
+        if (!isLast) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
     } catch (error: any) {
       console.error('Erreur lors de l\'envoi du message:', error);
       throw error;
@@ -677,17 +738,17 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
    * Envoie un message à tous les chats autorisés (pour les notifications de monitoring)
    */
   async broadcastMessage(message: string): Promise<void> {
-    const allowedChatIds = config.telegram.allowedChatIds;
+    const authorizedUsers = getAllAuthorizedUsers();
 
-    for (const chatId of allowedChatIds) {
+    for (const user of authorizedUsers) {
       try {
-        await this.bot.sendMessage(chatId, message, {
+        await this.bot.sendMessage(user.chat_id, message, {
           parse_mode: 'HTML',
           disable_web_page_preview: true,
         });
-        console.log(`📤 Notification envoyée au chat ${chatId}`);
+        console.log(`📤 Notification envoyée au chat ${user.chat_id} (${user.username || 'Inconnu'})`);
       } catch (error) {
-        console.error(`❌ Erreur lors de l'envoi au chat ${chatId}:`, error);
+        console.error(`❌ Erreur lors de l'envoi au chat ${user.chat_id}:`, error);
       }
     }
   }
@@ -700,20 +761,20 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
     filename: string,
     caption?: string
   ): Promise<void> {
-    const allowedChatIds = config.telegram.allowedChatIds;
+    const authorizedUsers = getAllAuthorizedUsers();
 
-    for (const chatId of allowedChatIds) {
+    for (const user of authorizedUsers) {
       try {
-        await this.bot.sendDocument(chatId, document, {
+        await this.bot.sendDocument(user.chat_id, document, {
           caption: caption,
           parse_mode: 'HTML',
         }, {
           filename: filename,
           contentType: 'application/pdf',
         });
-        console.log(`📤 Document envoyé au chat ${chatId} (${filename})`);
+        console.log(`📤 Document envoyé au chat ${user.chat_id} (${user.username || 'Inconnu'}) - ${filename}`);
       } catch (error) {
-        console.error(`❌ Erreur lors de l'envoi du document au chat ${chatId}:`, error);
+        console.error(`❌ Erreur lors de l'envoi du document au chat ${user.chat_id}:`, error);
       }
     }
   }
