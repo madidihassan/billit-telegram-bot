@@ -177,6 +177,36 @@
       "collectgo"
     ]
   },
+  "coolblue": {
+    "aliases": [
+      "coolblue"
+    ],
+    "patterns": [
+      "coolblue"
+    ]
+  },
+  "debrico": {
+    "aliases": [
+      "debrico sprl",
+      "debrico",
+      "debrico",
+      "debrico sprl"
+    ],
+    "patterns": [
+      "debricosprl"
+    ]
+  },
+  "deomatic": {
+    "aliases": [
+      "deomatic sprl",
+      "deomatic",
+      "deomatic",
+      "deomatic sprl"
+    ],
+    "patterns": [
+      "deomaticsprl"
+    ]
+  },
   "eblease": {
     "aliases": [
       "eb-lease",
@@ -264,6 +294,236 @@
       "mouden"
     ]
   },
+  "en faveur agourram mehdi be60000481398670 gebabebb introduit le": {
+    "aliases": [
+      "en faveur de agourram mehdi be60000481398670 gebabebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdeagourrammehdibe60000481398670gebabebbintroduitle"
+    ]
+  },
+  "en faveur allaoui ouassama be25001930899982 gebabebb introduit le": {
+    "aliases": [
+      "en faveur de allaoui ouassama be25001930899982 gebabebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdeallaouiouassamabe25001930899982gebabebbintroduitle"
+    ]
+  },
+  "en faveur allaoui zakaria be62377066049761 bbrubebb introduit le": {
+    "aliases": [
+      "en faveur de allaoui zakaria be62377066049761 bbrubebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdeallaouizakariabe62377066049761bbrubebbintroduitle"
+    ]
+  },
+  "en faveur boakye nana be54000482507197 gebabebb introduit le": {
+    "aliases": [
+      "en faveur de boakye nana be54000482507197 gebabebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdeboakyenanabe54000482507197gebabebbintroduitle"
+    ]
+  },
+  "en faveur bruxelles proprete be45096621951489 gkccbebb introduit le": {
+    "aliases": [
+      "en faveur de bruxelles proprete be45096621951489 gkccbebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdebruxellespropretebe45096621951489gkccbebbintroduitle"
+    ]
+  },
+  "en faveur catherine vanboxstael be75630023793351 bbrubebb introduit le": {
+    "aliases": [
+      "en faveur de catherine vanboxstael be75630023793351 bbrubebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdecatherinevanboxstaelbe75630023793351bbrubebbintroduitle"
+    ]
+  },
+  "en faveur chirine laghmich be13063750421539 gkccbebb introduit le": {
+    "aliases": [
+      "en faveur de chirine laghmich be13063750421539 gkccbebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdechirinelaghmichbe13063750421539gkccbebbintroduitle"
+    ]
+  },
+  "en faveur diallo ibrahima be66736065560243 kredbebb introduit le": {
+    "aliases": [
+      "en faveur de diallo ibrahima be66736065560243 kredbebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdedialloibrahimabe66736065560243kredbebbintroduitle"
+    ]
+  },
+  "en faveur el baraka nihel be62001926814161 gebabebb introduit le": {
+    "aliases": [
+      "en faveur de el baraka nihel be62001926814161 gebabebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdeelbarakanihelbe62001926814161gebabebbintroduitle"
+    ]
+  },
+  "en faveur hesa solutions be09731056045157 kredbebb introduit le": {
+    "aliases": [
+      "en faveur de hesa solutions be09731056045157 kredbebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdehesasolutionsbe09731056045157kredbebbintroduitle"
+    ]
+  },
+  "en faveur kbhl sprl be58001534315179 gebabebb introduit le": {
+    "aliases": [
+      "en faveur de kbhl sprl be58001534315179 gebabebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdekbhlsprlbe58001534315179gebabebbintroduitle"
+    ]
+  },
+  "en faveur khaddouma nabil be75063692135451 gkccbebb introduit le": {
+    "aliases": [
+      "en faveur de khaddouma nabil be75063692135451 gkccbebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdekhaddoumanabilbe75063692135451gkccbebbintroduitle"
+    ]
+  },
+  "en faveur marsli miloud be41310198590210 bbrubebb introduit le": {
+    "aliases": [
+      "en faveur de marsli miloud be41310198590210 bbrubebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdemarslimiloudbe41310198590210bbrubebbintroduitle"
+    ]
+  },
+  "en faveur merri noah be02063680300340 gkccbebb introduit le": {
+    "aliases": [
+      "en faveur de merri noah be02063680300340 gkccbebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdemerrinoahbe02063680300340gkccbebbintroduitle"
+    ]
+  },
+  "en faveur orange belgium be05210023359975 gebabebb introduit le": {
+    "aliases": [
+      "en faveur de orange belgium be05210023359975 gebabebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdeorangebelgiumbe05210023359975gebabebbintroduitle"
+    ]
+  },
+  "en faveur p v assurances be06068945216022 gkccbebb introduit le": {
+    "aliases": [
+      "en faveur de p v assurances be06068945216022 gkccbebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdepvassurancesbe06068945216022gkccbebbintroduitle"
+    ]
+  },
+  "en faveur plug pos be18310123847565 bbrubebb introduit le": {
+    "aliases": [
+      "en faveur de plug pos be18310123847565 bbrubebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdeplugposbe18310123847565bbrubebbintroduitle"
+    ]
+  },
+  "en faveur saadi zayd be61363210216117 bbrubebb introduit le": {
+    "aliases": [
+      "en faveur de saadi zayd be61363210216117 bbrubebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdesaadizaydbe61363210216117bbrubebbintroduitle"
+    ]
+  },
+  "en faveur securite sociale be63679026181108 pchqbebb introduit le": {
+    "aliases": [
+      "en faveur de securite sociale be63679026181108 pchqbebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdesecuritesocialebe63679026181108pchqbebbintroduitle"
+    ]
+  },
+  "en faveur seif el din said be13000437726139 gebabebb introduit le": {
+    "aliases": [
+      "en faveur de seif el din said be13000437726139 gebabebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdeseifeldinsaidbe13000437726139gebabebbintroduitle"
+    ]
+  },
+  "en faveur team perception precompte be85679200363806 pchqbebb introduit le": {
+    "aliases": [
+      "en faveur de team perception precompte be85679200363806 pchqbebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdeteamperceptionprecomptebe85679200363806pchqbebbintroduitle"
+    ]
+  },
+  "en faveur vws technics be28320065673720 bbrubebb introduit le": {
+    "aliases": [
+      "en faveur de vws technics be28320065673720 bbrubebb introduit le",
+      "en",
+      "en faveur"
+    ],
+    "patterns": [
+      "enfaveurdevwstechnicsbe28320065673720bbrubebbintroduitle"
+    ]
+  },
+  "enes pack": {
+    "aliases": [
+      "enes pack",
+      "enes",
+      "enes pack"
+    ],
+    "patterns": [
+      "enespack"
+    ]
+  },
   "engie": {
     "aliases": [
       "engie",
@@ -292,6 +552,26 @@
     ],
     "patterns": [
       "escompany"
+    ]
+  },
+  "europabank montant de prelevement": {
+    "aliases": [
+      "europabank n v montant de prelevement",
+      "europabank",
+      "europabank n"
+    ],
+    "patterns": [
+      "europabanknvmontantdeprelevement"
+    ]
+  },
+  "first drink": {
+    "aliases": [
+      "first drink",
+      "first",
+      "first drink"
+    ],
+    "patterns": [
+      "firstdrink"
     ]
   },
   "flitsmeister parkeren": {
@@ -336,6 +616,14 @@
       "groupinduverbaloise"
     ]
   },
+  "heliadis": {
+    "aliases": [
+      "heliadis"
+    ],
+    "patterns": [
+      "heliadis"
+    ]
+  },
   "hfood": {
     "aliases": [
       "h-food",
@@ -343,6 +631,14 @@
     ],
     "patterns": [
       "hfood"
+    ]
+  },
+  "hobinvest": {
+    "aliases": [
+      "hobinvest"
+    ],
+    "patterns": [
+      "hobinvest"
     ]
   },
   "hubert": {
@@ -353,6 +649,14 @@
     ],
     "patterns": [
       "hubert"
+    ]
+  },
+  "idewe": {
+    "aliases": [
+      "idewe"
+    ],
+    "patterns": [
+      "idewe"
     ]
   },
   "indigo p docks": {
@@ -383,6 +687,14 @@
     ],
     "patterns": [
       "jamhounmokhlis2"
+    ]
+  },
+  "jfc": {
+    "aliases": [
+      "jfc"
+    ],
+    "patterns": [
+      "jfc"
     ]
   },
   "kalidechami": {
@@ -430,6 +742,14 @@
     ],
     "patterns": [
       "lahaye"
+    ]
+  },
+  "liantis": {
+    "aliases": [
+      "liantis"
+    ],
+    "patterns": [
+      "liantis"
     ]
   },
   "lotfisco": {
@@ -506,6 +826,14 @@
       "mediwet"
     ]
   },
+  "mega": {
+    "aliases": [
+      "mega"
+    ],
+    "patterns": [
+      "mega"
+    ]
+  },
   "messer belgium": {
     "aliases": [
       "messer belgium nv",
@@ -524,6 +852,17 @@
     ],
     "patterns": [
       "mrabet"
+    ]
+  },
+  "must food": {
+    "aliases": [
+      "must food srl",
+      "must food",
+      "must",
+      "must food"
+    ],
+    "patterns": [
+      "mustfoodsrl"
     ]
   },
   "office easy": {
@@ -563,6 +902,16 @@
     ],
     "patterns": [
       "ozfoodsa"
+    ]
+  },
+  "paiement bit mastercard": {
+    "aliases": [
+      "paiement debit mastercard",
+      "paiement",
+      "paiement debit"
+    ],
+    "patterns": [
+      "paiementdebitmastercard"
     ]
   },
   "parking": {
@@ -609,6 +958,16 @@
       "ppropaymentservicessa"
     ]
   },
+  "proxy lhaize": {
+    "aliases": [
+      "proxy delhaize",
+      "proxy",
+      "proxy delhaize"
+    ],
+    "patterns": [
+      "proxydelhaize"
+    ]
+  },
   "qibouz": {
     "aliases": [
       "qibouz malak",
@@ -616,6 +975,14 @@
     ],
     "patterns": [
       "qibouz"
+    ]
+  },
+  "rentokil": {
+    "aliases": [
+      "rentokil"
+    ],
+    "patterns": [
+      "rentokil"
     ]
   },
   "restomax": {
@@ -633,6 +1000,16 @@
     ],
     "patterns": [
       "samat"
+    ]
+  },
+  "satelliet belgium": {
+    "aliases": [
+      "satelliet belgium",
+      "satelliet",
+      "satelliet belgium"
+    ],
+    "patterns": [
+      "satellietbelgium"
     ]
   },
   "satti": {
@@ -653,6 +1030,14 @@
     "patterns": [
       "belgianshell",
       "shell"
+    ]
+  },
+  "siamu": {
+    "aliases": [
+      "siamu"
+    ],
+    "patterns": [
+      "siamu"
     ]
   },
   "sligro": {
@@ -732,6 +1117,16 @@
     ],
     "patterns": [
       "tontonchami"
+    ]
+  },
+  "top bedford co hot bed": {
+    "aliases": [
+      "top bedford co hot bed",
+      "top",
+      "top bedford"
+    ],
+    "patterns": [
+      "topbedfordcohotbed"
     ]
   },
   "turbatu": {
