@@ -1459,7 +1459,7 @@ export class AIAgentServiceV2 {
 
           // Filtrer par employé (si spécifié)
           const { getAllEmployees } = await import('./database');
-          const employees = getAllEmployees();
+          let employees = getAllEmployees();
           let salaryTransactions: any[];
 
           // Fonction stricte pour matcher un nom d'employé dans une description
@@ -1634,6 +1634,12 @@ export class AIAgentServiceV2 {
               }
             }
           });
+
+          // ✅ Recharger les employés depuis la BD après auto-apprentissage
+          if (newEmployeesAdded.length > 0) {
+            employees = getAllEmployees();
+            console.log(`✅ ${employees.length} employés rechargés depuis la BD`);
+          }
 
           // 📊 ANALYSE MENSUELLE ET PAR EMPLOYÉ: si période > 1 mois OU si "analyse" demandée
           let monthlyAnalysis = '';
