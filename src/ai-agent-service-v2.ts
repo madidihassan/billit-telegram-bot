@@ -1599,8 +1599,8 @@ export class AIAgentServiceV2 {
 
             if (!isKnown && isSalaryTransaction(desc)) {
               // Extraire le nom de la description
-              // Format: "VIREMENT EN FAVEUR DE [NOM] BE..."
-              const match = desc.match(/VIREMENT EN FAVEUR DE\s+([^B]+?)\s+BE/i);
+              // Format: "VIREMENT EN FAVEUR DE [NOM] BE12..."
+              const match = desc.match(/VIREMENT EN FAVEUR DE\s+(.+?)\s+BE\d{2}/i);
               if (match) {
                 const extractedName = match[1].trim();
 
