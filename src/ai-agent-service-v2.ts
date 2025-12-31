@@ -1795,16 +1795,27 @@ export class AIAgentServiceV2 {
           }
 
           // Décider si on inclut la liste détaillée
-          // 1. Si l'utilisateur demande explicitement la liste (include_details: true OU mot "liste" dans la question)
+          // 1. Si l'utilisateur demande explicitement la liste (include_details: true OU mots-clés dans la question)
           // 2. Si recherche spécifique d'UN employé avec peu de transactions (≤ 10)
           // 3. SAUF si la question demande un "top X" sans le mot "liste" (dans ce cas, juste l'analyse suffit)
           // 4. SAUF si mois unique avec beaucoup de transactions (> 10) sans demande explicite
-          const userAsksForList = questionLower.includes('liste') || questionLower.includes('détail');
+          const userAsksForList = questionLower.includes('liste') ||
+                                 questionLower.includes('détail') ||
+                                 questionLower.includes('à qui') ||
+                                 questionLower.includes('qui a') ||
+                                 questionLower.includes('employés') ||
+                                 questionLower.includes('noms') ||
+                                 questionLower.includes('qui j\'ai');
           const userWantsDetails = args.include_details === true || userAsksForList;
           const userAsksForTopOnly = /top\s*\d+/.test(questionLower) && !userAsksForList;
           const isSpecificEmployeeSearch = args.employee_name && salaryTransactions.length <= 10;
           const isSingleMonthManyTransactions = args.month && salaryTransactions.length > 10;
-          const includeDetailedList = !userAsksForTopOnly && !isSingleMonthManyTransactions && (userWantsDetails || isSpecificEmployeeSearch);
+          // Si l'utilisateur demande explicitement les détails, on les affiche même pour mois unique >10
+          const includeDetailedList = !userAsksForTopOnly && (
+            userWantsDetails ||  // Demande explicite prioritaire
+            isSpecificEmployeeSearch ||  // Recherche spécifique
+            !isSingleMonthManyTransactions  // Ou pas mois unique avec beaucoup
+          );
 
           // 📊 DÉTECTION DES QUESTIONS SUR MIN/MAX
           let minMaxAnalysis = '';
