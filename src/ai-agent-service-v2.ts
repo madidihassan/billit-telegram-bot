@@ -537,7 +537,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'analyze_supplier_expenses',
-          description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro") → SPECIFIER supplier_name\n2. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n3. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n6. ⚠️ Si utilisateur demande "LA LISTE" explicitement → METTRE include_details: true\n7. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {}\n- "Dépenses de novembre" → {month: "novembre"}',
+          description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur ET lister les factures. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\n🎯 UTILISE CET OUTIL POUR:\n- "Liste des factures de X" → {supplier_name: "X", include_details: true}\n- "Toutes les factures de X sur l\'année" → {supplier_name: "X", include_details: true}\n- "Factures de X en novembre" → {supplier_name: "X", month: "novembre", include_details: true}\n- "Dépenses chez X" → {supplier_name: "X"}\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro", "Foster") → SPECIFIER supplier_name\n2. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n3. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année", "de l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n6. ⚠️ Si utilisateur demande "LA LISTE", "FACTURES", "TOUTES" explicitement → METTRE include_details: true\n7. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Liste des factures de Foster" → {supplier_name: "Foster", include_details: true}\n- "Toutes les factures de l\'année de Foster" → {supplier_name: "Foster", include_details: true}\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {}\n- "Dépenses de novembre" → {month: "novembre"}',
           parameters: {
             type: 'object',
             properties: {
@@ -2322,17 +2322,24 @@ export class AIAgentServiceV2 {
               });
             }
 
-            // Afficher les 10 dernières transactions
+            // Afficher les dernières transactions (10 par défaut, toutes si demandé explicitement)
             if (supplierExpenses.length > 0) {
-              const recentPayments = supplierExpenses.slice(0, Math.min(10, supplierExpenses.length));
-              analysisText += `\n💳 ${lastTransactionsLabel}:\n`;
+              const userAsksForAll = questionLower.includes('toutes') || questionLower.includes('liste') || args.include_details === true;
+              const maxToShow = userAsksForAll ? supplierExpenses.length : Math.min(10, supplierExpenses.length);
+              const recentPayments = supplierExpenses.slice(0, maxToShow);
+
+              const listTitle = userAsksForAll && supplierExpenses.length > 10 ?
+                `📋 Tous les ${transactionLabel}` :
+                `💳 ${lastTransactionsLabel}`;
+
+              analysisText += `\n${listTitle}:\n`;
               recentPayments.forEach((tx, i) => {
                 const date = new Date(tx.date).toLocaleDateString('fr-BE');
                 const amount = Math.abs(tx.amount).toFixed(2);
                 analysisText += `   ${i + 1}. ${date}: ${amount}€\n`;
               });
 
-              if (supplierExpenses.length > 10) {
+              if (!userAsksForAll && supplierExpenses.length > 10) {
                 analysisText += `   ... et ${supplierExpenses.length - 10} autres ${transactionLabel}\n`;
               }
             }
