@@ -1811,7 +1811,8 @@ export class AIAgentServiceV2 {
                                  questionLower.includes('qui a') ||
                                  questionLower.includes('employés') ||
                                  questionLower.includes('noms') ||
-                                 questionLower.includes('qui j\'ai');
+                                 questionLower.includes('qui j\'ai') ||
+                                 questionLower.includes('salaire');
           const userWantsDetails = args.include_details === true || userAsksForList;
           const userAsksForTopOnly = /top\s*\d+/.test(questionLower) && !userAsksForList;
           const isSpecificEmployeeSearch = args.employee_name && salaryTransactions.length <= 10;
