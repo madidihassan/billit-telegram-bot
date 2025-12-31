@@ -177,8 +177,26 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_monthly_credits',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir le total RÉEL des recettes/rentrées du mois. Tu DOIS appeler cet outil pour TOUTE question sur les recettes, rentrées, ou entrées d\'argent. Ne JAMAIS inventer de montant. Exemples: "Recettes du mois?", "Total rentrées?", "Combien d\'entrées?"',
+          description: '⚠️ APPEL OBLIGATOIRE pour UN SEUL mois (mois en cours). Obtenir le total RÉEL des recettes/rentrées du mois en cours. Pour PLUSIEURS mois ou "derniers X mois", utilise get_multi_month_revenues. Ne JAMAIS inventer de montant. Exemples: "Recettes du mois?", "Total rentrées?", "Combien d\'entrées?"',
           parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_multi_month_revenues',
+          description: '⚠️ OUTIL POUR RECETTES DE PLUSIEURS MOIS. Utilise cet outil quand l\'utilisateur demande les recettes de PLUSIEURS mois (ex: "recettes des 3 derniers mois", "recettes d\'octobre, novembre et décembre", "recettes depuis octobre"). Retourne un résumé par mois + total cumulé. NE PAS utiliser pour un seul mois.',
+          parameters: {
+            type: 'object',
+            properties: {
+              months: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Liste des mois au format YYYY-MM (ex: ["2025-10", "2025-11", "2025-12"]). MINIMUM 2 mois requis.',
+              },
+            },
+            required: ['months'],
+          },
         },
       },
       {
@@ -200,18 +218,36 @@ export class AIAgentServiceV2 {
       {
         type: 'function',
         function: {
+          name: 'get_monthly_summaries',
+          description: '⚠️⚠️⚠️ INTERDIT pour un seul mois ! Utilise cet outil UNIQUEMENT si l\'utilisateur demande EXPLICITEMENT 2 mois OU PLUS dans sa question (ex: "balances d\'octobre ET novembre", "octobre, novembre et décembre"). ⚠️ Si l\'utilisateur dit "balance d\'octobre" (1 seul mois), utilise get_period_transactions à la place. ⚠️ NE PAS "enrichir" en ajoutant des mois non demandés (ex: si l\'utilisateur demande octobre, NE PAS afficher novembre et décembre). Retourne un résumé par mois + total cumulé.',
+          parameters: {
+            type: 'object',
+            properties: {
+              months: {
+                type: 'array',
+                items: { type: 'string' },
+                description: '⚠️ Liste des mois EXPLICITEMENT mentionnés par l\'utilisateur au format YYYY-MM. MINIMUM 2 mois requis. NE PAS ajouter de mois supplémentaires.',
+              },
+            },
+            required: ['months'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'get_period_transactions',
-          description: 'Obtenir les transactions bancaires pour une période donnée. ⚠️ IMPORTANT: Si l\'utilisateur mentionne un fournisseur spécifique (ex: "paiements à Foster", "loyer d\'Alkhoomsy"), tu DOIS utiliser le paramètre supplier_name pour filtrer. Ne retourne PAS toutes les transactions si un fournisseur est mentionné.',
+          description: '⚠️ OUTIL PAR DÉFAUT pour les balances mensuelles. Utilise cet outil pour: (1) balance d\'UN SEUL mois (ex: "balance d\'octobre", "balance du mois de novembre"), (2) transactions sur une période spécifique, (3) filtrer par fournisseur. Retourne un résumé (crédits, débits, balance) + liste des transactions. Si l\'utilisateur demande SEULEMENT la balance sans mentionner "liste" ou "transactions", tu PEUX limiter l\'affichage au résumé.',
           parameters: {
             type: 'object',
             properties: {
               start_date: {
                 type: 'string',
-                description: 'Date de début (YYYY-MM-DD)',
+                description: 'Date de début (YYYY-MM-DD). Pour un mois complet: premier jour du mois (ex: 2025-10-01 pour octobre).',
               },
               end_date: {
                 type: 'string',
-                description: 'Date de fin (YYYY-MM-DD)',
+                description: 'Date de fin (YYYY-MM-DD). Pour un mois complet: dernier jour du mois (ex: 2025-10-31 pour octobre).',
               },
               filter_type: {
                 type: 'string',
@@ -986,13 +1022,14 @@ export class AIAgentServiceV2 {
         }
 
         case 'get_monthly_credits': {
-          const credits = await this.bankClient.getCredits();
+          // ✅ CORRECTION: Utiliser des dates précises pour éviter la limite de 120 transactions
           const now = new Date();
-          const monthCredits = credits.filter(tx => {
-            const txDate = new Date(tx.date);
-            return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
-          });
+          const startDate = new Date(now.getFullYear(), now.getMonth(), 1); // 1er du mois
+          const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Dernier jour du mois
+
+          const monthCredits = await this.bankClient.getCredits(startDate, endDate);
           const total = monthCredits.reduce((sum, tx) => sum + tx.amount, 0);
+
           result = {
             month: now.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' }),
             total_amount: total,
@@ -1003,14 +1040,96 @@ export class AIAgentServiceV2 {
           break;
         }
 
+        case 'get_multi_month_revenues': {
+          const months = args.months as string[];
+
+          if (!months || !Array.isArray(months) || months.length === 0) {
+            return JSON.stringify({ error: 'Le paramètre months doit être un tableau non vide de mois au format YYYY-MM' });
+          }
+
+          if (months.length < 2) {
+            return JSON.stringify({
+              error: 'get_multi_month_revenues nécessite MINIMUM 2 mois. Pour un seul mois, utilise get_monthly_credits.',
+            });
+          }
+
+          const parseMonth = (monthStr: string): { year: number, month: number } | null => {
+            const match = monthStr.match(/^(\d{4})-(\d{1,2})$/);
+            if (!match) return null;
+            return { year: parseInt(match[1]), month: parseInt(match[2]) - 1 };
+          };
+
+          const getLastDayOfMonth = (year: number, month: number): number => {
+            return new Date(year, month + 1, 0).getDate();
+          };
+
+          const formatMonthName = (year: number, month: number): string => {
+            const date = new Date(year, month, 1);
+            return date.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+          };
+
+          const monthlySummaries = [];
+          let cumulativeRevenues = 0;
+          let cumulativeCount = 0;
+
+          for (const monthStr of months) {
+            const parsed = parseMonth(monthStr);
+            if (!parsed) {
+              return JSON.stringify({ error: `Format de mois invalide: ${monthStr}. Utiliser YYYY-MM` });
+            }
+
+            const { year, month } = parsed;
+            const startDate = new Date(year, month, 1);
+            const lastDay = getLastDayOfMonth(year, month);
+            const endDate = new Date(year, month, lastDay, 23, 59, 59, 999);
+
+            const credits = await this.bankClient.getCredits(startDate, endDate);
+            const totalRevenues = credits.reduce((sum, tx) => sum + tx.amount, 0);
+
+            monthlySummaries.push({
+              month: formatMonthName(year, month),
+              month_key: monthStr,
+              revenues: totalRevenues,
+              count: credits.length,
+            });
+
+            cumulativeRevenues += totalRevenues;
+            cumulativeCount += credits.length;
+          }
+
+          let directResponse = '💰 Recettes mensuelles\n\n';
+
+          for (const summary of monthlySummaries) {
+            directResponse += `📅 ${summary.month}\n`;
+            directResponse += `   💰 Recettes: ${summary.revenues.toFixed(2)}€ (${summary.count} tx)\n\n`;
+          }
+
+          directResponse += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+          directResponse += '📊 TOTAL CUMULÉ\n';
+          directResponse += `   💰 Recettes totales: ${cumulativeRevenues.toFixed(2)}€\n`;
+          directResponse += `   📊 Total transactions: ${cumulativeCount}`;
+
+          result = {
+            monthly_summaries: monthlySummaries,
+            cumulative: {
+              total_revenues: cumulativeRevenues,
+              total_count: cumulativeCount,
+            },
+            currency: 'EUR',
+            direct_response: directResponse,
+          };
+          break;
+        }
+
         case 'get_monthly_debits': {
-          const debits = await this.bankClient.getDebits();
+          // ✅ CORRECTION: Utiliser des dates précises pour éviter la limite de 120 transactions
           const now = new Date();
-          const monthDebits = debits.filter(tx => {
-            const txDate = new Date(tx.date);
-            return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
-          });
+          const startDate = new Date(now.getFullYear(), now.getMonth(), 1); // 1er du mois
+          const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Dernier jour du mois
+
+          const monthDebits = await this.bankClient.getDebits(startDate, endDate);
           const total = monthDebits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
           result = {
             month: now.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' }),
             total_amount: total,
@@ -1046,6 +1165,120 @@ export class AIAgentServiceV2 {
             total_balance: total,
             last_global_update: balances.lastUpdate,
             currency: 'EUR'
+          };
+          break;
+        }
+
+        case 'get_monthly_summaries': {
+          const months = args.months as string[];
+
+          if (!months || !Array.isArray(months) || months.length === 0) {
+            return JSON.stringify({ error: 'Le paramètre months doit être un tableau non vide de mois au format YYYY-MM' });
+          }
+
+          // Validation : minimum 2 mois requis
+          if (months.length < 2) {
+            return JSON.stringify({
+              error: 'get_monthly_summaries nécessite MINIMUM 2 mois. Pour un seul mois, utilise get_period_transactions.',
+              hint: 'Reformule ta requête avec get_period_transactions pour obtenir les transactions d\'un seul mois.',
+            });
+          }
+
+          // Fonction helper pour parser un mois YYYY-MM
+          const parseMonth = (monthStr: string): { year: number, month: number } | null => {
+            const match = monthStr.match(/^(\d{4})-(\d{1,2})$/);
+            if (!match) return null;
+            return { year: parseInt(match[1]), month: parseInt(match[2]) - 1 }; // month est 0-indexed
+          };
+
+          // Fonction helper pour obtenir le dernier jour du mois
+          const getLastDayOfMonth = (year: number, month: number): number => {
+            return new Date(year, month + 1, 0).getDate();
+          };
+
+          // Fonction helper pour formater un nom de mois
+          const formatMonthName = (year: number, month: number): string => {
+            const date = new Date(year, month, 1);
+            return date.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+          };
+
+          const monthlySummaries = [];
+          let cumulativeCredits = 0;
+          let cumulativeDebits = 0;
+          let cumulativeTransactions = 0;
+
+          // Traiter chaque mois
+          for (const monthStr of months) {
+            const parsed = parseMonth(monthStr);
+            if (!parsed) {
+              return JSON.stringify({ error: `Format de mois invalide: ${monthStr}. Utiliser YYYY-MM (ex: 2025-10)` });
+            }
+
+            const { year, month } = parsed;
+            const startDate = new Date(year, month, 1);
+            const lastDay = getLastDayOfMonth(year, month);
+            const endDate = new Date(year, month, lastDay, 23, 59, 59, 999);
+
+            // Récupérer les transactions pour ce mois
+            const transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
+
+            const credits = transactions.filter(tx => tx.type === 'Credit');
+            const debits = transactions.filter(tx => tx.type === 'Debit');
+
+            const totalCredits = credits.reduce((sum, tx) => sum + tx.amount, 0);
+            const totalDebits = debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+            const balance = totalCredits - totalDebits;
+
+            monthlySummaries.push({
+              month: formatMonthName(year, month),
+              month_key: monthStr,
+              total_transactions: transactions.length,
+              credits: {
+                count: credits.length,
+                total: totalCredits,
+              },
+              debits: {
+                count: debits.length,
+                total: totalDebits,
+              },
+              balance: balance,
+            });
+
+            cumulativeCredits += totalCredits;
+            cumulativeDebits += totalDebits;
+            cumulativeTransactions += transactions.length;
+          }
+
+          const cumulativeBalance = cumulativeCredits - cumulativeDebits;
+
+          // Construire le message formaté
+          let directResponse = '📊 Résumé des balances mensuelles\n\n';
+
+          for (const summary of monthlySummaries) {
+            directResponse += `📅 ${summary.month}\n`;
+            directResponse += `   Total: ${summary.total_transactions} transactions\n`;
+            directResponse += `   💰 Crédits: ${summary.credits.total.toFixed(2)}€ (${summary.credits.count} tx)\n`;
+            directResponse += `   💸 Débits: ${summary.debits.total.toFixed(2)}€ (${summary.debits.count} tx)\n`;
+            directResponse += `   📈 Balance: ${summary.balance.toFixed(2)}€\n\n`;
+          }
+
+          directResponse += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+          directResponse += '📊 TOTAL CUMULÉ\n';
+          directResponse += `   Total: ${cumulativeTransactions} transactions\n`;
+          directResponse += `   💰 Crédits: ${cumulativeCredits.toFixed(2)}€\n`;
+          directResponse += `   💸 Débits: ${cumulativeDebits.toFixed(2)}€\n`;
+          directResponse += `   📈 Balance: ${cumulativeBalance.toFixed(2)}€`;
+
+          result = {
+            monthly_summaries: monthlySummaries,
+            cumulative: {
+              total_transactions: cumulativeTransactions,
+              total_credits: cumulativeCredits,
+              total_debits: cumulativeDebits,
+              balance: cumulativeBalance,
+            },
+            currency: 'EUR',
+            direct_response: directResponse,
           };
           break;
         }
@@ -1086,40 +1319,58 @@ export class AIAgentServiceV2 {
           const totalDebits = debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
           const balance = totalCredits - totalDebits;
 
-          // Générer la liste formatée des transactions
-          // Limiter à 30 transactions pour ne pas dépasser la limite Telegram (4096 caractères)
-          const sortedTransactions = transactions
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          // Détecter si l'utilisateur demande la liste détaillée ou juste le résumé
+          const questionLower = this.currentQuestion.toLowerCase();
+          const wantsDetailedList = questionLower.includes('liste') ||
+                                    questionLower.includes('transactions') ||
+                                    questionLower.includes('détail') ||
+                                    questionLower.includes('détaillé');
 
-          const maxTransactions = 30;
-          const transactionsToShow = sortedTransactions.slice(0, maxTransactions);
-          const hasMore = transactions.length > maxTransactions;
+          let directResponse: string;
 
-          const transactionsList = transactionsToShow
-            .map((tx, index) => {
-              const num = String(index + 1).padStart(3, ' ');
-              const date = new Date(tx.date).toLocaleDateString('fr-BE');
-              const type = tx.type === 'Credit' ? '💰' : '💸';
-              const amount = tx.type === 'Credit'
-                ? `+${tx.amount.toFixed(2)}€`
-                : `-${Math.abs(tx.amount).toFixed(2)}€`;
-              const desc = (tx.description || 'Sans description').substring(0, 100); // Limiter la description
-              return `${num}. ${date} ${type} ${amount}\n     ${desc}`;
-            })
-            .join('\n\n');
+          if (wantsDetailedList || transactions.length <= 10) {
+            // Afficher la liste détaillée si demandée OU si peu de transactions (<=10)
+            const sortedTransactions = transactions
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-          const moreMessage = hasMore
-            ? `\n\n... et ${transactions.length - maxTransactions} autres transactions\n(Affichage limité aux ${maxTransactions} plus récentes)`
-            : '';
+            const maxTransactions = 30;
+            const transactionsToShow = sortedTransactions.slice(0, maxTransactions);
+            const hasMore = transactions.length > maxTransactions;
 
-          const directResponse = `📊 Transactions du ${startDate.toLocaleDateString('fr-BE')} au ${endDate.toLocaleDateString('fr-BE')}\n\n` +
-            `Total: ${transactions.length} transactions\n` +
-            `💰 Crédits: ${totalCredits.toFixed(2)}€ (${credits.length} tx)\n` +
-            `💸 Débits: ${totalDebits.toFixed(2)}€ (${debits.length} tx)\n` +
-            `📈 Balance: ${balance.toFixed(2)}€\n\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            transactionsList +
-            moreMessage;
+            const transactionsList = transactionsToShow
+              .map((tx, index) => {
+                const num = String(index + 1).padStart(3, ' ');
+                const date = new Date(tx.date).toLocaleDateString('fr-BE');
+                const type = tx.type === 'Credit' ? '💰' : '💸';
+                const amount = tx.type === 'Credit'
+                  ? `+${tx.amount.toFixed(2)}€`
+                  : `-${Math.abs(tx.amount).toFixed(2)}€`;
+                const desc = (tx.description || 'Sans description').substring(0, 100);
+                return `${num}. ${date} ${type} ${amount}\n     ${desc}`;
+              })
+              .join('\n\n');
+
+            const moreMessage = hasMore
+              ? `\n\n... et ${transactions.length - maxTransactions} autres transactions\n(Affichage limité aux ${maxTransactions} plus récentes)`
+              : '';
+
+            directResponse = `📊 Transactions du ${startDate.toLocaleDateString('fr-BE')} au ${endDate.toLocaleDateString('fr-BE')}\n\n` +
+              `Total: ${transactions.length} transactions\n` +
+              `💰 Crédits: ${totalCredits.toFixed(2)}€ (${credits.length} tx)\n` +
+              `💸 Débits: ${totalDebits.toFixed(2)}€ (${debits.length} tx)\n` +
+              `📈 Balance: ${balance.toFixed(2)}€\n\n` +
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+              transactionsList +
+              moreMessage;
+          } else {
+            // Afficher uniquement le résumé (pas de liste détaillée)
+            const monthName = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+            directResponse = `📊 Balance de ${monthName}\n\n` +
+              `Total: ${transactions.length} transactions\n` +
+              `💰 Crédits: ${totalCredits.toFixed(2)}€ (${credits.length} tx)\n` +
+              `💸 Débits: ${totalDebits.toFixed(2)}€ (${debits.length} tx)\n` +
+              `📈 Balance: ${balance.toFixed(2)}€`;
+          }
 
           result = {
             period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
@@ -1946,8 +2197,8 @@ export class AIAgentServiceV2 {
           const { matchesSupplier, SUPPLIER_ALIASES } = await import('./supplier-aliases');
           const suppliers = Object.keys(SUPPLIER_ALIASES);
 
-          // Filtrer les dépenses vers fournisseurs (débits uniquement)
-          let supplierExpenses: any[];
+          // Filtrer les transactions du fournisseur (TOUS types : crédit ET débit)
+          let supplierTransactions: any[];
 
           if (args.supplier_name) {
             // Filtrer pour un fournisseur spécifique
@@ -1962,26 +2213,34 @@ export class AIAgentServiceV2 {
             console.log(`🔍 Recherche fournisseur "${searchTerm}": ${matchingSuppliers.length} fournisseur(s) trouvé(s)`);
 
             if (matchingSuppliers.length > 0) {
-              supplierExpenses = transactions.filter(tx => {
-                if (tx.type !== 'Debit') return false;
-                // Vérifier si la transaction correspond à un des fournisseurs trouvés
+              supplierTransactions = transactions.filter(tx => {
+                // ✅ CHANGEMENT: Accepter TOUS les types (Credit et Debit)
                 return matchingSuppliers.some((sup: string) => matchesSupplier(tx.description || '', sup));
               });
             } else {
               // Recherche directe dans les descriptions
-              supplierExpenses = transactions.filter(tx =>
-                tx.type === 'Debit' &&
+              supplierTransactions = transactions.filter(tx =>
                 matchesSupplier(tx.description || '', args.supplier_name)
               );
             }
           } else {
-            // Obtenir TOUTES les dépenses vers fournisseurs connus
-            supplierExpenses = transactions.filter(tx => {
+            // Obtenir TOUTES les transactions vers fournisseurs connus (débits uniquement pour le top global)
+            supplierTransactions = transactions.filter(tx => {
               if (tx.type !== 'Debit') return false;
               // Vérifier si correspond à un fournisseur connu
               return suppliers.some((sup: string) => matchesSupplier(tx.description || '', sup));
             });
           }
+
+          // ✨ DÉTECTION AUTOMATIQUE: Dépenses ou Revenus ?
+          const debits = supplierTransactions.filter(tx => tx.type === 'Debit');
+          const credits = supplierTransactions.filter(tx => tx.type === 'Credit');
+          const totalDebits = debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+          const totalCredits = credits.reduce((sum, tx) => sum + tx.amount, 0);
+
+          // Si plus de crédits que de débits, c'est un partenaire qui verse (revenus)
+          const isRevenuePartner = totalCredits > totalDebits;
+          const supplierExpenses = isRevenuePartner ? credits : debits;
 
           const totalSpent = supplierExpenses.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
@@ -1992,11 +2251,74 @@ export class AIAgentServiceV2 {
           const questionLower = this.currentQuestion.toLowerCase();
           const userAsksForAnalysis = questionLower.includes('analyse') || questionLower.includes('top');
           const isMultiSupplierQuery = !args.supplier_name && supplierExpenses.length > 0;
+          const isSpecificSupplierAnalysis = args.supplier_name && supplierExpenses.length > 0;
 
           let analysisText = '';
           const showSupplierAnalysis = !args.supplier_name && isMultiSupplierQuery;
 
-          if (showSupplierAnalysis) {
+          if (isSpecificSupplierAnalysis) {
+            // ✨ ANALYSE DÉTAILLÉE D'UN FOURNISSEUR SPÉCIFIQUE ✨
+            const amounts = supplierExpenses.map(tx => Math.abs(tx.amount));
+            const minAmount = Math.min(...amounts);
+            const maxAmount = Math.max(...amounts);
+            const avgAmount = totalSpent / supplierExpenses.length;
+
+            // Label adapté selon le type
+            const transactionLabel = isRevenuePartner ? 'versements' : 'paiements';
+            const lastTransactionsLabel = isRevenuePartner ? 'Derniers versements' : 'Derniers paiements';
+
+            // Calculer l'évolution mensuelle
+            const monthlyBreakdown: { [key: string]: { total: number; count: number } } = {};
+            supplierExpenses.forEach(tx => {
+              const monthKey = new Date(tx.date).toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+              if (!monthlyBreakdown[monthKey]) {
+                monthlyBreakdown[monthKey] = { total: 0, count: 0 };
+              }
+              monthlyBreakdown[monthKey].total += Math.abs(tx.amount);
+              monthlyBreakdown[monthKey].count++;
+            });
+
+            // Trier les mois par date
+            const sortedMonths = Object.entries(monthlyBreakdown)
+              .map(([month, data]) => ({ month, ...data }))
+              .sort((a, b) => {
+                // Parser les dates pour les comparer
+                const dateA = new Date(a.month.split(' ').reverse().join('-'));
+                const dateB = new Date(b.month.split(' ').reverse().join('-'));
+                return dateB.getTime() - dateA.getTime(); // Plus récent en premier
+              });
+
+            analysisText = `\n\n📊 ANALYSE DÉTAILLÉE\n\n`;
+            analysisText += `💰 Statistiques:\n`;
+            analysisText += `   • Montant total: ${totalSpent.toFixed(2)}€\n`;
+            analysisText += `   • Nombre de ${transactionLabel}: ${supplierExpenses.length}\n`;
+            analysisText += `   • Montant moyen: ${avgAmount.toFixed(2)}€\n`;
+            analysisText += `   • Montant minimum: ${minAmount.toFixed(2)}€\n`;
+            analysisText += `   • Montant maximum: ${maxAmount.toFixed(2)}€\n`;
+
+            if (sortedMonths.length > 1) {
+              analysisText += `\n📅 Évolution mensuelle:\n`;
+              sortedMonths.forEach(m => {
+                const avgMonth = m.total / m.count;
+                analysisText += `   • ${m.month}: ${m.total.toFixed(2)}€ (${m.count} ${transactionLabel}, moy: ${avgMonth.toFixed(2)}€)\n`;
+              });
+            }
+
+            // Afficher les 10 dernières transactions
+            if (supplierExpenses.length > 0) {
+              const recentPayments = supplierExpenses.slice(0, Math.min(10, supplierExpenses.length));
+              analysisText += `\n💳 ${lastTransactionsLabel}:\n`;
+              recentPayments.forEach((tx, i) => {
+                const date = new Date(tx.date).toLocaleDateString('fr-BE');
+                const amount = Math.abs(tx.amount).toFixed(2);
+                analysisText += `   ${i + 1}. ${date}: ${amount}€\n`;
+              });
+
+              if (supplierExpenses.length > 10) {
+                analysisText += `   ... et ${supplierExpenses.length - 10} autres ${transactionLabel}\n`;
+              }
+            }
+          } else if (showSupplierAnalysis) {
             // Grouper par fournisseur
             const supplierTotals: { [key: string]: { total: number; count: number } } = {};
 
@@ -2085,8 +2407,13 @@ export class AIAgentServiceV2 {
           const isSingleMonthManyExpenses = args.month && supplierExpenses.length > 10;
           const includeDetailedList = !userAsksForTopOnly && !isSingleMonthManyExpenses && (userWantsDetails || isSpecificSupplierSearch);
 
-          let directResponse = `💸 Dépenses fournisseurs de ${periodTitle}\n\n` +
-            `Total: ${totalSpent.toFixed(2)}€ (${supplierExpenses.length} paiements)` +
+          // Adapter le titre selon le type (dépenses ou revenus)
+          const titleIcon = isRevenuePartner ? '💰' : '💸';
+          const titleType = isRevenuePartner ? 'Revenus' : 'Dépenses fournisseurs';
+          const countLabel = isRevenuePartner ? 'versements' : 'paiements';
+
+          let directResponse = `${titleIcon} ${titleType} de ${periodTitle}\n\n` +
+            `Total: ${totalSpent.toFixed(2)}€ (${supplierExpenses.length} ${countLabel})` +
             analysisText;
 
           if (includeDetailedList) {
@@ -3614,6 +3941,28 @@ export class AIAgentServiceV2 {
       if (analyzeExpensesMatch) {
         console.log('🔍 Détection: Analyse de dépenses fournisseurs - ajout d\'un hint pour l\'IA');
         question = `[HINT: L'utilisateur demande une analyse des dépenses fournisseurs. Utiliser analyze_supplier_expenses pour obtenir l'analyse complète avec statistiques.] ${question}`;
+      }
+
+      // ========== DÉTECTIONS POUR LES BALANCES MENSUELLES ==========
+
+      // Détection de demande de balances pour PLUSIEURS mois (minimum 2)
+      // Ex: "balances d'octobre, novembre et décembre", "balances d'octobre et novembre"
+      // Compter le nombre de mois mentionnés avec virgules ou "et"
+      const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+      const mentionedMonths = monthNames.filter(month => questionLower.includes(month));
+      const hasMultipleMonths = mentionedMonths.length >= 2;
+      const hasBalanceKeyword = questionLower.includes('balance');
+      const hasRevenuesKeyword = questionLower.includes('recette') || questionLower.includes('revenue') || questionLower.includes('rentrée');
+
+      if (hasBalanceKeyword && hasMultipleMonths) {
+        console.log(`🔍 Détection: Balances multi-mois (${mentionedMonths.length} mois détectés) - ajout d'un hint pour l'IA`);
+        question = `[HINT: L'utilisateur demande les balances de ${mentionedMonths.length} mois (${mentionedMonths.join(', ')}). Utiliser get_monthly_summaries avec la liste des mois mentionnés (format YYYY-MM). NE PAS utiliser get_period_transactions car l'utilisateur veut un résumé par mois sans liste détaillée des transactions.] ${question}`;
+      }
+
+      // Détection de recettes multi-mois (ex: "recettes des 3 derniers mois", "recettes d'octobre et novembre")
+      if (hasRevenuesKeyword && (hasMultipleMonths || questionLower.match(/\d+\s*(derniers?|précédents?)\s*mois/))) {
+        console.log(`🔍 Détection: Recettes multi-mois - ajout d'un hint pour l'IA`);
+        question = `[HINT: L'utilisateur demande les recettes de PLUSIEURS mois. Utiliser get_multi_month_revenues avec la liste des mois concernés (format YYYY-MM). NE PAS utiliser get_period_transactions.] ${question}`;
       }
 
       // Construire les messages avec l'historique de conversation

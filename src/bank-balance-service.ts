@@ -280,4 +280,11 @@ export class BankBalanceService {
 
     return Object.values(store.accounts).reduce((sum, account) => sum + account.balance, 0);
   }
+
+  /**
+   * Récupère l'instance de BankClient pour accéder aux méthodes bancaires
+   */
+  public getBankClient(): BankClient {
+    return this.bankClient;
+  }
 }

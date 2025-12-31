@@ -367,7 +367,10 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
       inline_keyboard: [
         [
           { text: '📋 Impayées', callback_data: 'unpaid' },
-          { text: '⚠️ En retard', callback_data: 'overdue' },
+          { text: '⚠️ En retard', callback_data: 'overdue' }
+        ],
+        [
+          { text: '📅 Échéances', callback_data: 'due' },
           { text: '📊 Stats', callback_data: 'stats' }
         ],
         [

@@ -59,6 +59,9 @@ export class CommandHandler {
       case 'overdue':
         return this.handleOverdue();
 
+      case 'due':
+        return this.handleDueInvoices();
+
       case 'stats':
         return this.handleStats();
 
@@ -361,36 +364,170 @@ ${lines.join('\n')}
   }
 
   /**
+   * Liste les factures à échéance (impayées avec échéance dans les 15 prochains jours)
+   */
+  private async handleDueInvoices(): Promise<string> {
+    try {
+      // Récupérer toutes les factures impayées via la méthode dédiée
+      const unpaidInvoices = await this.billitClient.getUnpaidInvoices();
+
+      // Filtrer les factures avec échéance dans les 15 prochains jours
+      const now = new Date();
+      const fifteenDaysLater = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+
+      const dueInvoices = unpaidInvoices.filter(inv => {
+        if (!inv.due_date) return false;
+        const dueDate = new Date(inv.due_date);
+        // Échéance entre maintenant et dans 15 jours
+        return dueDate >= now && dueDate <= fifteenDaysLater;
+      });
+
+      // Trier par date d'échéance (plus proche en premier)
+      dueInvoices.sort((a, b) => {
+        const dateA = new Date(a.due_date).getTime();
+        const dateB = new Date(b.due_date).getTime();
+        return dateA - dateB;
+      });
+
+      if (dueInvoices.length === 0) {
+        return '✅ Aucune facture à échéance dans les 15 prochains jours !';
+      }
+
+      let total = 0;
+      const lines = dueInvoices.map((inv, idx) => {
+        total += inv.total_amount;
+        const amount = this.formatAmount(inv.total_amount, inv.currency);
+        const daysUntilDue = Math.ceil(
+          (new Date(inv.due_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        const dueText = daysUntilDue === 0 ? 'Aujourd\'hui' :
+                        daysUntilDue === 1 ? 'Demain' :
+                        `Dans ${daysUntilDue}j`;
+
+        const icon = daysUntilDue <= 3 ? '🔴' : daysUntilDue <= 7 ? '🟠' : '🟡';
+
+        return `${idx + 1}. <b>${inv.supplier_name}</b> - ${amount} - ${icon} <b>${dueText}</b>`;
+      });
+
+      const totalFormatted = this.formatAmount(total, dueInvoices[0]?.currency || 'EUR');
+
+      return `
+━━━━━━━━━━━━━━━━━━━━━━
+📅 <b>FACTURES À ÉCHÉANCE</b>
+━━━━━━━━━━━━━━━━━━━━━━
+<i>Prochains 15 jours</i>
+
+${lines.join('\n')}
+
+━━━━━━━━━━━━━━━━━━━━━━
+💰 <b>TOTAL: ${totalFormatted}</b>
+   (${dueInvoices.length} facture${dueInvoices.length > 1 ? 's' : ''})
+      `.trim();
+    } catch (error: any) {
+      console.error('Erreur handleDueInvoices:', error);
+      return `❌ Erreur lors de la récupération: ${error.message}`;
+    }
+  }
+
+  /**
    * Affiche les statistiques du mois
    */
   private async handleStats(): Promise<string> {
     try {
-      const stats = await this.billitClient.getMonthlyStats();
       const now = new Date();
       const monthName = now.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
 
+      // Stats du mois en cours
+      const stats = await this.billitClient.getMonthlyStats();
+
+      // Stats bancaires du mois (recettes/dépenses)
+      const bankStats = await this.bankBalanceService.getBankClient().getMonthlyStats();
+
+      // Factures en retard
+      const overdueInvoices = await this.billitClient.getOverdueInvoices();
+
+      // Toutes les factures récentes pour analyse par fournisseur
+      const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+
+      // Calculer montant moyen par facture
+      const avgAmount = stats.count > 0 ? stats.total / stats.count : 0;
+
+      // Analyse par fournisseur (top 5 du mois)
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthInvoices = allInvoices.filter(inv => {
+        const invDate = new Date(inv.invoice_date);
+        return invDate >= monthStart;
+      });
+
+      const supplierTotals = new Map<string, number>();
+      monthInvoices.forEach((inv: any) => {
+        const supplier = inv.supplier_name || 'Inconnu';
+        const current = supplierTotals.get(supplier) || 0;
+        supplierTotals.set(supplier, current + inv.total_amount);
+      });
+
+      const topSuppliers = Array.from(supplierTotals.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
+      // Calculer le bénéfice net
+      const profit = bankStats.balance;
+      const profitIcon = profit >= 0 ? '📈' : '📉';
+
+      // Formater les montants
       const totalFormatted = this.formatAmount(stats.total, 'EUR');
       const paidFormatted = this.formatAmount(stats.paid, 'EUR');
       const unpaidFormatted = this.formatAmount(stats.unpaid, 'EUR');
+      const avgFormatted = this.formatAmount(avgAmount, 'EUR');
+      const revenuesFormatted = this.formatAmount(bankStats.credits, 'EUR');
+      const expensesFormatted = this.formatAmount(bankStats.debits, 'EUR');
+      const profitFormatted = this.formatAmount(profit, 'EUR');
 
-      return `
+      let result = `
 ━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>STATISTIQUES DU MOIS</b>
 ━━━━━━━━━━━━━━━━━━━━━━
 📅 <b>${monthName}</b>
 
-📋 <b>Total des factures:</b> ${stats.count}
-
-✅ <b>Factures payées:</b> ${stats.paidCount} facture${stats.paidCount > 1 ? 's' : ''}
-   💰 Montant: ${paidFormatted}
-
-⏳ <b>Factures impayées:</b> ${stats.unpaidCount} facture${stats.unpaidCount > 1 ? 's' : ''}
-   💰 Montant: ${unpaidFormatted}
+💰 <b>SANTÉ FINANCIÈRE</b>
+   💵 Recettes: ${revenuesFormatted} (${bankStats.creditCount} tx)
+   💸 Dépenses: ${expensesFormatted} (${bankStats.debitCount} tx)
+   ${profitIcon} <b>Bénéfice: ${profitFormatted}</b>
 
 ━━━━━━━━━━━━━━━━━━━━━━
-💰 <b>MONTANT TOTAL DU MOIS: ${totalFormatted}</b>
+
+📋 <b>FACTURES FOURNISSEURS</b>
+   Total: ${stats.count} factures (Moy: ${avgFormatted})
+
+   ✅ Payées: ${stats.paidCount} factures
+      💰 ${paidFormatted}
+
+   ⏳ Impayées: ${stats.unpaidCount} factures
+      💰 ${unpaidFormatted}
+
 ━━━━━━━━━━━━━━━━━━━━━━
-      `.trim();
+💰 <b>TOTAL FACTURES: ${totalFormatted}</b>
+━━━━━━━━━━━━━━━━━━━━━━
+`;
+
+      // Ajouter top fournisseurs si disponible
+      if (topSuppliers.length > 0) {
+        result += `\n🏪 <b>TOP 5 FOURNISSEURS DU MOIS</b>\n`;
+        topSuppliers.forEach(([supplier, amount], i) => {
+          const icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+          result += `${icon} ${supplier}: ${this.formatAmount(amount, 'EUR')}\n`;
+        });
+      }
+
+      // Ajouter factures en retard si présentes
+      if (overdueInvoices.length > 0) {
+        const overdueTotal = overdueInvoices.reduce((sum, inv) => sum + inv.total_amount, 0);
+        result += `\n⚠️ <b>FACTURES EN RETARD</b>\n`;
+        result += `${overdueInvoices.length} factures (${this.formatAmount(overdueTotal, 'EUR')})\n`;
+      }
+
+      return result.trim();
     } catch (error: any) {
       console.error('Erreur handleStats:', error);
       return `❌ Erreur lors de la récupération: ${error.message}`;
