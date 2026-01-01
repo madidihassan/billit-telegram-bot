@@ -9,24 +9,24 @@ Ce système gère **deux sociétés différentes** avec le **même code source**
 ### 1. Tonton202
 - **Bot Telegram** : `@HM205_bot`
 - **Token** : `7796037845:AAE4t4zs80j7F8a0G7sAH01WxD4_J6xS8UM`
-- **Chemin projet** : `/home/ubuntu/Billit/tonton202`
+- **Chemin projet** : `/home/ubuntu/Billit/bot_tonton202`
 - **Utilisateurs autorisés** :
   - Hassan (Chat ID: 7887749968)
   - Soufiane (Chat ID: 8006682970)
   - Loubna (Chat ID: 6542906157)
 - **Fournisseurs** : 81 fournisseurs enregistrés
-- **Base de données** : `/home/ubuntu/Billit/tonton202/supplier-aliases.json`
+- **Base de données** : `/home/ubuntu/Billit/bot_tonton202/supplier-aliases.json`
 
 ### 2. MustFood
 - **Bot Telegram** : `@MustFood_bot`
 - **Token** : `7582823949:AAFb-MP7UVX7f-JgO8aKwoilHw5yy2AxIuI`
-- **Chemin projet** : `/home/ubuntu/Billit/mustfood`
+- **Chemin projet** : `/home/ubuntu/Billit/bot_mustfood`
 - **Utilisateurs autorisés** :
   - Smail (Chat ID: 1082592606)
   - Hassan (Chat ID: 7887749968)
   - Yousra (Chat ID: 7896989437)
 - **Fournisseurs** : 96 fournisseurs enregistrés
-- **Base de données** : `/home/ubuntu/Billit/mustfood/supplier-aliases.json`
+- **Base de données** : `/home/ubuntu/Billit/bot_mustfood/supplier-aliases.json`
 
 ## 🔗 Éléments partagés
 
@@ -55,17 +55,17 @@ Le code source étant partagé, toute modification doit être **répliquée** da
 
 ```bash
 # 1. Modifier le code dans UN des projets (ex: tonton202)
-cd /home/ubuntu/Billit/tonton202/src
+cd /home/ubuntu/Billit/bot_tonton202/src
 # ... faire les modifications ...
 
 # 2. Compiler
 npm run build
 
 # 3. Copier les modifications vers l'autre projet
-cp -r src/*.ts /home/ubuntu/Billit/mustfood/src/
+cp -r src/*.ts /home/ubuntu/Billit/bot_mustfood/src/
 
 # 4. Compiler l'autre projet
-cd /home/ubuntu/Billit/mustfood
+cd /home/ubuntu/Billit/bot_mustfood
 npm run build
 
 # 5. Redémarrer les deux bots
@@ -96,13 +96,13 @@ npm run build
 
 **Tonton202 (@HM205_bot)** :
 ```bash
-cd /home/ubuntu/Billit/tonton202
+cd /home/ubuntu/Billit/bot_tonton202
 ./start-bot-wrapper.sh > bot.log 2>&1 &
 ```
 
 **MustFood (@MustFood_bot)** :
 ```bash
-cd /home/ubuntu/Billit/mustfood
+cd /home/ubuntu/Billit/bot_mustfood
 ./start-bot-wrapper.sh > bot.log 2>&1 &
 ```
 
@@ -114,8 +114,8 @@ pkill -f "7796037845"  # Arrêter @HM205_bot
 pkill -f "7582823949"  # Arrêter @MustFood_bot
 
 # OU arrêter tous les bots d'un projet
-pkill -9 -f "/home/ubuntu/Billit/tonton202.*dist/index-bot"
-pkill -9 -f "/home/ubuntu/Billit/mustfood.*dist/index-bot"
+pkill -9 -f "/home/ubuntu/Billit/bot_tonton202.*dist/index-bot"
+pkill -9 -f "/home/ubuntu/Billit/bot_mustfood.*dist/index-bot"
 ```
 
 ### Vérifier si les bots tournent
@@ -157,13 +157,13 @@ Chaque société peut ajouter ses propres fournisseurs :
 
 **Tonton202** :
 ```bash
-cd /home/ubuntu/Billit/tonton202
+cd /home/ubuntu/Billit/bot_tonton202
 npx ts-node add-supplier.ts "Nouveau Fournisseur"
 ```
 
 **MustFood** :
 ```bash
-cd /home/ubuntu/Billit/mustfood
+cd /home/ubuntu/Billit/bot_mustfood
 npx ts-node add-supplier.ts "Nouveau Fournisseur"
 ```
 
@@ -215,7 +215,7 @@ Pour ajouter un nouveau bot pour une autre société :
 
 2. **Dupliquer le projet**
    ```bash
-   cp -r /home/ubuntu/Billit/tonton202 /home/ubuntu/Billit/nouvelle-societe
+   cp -r /home/ubuntu/Billit/bot_tonton202 /home/ubuntu/Billit/nouvelle-societe
    cd /home/ubuntu/Billit/nouvelle-societe
    ```
 
@@ -239,8 +239,8 @@ Pour ajouter un nouveau bot pour une autre société :
 - **Développeur** : Hassan (Chat ID: 7887749968)
 - **Documentation** : Ce fichier + `CLAUDE.md`
 - **Projets** :
-  - Tonton202 : `/home/ubuntu/Billit/tonton202`
-  - MustFood : `/home/ubuntu/Billit/mustfood`
+  - Tonton202 : `/home/ubuntu/Billit/bot_tonton202`
+  - MustFood : `/home/ubuntu/Billit/bot_mustfood`
 
 ---
 

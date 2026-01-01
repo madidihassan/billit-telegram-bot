@@ -20,7 +20,7 @@ Les noms d'employés étaient stockés sans espaces dans la base de données (ex
 Si vous devez appliquer les mêmes corrections sur mustfood :
 
 ```bash
-cd /home/ubuntu/Billit/mustfood
+cd /home/ubuntu/Billit/bot_mustfood
 
 # 1. Inspecter les noms actuels
 npx ts-node inspect-employees.ts
@@ -35,7 +35,7 @@ npx ts-node remove-duplicates.ts
 npx ts-node inspect-employees.ts
 
 # 5. Redémarrer le bot
-pkill -f "/home/ubuntu/Billit/mustfood.*node.*dist/index-bot"
+pkill -f "/home/ubuntu/Billit/bot_mustfood.*node.*dist/index-bot"
 ./start-bot-wrapper.sh &
 ```
 

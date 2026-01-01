@@ -5,8 +5,8 @@
 
 const Database = require('better-sqlite3');
 
-const tontonDB = new Database('/home/ubuntu/Billit/tonton202/data/billit.db');
-const mustfoodDB = new Database('/home/ubuntu/Billit/mustfood/data/billit.db');
+const tontonDB = new Database('/home/ubuntu/Billit/bot_tonton202/data/billit.db');
+const mustfoodDB = new Database('/home/ubuntu/Billit/bot_mustfood/data/billit.db');
 
 console.log('🔄 Synchronisation des fournisseurs tonton202 → mustfood\n');
 
