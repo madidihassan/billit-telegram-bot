@@ -64,8 +64,8 @@ ps aux | grep "node dist/index-bot" | grep -v grep
 pwdx <PID>  # Affiche le répertoire de travail du processus
 
 # Tuer un bot spécifique
-pkill -f "/home/ubuntu/Billit/tonton202.*node.*dist/index-bot"  # Tonton202
-pkill -f "/home/ubuntu/Billit/mustfood.*node.*dist/index-bot"   # Mustfood
+pkill -f "/home/ubuntu/Billit/bot_tonton202.*node.*dist/index-bot"  # Tonton202
+pkill -f "/home/ubuntu/Billit/bot_mustfood.*node.*dist/index-bot"   # Mustfood
 
 # Tuer tous les bots Telegram
 pkill -f "/home/ubuntu/Billit.*node.*dist/index-bot"
@@ -444,10 +444,10 @@ cd /home/ubuntu/Billit/mustfood
 **.env manquant sur mustfood** :
 ```bash
 # Copier le template
-cp /home/ubuntu/Billit/tonton202/.env.example /home/ubuntu/Billit/mustfood/.env
+cp /home/ubuntu/Billit/bot_tonton202/.env.example /home/ubuntu/Billit/bot_mustfood/.env
 
 # Éditer avec les valeurs Mustfood
-vim /home/ubuntu/Billit/mustfood/.env
+vim /home/ubuntu/Billit/bot_mustfood/.env
 ```
 
 ### ⚡ Raccourcis

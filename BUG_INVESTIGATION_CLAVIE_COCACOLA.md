@@ -71,7 +71,7 @@ const clavieId = db.addSupplier('Clavie', clavieAliases, 'fournisseur');
 npm run build
 
 # Arrêt des processus
-pkill -f "/home/ubuntu/Billit/tonton202.*node.*dist/index-bot"
+pkill -f "/home/ubuntu/Billit/bot_tonton202.*node.*dist/index-bot"
 
 # Redémarrage (force le rechargement du cache)
 ./start-bot-wrapper.sh &
@@ -190,11 +190,11 @@ Bot redémarré avec PID: 2768393
 
 ## Fichiers Modifiés
 
-- `/home/ubuntu/Billit/tonton202/data/billit.db` - Base de données SQLite
+- `/home/ubuntu/Billit/bot_tonton202/data/billit.db` - Base de données SQLite
   - Coca-Cola: ID 14 → 83
   - Clavie: ID 12 → 84
 
-- `/home/ubuntu/Billit/tonton202/dist/supplier-aliases.js` - Cache recompilé
+- `/home/ubuntu/Billit/bot_tonton202/dist/supplier-aliases.js` - Cache recompilé
 
 ## Commit Git
 

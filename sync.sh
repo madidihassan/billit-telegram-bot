@@ -145,9 +145,9 @@ echo "📦 ÉTAPE 7: Déploiement développement ${TARGET_NAME}"
 echo "────────────────────────────────────────────────────────────"
 
 if [ "$TARGET_BRANCH" = "mustfood" ]; then
-    DEV_PATH="/home/ubuntu/Billit/mustfood"
+    DEV_PATH="/home/ubuntu/Billit/bot_mustfood"
 elif [ "$TARGET_BRANCH" = "main" ]; then
-    DEV_PATH="/home/ubuntu/Billit/tonton202"
+    DEV_PATH="/home/ubuntu/Billit/bot_tonton202"
 fi
 
 if [ -d "$DEV_PATH" ]; then
@@ -172,7 +172,7 @@ if [ -d "$DEV_PATH" ]; then
         error "Échec de la compilation TypeScript"
         error "Le bot existant ne sera PAS arrêté pour éviter une interruption de service"
         warning "Veuillez corriger les erreurs de compilation et relancer sync"
-        cd /home/ubuntu/Billit/tonton202
+        cd /home/ubuntu/Billit/bot_tonton202
         git checkout "$CURRENT_BRANCH"
         exit 1
     fi
@@ -208,7 +208,7 @@ if [ -d "$DEV_PATH" ]; then
     else
         error "Échec du redémarrage du bot ${TARGET_NAME}"
         error "Vérifiez les logs: tail -f $DEV_PATH/mustfood-bot.log"
-        cd /home/ubuntu/Billit/tonton202
+        cd /home/ubuntu/Billit/bot_tonton202
         git checkout "$CURRENT_BRANCH"
         exit 1
     fi
@@ -224,7 +224,7 @@ echo "────────────────────────�
 echo "🔙 RETOUR À LA BRANCHE D'ORIGINE"
 echo "────────────────────────────────────────────────────────────"
 
-cd /home/ubuntu/Billit/tonton202
+cd /home/ubuntu/Billit/bot_tonton202
 git checkout "$CURRENT_BRANCH"
 success "Retour à la branche ${CURRENT_BRANCH}"
 
