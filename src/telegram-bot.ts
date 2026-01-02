@@ -128,6 +128,10 @@ export class TelegramBotInteractive {
         if (command === 'menu') {
           this.waitingForInput = null;
           response = await this.commandHandler.handleCommand('help', []);
+        } else if (command === 'show_guide') {
+          this.waitingForInput = null;
+          await this.showUserGuide();
+          return;
         } else if (command === 'ai_tools') {
           this.waitingForInput = null;
           response = await this.getAIToolsList();
@@ -187,11 +191,16 @@ export class TelegramBotInteractive {
 
       try {
         const response = await this.commandHandler.handleCommand(command, args);
-        
+
         // Capturer le contexte
         this.captureInvoiceContext(command, args, response);
-        
-        await this.sendMessageWithButtons(response);
+
+        // Cas spécial pour /help : envoyer avec le clavier personnalisé
+        if (command === 'help') {
+          await this.sendHelpMessage();
+        } else {
+          await this.sendMessageWithButtons(response);
+        }
       } catch (error: any) {
         console.error('Erreur lors du traitement de la commande:', error);
         const safeMessage = sanitizeError(error, 'Une erreur est survenue lors de l\'exécution de la commande');
@@ -385,6 +394,100 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
   }
 
   /**
+   * Envoie le message d'aide avec le bouton Guide complet
+   */
+  private async sendHelpMessage(): Promise<void> {
+    const response = await this.commandHandler.handleCommand('help', []);
+
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '📋 Factures impayées', callback_data: 'unpaid' },
+          { text: '⚠️ Factures en retard', callback_data: 'overdue' }
+        ],
+        [
+          { text: '📊 Statistiques', callback_data: 'stats' },
+          { text: '🔍 Rechercher', callback_data: 'search_prompt' }
+        ],
+        [
+          { text: '📖 Guide complet', callback_data: 'show_guide' },
+          { text: '🤖 Outils IA', callback_data: 'ai_tools' }
+        ],
+        [
+          { text: '❓ Aide', callback_data: 'menu' }
+        ]
+      ]
+    };
+
+    await this.bot.sendMessage(this.currentChatId, response, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: keyboard
+    });
+  }
+
+  /**
+   * Affiche le guide utilisateur complet
+   */
+  private async showUserGuide(): Promise<void> {
+    try {
+      // Version condensée du guide pour tenir dans la limite Telegram
+      const guideText = `📖 <b>GUIDE UTILISATEUR - QUESTIONS FRÉQUENTES</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>📋 FACTURES</b>
+• "Quelles factures sont impayées ?"
+• "Factures de plus de 3000€"
+• "Cherche les factures de Foster"
+• "Factures de Sligro en novembre"
+• "Factures de Colruyt et Makro"
+
+<b>🏢 FOURNISSEURS</b>
+• "Top 10 fournisseurs"
+• "Analyse les dépenses chez Sligro"
+• "Compare Colruyt et Sligro"
+• "Combien j'ai dépensé chez Uber Eats ?"
+• "Liste tous les fournisseurs"
+
+<b>💵 SALAIRES</b>
+• "Salaire de Mokhlis Jamhoun"
+• "Top 10 des employés les mieux payés"
+• "Analyse les salaires de décembre"
+• "Compare Mokhlis et Soufiane"
+• "Salaires entre octobre et décembre"
+
+<b>🏦 BANQUE</b>
+• "Balance du mois de décembre"
+• "Montre les dernières transactions"
+• "Solde du compte Europabank"
+• "Total des dépenses du mois"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>💡 CONSEILS</b>
+• Utilisez "et" pour plusieurs fournisseurs
+• Précisez l'année si nécessaire
+• Vous pouvez envoyer des messages vocaux !
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+      await this.bot.sendMessage(this.currentChatId, guideText, {
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Retour', callback_data: 'menu' }]
+          ]
+        }
+      });
+    } catch (error: any) {
+      console.error('Erreur lors de l\'affichage du guide:', error);
+      await this.sendMessage('❌ Erreur lors de l\'affichage du guide.');
+    }
+  }
+
+  /**
    * Génère la liste des outils IA disponibles
    */
   private async getAIToolsList(): Promise<string> {
@@ -451,12 +554,40 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
     try {
       const MAX_LENGTH = 4096;
 
+      // Déterminer le clavier à utiliser
+      let keyboard = this.getNavigationKeyboard();
+
+      // Si c'est la commande /help, ajouter le bouton Guide complet
+      const isHelpMessage = text.includes("Billit Bot - Guide d'utilisation") || text.includes('MODE CONVERSATIONNEL');
+      if (isHelpMessage) {
+        console.log('🎨 Détection message /help - utilisation du clavier personnalisé avec bouton Guide');
+        keyboard = {
+          inline_keyboard: [
+            [
+              { text: '📋 Factures impayées', callback_data: 'unpaid' },
+              { text: '⚠️ Factures en retard', callback_data: 'overdue' }
+            ],
+            [
+              { text: '📊 Statistiques', callback_data: 'stats' },
+              { text: '🔍 Rechercher', callback_data: 'search_prompt' }
+            ],
+            [
+              { text: '📖 Guide complet', callback_data: 'show_guide' },
+              { text: '🤖 Outils IA', callback_data: 'ai_tools' }
+            ],
+            [
+              { text: '❓ Aide', callback_data: 'menu' }
+            ]
+          ]
+        };
+      }
+
       // Si le message est court, l'envoyer tel quel
       if (text.length <= MAX_LENGTH) {
         await this.bot.sendMessage(this.currentChatId, text, {
           parse_mode: 'HTML',
           disable_web_page_preview: true,
-          reply_markup: this.getNavigationKeyboard()
+          reply_markup: keyboard
         });
         return;
       }
@@ -498,7 +629,7 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
           parse_mode: 'HTML',
           disable_web_page_preview: true,
           // N'afficher les boutons que sur le dernier message
-          reply_markup: isLast ? this.getNavigationKeyboard() : undefined
+          reply_markup: isLast ? keyboard : undefined
         });
 
         // Petite pause entre les messages pour éviter le rate limiting
