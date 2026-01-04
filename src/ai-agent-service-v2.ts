@@ -102,13 +102,17 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_recent_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les N dernières factures RÉELLES triées par date (les plus récentes en premier). Tu DOIS appeler cet outil pour: "les 5 dernières factures", "dernières factures", "factures récentes", "les 10 dernières". Cette fonction retourne TOUTES les factures (payées ET impayées) triées par date de facture.',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les N dernières factures RÉELLES triées par date (les plus récentes en premier). Tu DOIS appeler cet outil pour: "les 5 dernières factures", "dernières factures", "factures récentes", "les 10 dernières", "les 3 dernières factures de Coca-Cola". Cette fonction retourne les factures (payées ET impayées) triées par date de facture. Si un fournisseur est mentionné, utilise supplier_name.',
           parameters: {
             type: 'object',
             properties: {
               limit: {
                 type: 'number',
                 description: 'Nombre de factures à retourner (par défaut 5)',
+              },
+              supplier_name: {
+                type: 'string',
+                description: 'Nom du fournisseur pour filtrer les factures (ex: "Coca-Cola", "Foster"). Utilise ce paramètre si l\'utilisateur mentionne un fournisseur spécifique.',
               },
             },
             required: [],
@@ -897,6 +901,7 @@ export class AIAgentServiceV2 {
         case 'get_recent_invoices': {
           try {
             const limit = (args.limit as number) || 5;
+            const supplierName = args.supplier_name as string | undefined;
 
             // Récupérer toutes les factures (Max 120 pour l'API Billit)
             const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
@@ -909,10 +914,18 @@ export class AIAgentServiceV2 {
               break;
             }
 
-            console.log(`📊 get_recent_invoices: ${allInvoices.length} factures récupérées, demande de ${limit}`);
+            console.log(`📊 get_recent_invoices: ${allInvoices.length} factures récupérées, demande de ${limit}${supplierName ? ` pour ${supplierName}` : ''}`);
+
+            // Filtrer par fournisseur si spécifié
+            let filteredInvoices = allInvoices;
+            if (supplierName) {
+              const { matchesSupplier } = await import('./supplier-aliases');
+              filteredInvoices = allInvoices.filter(inv => matchesSupplier(inv.supplier_name, supplierName));
+              console.log(`🔍 Filtrage par fournisseur "${supplierName}": ${filteredInvoices.length} factures trouvées`);
+            }
 
             // Filtrer les factures avec une date valide et trier par date (la plus récente en premier)
-            const sortedInvoices = allInvoices
+            const sortedInvoices = filteredInvoices
               .filter(inv => inv.invoice_date && !isNaN(new Date(inv.invoice_date).getTime()))
               .sort((a, b) => {
                 const dateA = new Date(a.invoice_date).getTime();
@@ -4667,6 +4680,37 @@ export class AIAgentServiceV2 {
         question = `[HINT: L'utilisateur demande une analyse des dépenses fournisseurs. Utiliser analyze_supplier_expenses pour obtenir l'analyse complète avec statistiques.] ${question}`;
       }
 
+      // ========== DÉTECTIONS POUR "X DERNIÈRES FACTURES" ==========
+      // Détection de "X dernières factures", "les X dernières", "factures récentes", etc.
+      // Ex: "les 3 dernières factures", "donne-moi les 5 dernières factures", "factures récentes"
+      // Mapping des nombres en lettres vers chiffres
+      const numberWords: { [key: string]: string } = {
+        'une': '1', 'un': '1', 'deux': '2', 'trois': '3', 'quatre': '4', 'cinq': '5',
+        'six': '6', 'sept': '7', 'huit': '8', 'neuf': '9', 'dix': '10'
+      };
+
+      // Chercher d'abord les chiffres, puis les mots
+      let limit = '10';
+      const digitMatch = question.match(/(\d+)\s+derni[èe]res?\s+factures|les?\s+(\d+)\s+derni[èe]res?/i);
+      if (digitMatch) {
+        limit = digitMatch[1] || digitMatch[2] || '10';
+      } else {
+        // Chercher les nombres en lettres avant "dernières factures"
+        for (const [word, num] of Object.entries(numberWords)) {
+          if (questionLower.includes(word + ' dernières') || questionLower.includes(word + ' derniere')) {
+            limit = num;
+            break;
+          }
+        }
+      }
+
+      const lastInvoicesPattern = /(\d+|\w+)\s+derni[èe]res?\s+factures|les?\s+(\d+|\w+)\s+derni[èe]res?|factures?\s+r[ée]centes?|derni[èe]res?\s+factures/i;
+      const lastInvoicesMatch = question.match(lastInvoicesPattern);
+      if (lastInvoicesMatch && !questionLower.includes('analyse') && !questionLower.includes('dépense')) {
+        console.log(`🔍 Détection: ${limit} dernières factures demandées - ajout d'un hint pour l'IA`);
+        question = `[HINT: CRITIQUE - L'utilisateur demande les ${limit} DERNIÈRES FACTURES (pas une analyse). Tu DOIS utiliser get_last_n_invoices avec limit=${limit}. NE PAS utiliser analyze_supplier_expenses ni get_period_transactions. Si un fournisseur est mentionné, l'ajouter au paramètre supplier_name.] ${question}`;
+      }
+
       // ========== DÉTECTIONS POUR LES BALANCES MENSUELLES ==========
 
       // Détection de demande de balances pour PLUSIEURS mois (minimum 2)
@@ -4687,6 +4731,23 @@ export class AIAgentServiceV2 {
       if (hasRevenuesKeyword && (hasMultipleMonths || questionLower.match(/\d+\s*(derniers?|précédents?)\s*mois/))) {
         console.log(`🔍 Détection: Recettes multi-mois - ajout d'un hint pour l'IA`);
         question = `[HINT: L'utilisateur demande les recettes de PLUSIEURS mois. Utiliser get_multi_month_revenues avec la liste des mois concernés (format YYYY-MM). NE PAS utiliser get_period_transactions.] ${question}`;
+      }
+
+      // ========== DÉTECTION DE LA BALANCE ANNUELLE ==========
+      // Détection de demande de balance pour une année complète (ex: "balance de 2025", "balance de l'année 2025")
+      const annualBalancePattern = /balance.*?(?:de\s+l'année\s+)?(\d{4})|balance\s+(?:de\s+)?l'année\s+(\d{4})/i;
+      const annualBalanceMatch = question.match(annualBalancePattern);
+      if (annualBalanceMatch && !hasMultipleMonths) {
+        // Extraire l'année
+        const year = annualBalanceMatch[1] || annualBalanceMatch[2];
+        console.log(`🔍 Détection: Balance annuelle pour ${year} - ajout d'un hint pour l'IA`);
+        question = `[HINT: CRITIQUE - L'utilisateur demande la balance de l'année ${year} COMPLÈTE. Tu DOIS utiliser get_period_transactions avec:
+- start_date: "${year}-01-01"
+- end_date: "${year}-12-31"
+- NE PAS utiliser de filtre_type (pour avoir les crédits ET débits)
+- NE PAS utiliser de limite (laisser la pagination récupérer toutes les transactions)
+- La réponse doit montrer TOUTES les transactions de l'année ${year}, pas seulement quelques-unes.
+] ${question}`;
       }
 
       // ========== DÉTECTION DE LA PAGINATION ==========
