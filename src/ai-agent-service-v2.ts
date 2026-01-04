@@ -102,13 +102,17 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_recent_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les N dernières factures RÉELLES triées par date (les plus récentes en premier). Tu DOIS appeler cet outil pour: "les 5 dernières factures", "dernières factures", "factures récentes", "les 10 dernières". Cette fonction retourne TOUTES les factures (payées ET impayées) triées par date de facture.',
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les N dernières factures RÉELLES triées par date (les plus récentes en premier). Tu DOIS appeler cet outil pour: "les 5 dernières factures", "dernières factures", "factures récentes", "les 10 dernières", "les 3 dernières factures de Coca-Cola". Cette fonction retourne les factures (payées ET impayées) triées par date de facture. Si un fournisseur est mentionné, utilise supplier_name.',
           parameters: {
             type: 'object',
             properties: {
               limit: {
                 type: 'number',
                 description: 'Nombre de factures à retourner (par défaut 5)',
+              },
+              supplier_name: {
+                type: 'string',
+                description: 'Nom du fournisseur pour filtrer les factures (ex: "Coca-Cola", "Foster"). Utilise ce paramètre si l\'utilisateur mentionne un fournisseur spécifique.',
               },
             },
             required: [],
@@ -170,15 +174,41 @@ export class AIAgentServiceV2 {
         function: {
           name: 'get_monthly_balance',
           description: '⚠️ APPEL OBLIGATOIRE: Obtenir la balance bancaire RÉELLE du mois (recettes - dépenses). Tu DOIS appeler cet outil pour TOUTE question sur la balance, solde ou résultat du mois. Ne JAMAIS calculer ou inventer. Exemples: "Balance du mois?", "Solde bancaire?", "Résultat mensuel?"',
-          parameters: { type: 'object', properties: {}, required: [] },
+          parameters: {
+            type: 'object',
+            properties: {
+              month: {
+                type: 'string',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie un mois (ex: "décembre", "novembre", "12", "11"). Mois à analyser.',
+              },
+              year: {
+                type: 'string',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année (ex: "2025", "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur.',
+              },
+            },
+            required: [],
+          },
         },
       },
       {
         type: 'function',
         function: {
           name: 'get_monthly_credits',
-          description: '⚠️ APPEL OBLIGATOIRE pour UN SEUL mois (mois en cours). Obtenir le total RÉEL des recettes/rentrées du mois en cours. Pour PLUSIEURS mois ou "derniers X mois", utilise get_multi_month_revenues. Ne JAMAIS inventer de montant. Exemples: "Recettes du mois?", "Total rentrées?", "Combien d\'entrées?"',
-          parameters: { type: 'object', properties: {}, required: [] },
+          description: '⚠️ APPEL OBLIGATOIRE pour UN SEUL mois. Obtenir le total RÉEL des recettes/rentrées d\'un mois spécifique. Pour PLUSIEURS mois ou "derniers X mois", utilise get_multi_month_revenues. Ne JAMAIS inventer de montant. Exemples: "Recettes de décembre?", "Total rentrées décembre 2025?", "Combien d\'entrées en novembre?"',
+          parameters: {
+            type: 'object',
+            properties: {
+              month: {
+                type: 'string',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie un mois (ex: "décembre", "novembre", "12", "11"). Mois à analyser.',
+              },
+              year: {
+                type: 'string',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année (ex: "2025", "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur.',
+              },
+            },
+            required: [],
+          },
         },
       },
       {
@@ -203,8 +233,21 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_monthly_debits',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir le total RÉEL des dépenses/sorties du mois. Tu DOIS appeler cet outil pour TOUTE question sur les dépenses, sorties ou débits. Ne JAMAIS inventer de montant. Exemples: "Dépenses du mois?", "Total sorties?", "Combien de débits?"',
-          parameters: { type: 'object', properties: {}, required: [] },
+          description: '⚠️ APPEL OBLIGATOIRE: Obtenir le total RÉEL des dépenses/sorties d\'un mois spécifique. Tu DOIS appeler cet outil pour TOUTE question sur les dépenses, sorties ou débits. Ne JAMAIS inventer de montant. Exemples: "Dépenses de décembre?", "Total sorties novembre 2025?", "Combien de débits en octobre?"',
+          parameters: {
+            type: 'object',
+            properties: {
+              month: {
+                type: 'string',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie un mois (ex: "décembre", "novembre", "12", "11"). Mois à analyser.',
+              },
+              year: {
+                type: 'string',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année (ex: "2025", "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur.',
+              },
+            },
+            required: [],
+          },
         },
       },
       {
@@ -258,6 +301,14 @@ export class AIAgentServiceV2 {
                 type: 'string',
                 description: 'Nom du fournisseur ou employé pour filtrer. ⚠️ UTILISE CE PARAMÈTRE quand l\'utilisateur mentionne un fournisseur spécifique (ex: Foster, Alkhoomsy, Engie) ou un terme générique comme "loyer", "électricité" (après avoir demandé le nom du fournisseur).',
               },
+              offset: {
+                type: 'number',
+                description: '⚠️ PAGINATION: Numéro de la page à afficher (1 = première page, 2 = deuxième page, etc.). Utilise quand l\'utilisateur demande "les suivantes", "suite", "continue", "page suivante". Par défaut: 1.',
+              },
+              limit: {
+                type: 'number',
+                description: 'Nombre de transactions par page (30 par défaut). Ne changer que si l\'utilisateur le demande explicitement.',
+              },
             },
             required: ['start_date', 'end_date'],
           },
@@ -267,7 +318,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_employee_salaries',
-          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\nRÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. ⚠️ Si "TOUS les [NOM_FAMILLE]" (ex: "tous les Madidi") → FAIRE UN SEUL APPEL avec le nom de famille seul {employee_name: "Madidi"}. NE PAS faire d\'appels supplémentaires pour chaque employé individuel ⚠️\n3. Si "TOUS les salaires" (sans précision) → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n6. ⚠️ Si utilisateur demande "LA LISTE" explicitement → METTRE include_details: true\n\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → UN SEUL APPEL: {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → UN SEUL APPEL: {employee_name: "Madidi"} (trouvera automatiquement Hassan, Soufiane, Jawad)\n- "Tous les salaires des Madidi de novembre" → UN SEUL APPEL: {employee_name: "Madidi", month: "novembre"}\n- "Salaires de Hassan en décembre" → UN SEUL APPEL: {employee_name: "Hassan Madidi", month: "décembre"}\n- "Donne-moi LA LISTE de tous les salaires" → UN SEUL APPEL: {include_details: true}\n- "Tous les salaires" → UN SEUL APPEL: {}',
+          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\n🎯 UTILISER CET OUTIL QUAND la question contient le mot "salaire" ou "salaires" (ex: "Combien j\'ai payé en salaire à X", "Salaire de Soufiane", "Salaires des Madidi").\n\nRÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. ⚠️ Si "TOUS les [NOM_FAMILLE]" (ex: "tous les Madidi") → FAIRE UN SEUL APPEL avec le nom de famille seul {employee_name: "Madidi"}. NE PAS faire d\'appels supplémentaires pour chaque employé individuel ⚠️\n3. Si "TOUS les salaires" (sans précision) → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n6. ⚠️ Si utilisateur demande "LA LISTE" explicitement → METTRE include_details: true\n\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → UN SEUL APPEL: {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → UN SEUL APPEL: {employee_name: "Madidi"} (trouvera automatiquement Hassan, Soufiane, Jawad)\n- "Tous les salaires des Madidi de novembre" → UN SEUL APPEL: {employee_name: "Madidi", month: "novembre"}\n- "Salaires de Hassan en décembre" → UN SEUL APPEL: {employee_name: "Hassan Madidi", month: "décembre"}\n- "Combien j\'ai payé en salaire à X" → UN SEUL APPEL: {employee_name: "X"}\n- "Donne-moi LA LISTE de tous les salaires" → UN SEUL APPEL: {include_details: true}\n- "Tous les salaires" → UN SEUL APPEL: {}',
           parameters: {
             type: 'object',
             properties: {
@@ -289,7 +340,7 @@ export class AIAgentServiceV2 {
               },
               year: {
                 type: 'string',
-                description: 'Année (2025, 2024). Défaut: année en cours.',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
               },
               include_details: {
                 type: 'boolean',
@@ -319,7 +370,7 @@ export class AIAgentServiceV2 {
               },
               year: {
                 type: 'string',
-                description: 'Année (2025, 2024). Défaut: année en cours.',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
               },
             },
             required: ['employee_names'],
@@ -330,7 +381,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'get_supplier_payments',
-          description: 'UTILISE CETTE FONCTION pour les paiements que VOUS avez faits VERS un fournisseur (dépenses/débits). Répond aux questions: "Combien payé à Foster?", "Paiements à Coca-Cola?", "Combien jai payé à Edenred?", "Combien jai versé à Foster?". IMPORTANT: Si lutilisateur demande des versements REÇUS dun fournisseur (ex: "Versements de Takeaway", "Combien Takeaway ma versé?", "Versements faits PAR Pluxee"), utilise get_supplier_received_payments à la place.',
+          description: 'UTILISE CETTE FONCTION pour les paiements que VOUS avez faits VERS un fournisseur (dépenses/débits). Répond aux questions: "Combien payé à Foster?", "Paiements à Coca-Cola?", "Combien jai payé à Edenred?", "Combien jai versé à Foster?". ⚠️ IMPORTANT: NE PAS UTILISER pour les SALAIRES. Si la question contient le mot "salaire" ou "salaire" + nom de personne, utiliser get_employee_salaries à la place. ⚠️ Si lutilisateur demande des versements REÇUS dun fournisseur (ex: "Versements de Takeaway", "Combien Takeaway ma versé?", "Versements faits PAR Pluxee"), utilise get_supplier_received_payments à la place.',
           parameters: {
             type: 'object',
             properties: {
@@ -344,7 +395,7 @@ export class AIAgentServiceV2 {
               },
               year: {
                 type: 'string',
-                description: 'Année (2025, 2024). Par défaut 2025.',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
               },
             },
             required: ['supplier_name'],
@@ -369,7 +420,7 @@ export class AIAgentServiceV2 {
               },
               year: {
                 type: 'string',
-                description: 'Année (2025, 2024). Par défaut 2025.',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
               },
             },
             required: ['supplier_name'],
@@ -380,13 +431,24 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'search_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Rechercher des factures RÉELLES par fournisseur ou numéro. Tu DOIS appeler cet outil pour TOUTE recherche de facture. Ne JAMAIS inventer de résultats. Exemples: "Cherche factures Foster", "Trouve facture 123", "Recherche Coca-Cola"',
+          description: '⚠️ APPEL OBLIGATOIRE: Rechercher des factures RÉELLES par fournisseur, numéro ou montant. Tu DOIS appeler cet outil pour TOUTE recherche de facture. Ne JAMAIS inventer de résultats.\n\n🎯 UTILISER pour filtres par MONTANT:\n- "Factures de plus de 3000€" → {min_amount: 3000}\n- "Factures moins de 500€" → {max_amount: 500}\n- "Factures entre 1000 et 5000€" → {min_amount: 1000, max_amount: 5000}\n\nExemples: "Cherche factures Foster", "Trouve facture 123", "Recherche Coca-Cola", "Factures plus de 10000€"',
           parameters: {
             type: 'object',
             properties: {
-              search_term: { type: 'string', description: 'Terme à rechercher' },
+              search_term: {
+                type: 'string',
+                description: 'Terme à rechercher (fournisseur, numéro). Optionnel si filtre par montant.'
+              },
+              min_amount: {
+                type: 'number',
+                description: 'Montant minimum (ex: 3000 pour "plus de 3000€"). Optionnel.'
+              },
+              max_amount: {
+                type: 'number',
+                description: 'Montant maximum (ex: 500 pour "moins de 500€"). Optionnel.'
+              },
             },
-            required: ['search_term'],
+            required: [],
           },
         },
       },
@@ -430,6 +492,14 @@ export class AIAgentServiceV2 {
       {
         type: 'function',
         function: {
+          name: 'get_user_guide',
+          description: '⚠️ APPEL OBLIGATOIRE: Envoyer le guide utilisateur complet avec tous les exemples de questions et commandes. Tu DOIS appeler cet outil quand l\'utilisateur demande "donne moi le guide", "guide", "aide complète", "comment utiliser le bot", "quelles questions poser", "que puis-je demander". Le guide sera envoyé en plusieurs parties automatiquement.',
+          parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'get_monthly_invoices',
           description: '⚠️ APPEL OBLIGATOIRE: Obtenir TOUTES les factures RÉELLES du mois en cours. Tu DOIS appeler cet outil pour TOUTE question sur les factures du mois actuel. Ne JAMAIS inventer de liste ou de nombres. Exemples: "Combien de factures ce mois?", "Factures du mois", "Liste les factures"',
           parameters: { type: 'object', properties: {}, required: [] },
@@ -449,7 +519,7 @@ export class AIAgentServiceV2 {
               },
               year: {
                 type: 'string',
-                description: 'Année (2025, 2024...). Optionnel, par défaut année en cours.',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
               },
             },
             required: ['month'],
@@ -537,7 +607,7 @@ export class AIAgentServiceV2 {
         type: 'function',
         function: {
           name: 'analyze_supplier_expenses',
-          description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur ET lister les factures. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\n🎯 UTILISE CET OUTIL POUR:\n- "Liste des factures de X" → {supplier_name: "X", include_details: true}\n- "Toutes les factures de X sur l\'année" → {supplier_name: "X", include_details: true}\n- "Factures de X en novembre" → {supplier_name: "X", month: "novembre", include_details: true}\n- "Dépenses chez X" → {supplier_name: "X"}\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro", "Foster") → SPECIFIER supplier_name\n2. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n3. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année", "de l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n6. ⚠️ Si utilisateur demande "LA LISTE", "FACTURES", "TOUTES" explicitement → METTRE include_details: true\n7. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Liste des factures de Foster" → {supplier_name: "Foster", include_details: true}\n- "Toutes les factures de l\'année de Foster" → {supplier_name: "Foster", include_details: true}\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {}\n- "Dépenses de novembre" → {month: "novembre"}',
+          description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur ET lister les factures.\n\n🎯 UTILISE CET OUTIL POUR:\n- "Liste des factures de X" → {supplier_name: "X", include_details: true}\n- "Toutes les factures de X sur l\'année" → {supplier_name: "X", include_details: true}\n- "Factures de X en novembre" → {supplier_name: "X", month: "novembre", include_details: true}\n- "Dépenses chez X" → {supplier_name: "X"}\n- "Factures de X et Y" → {supplier_name: "X et Y"} (PLUSIEURS FOURNISSEURS en un seul appel !)\n\n⚠️ IMPORTANT: Si la question mentionne PLUSIEURS fournisseurs (ex: "Uber et Takeaway", "Colruyt et Sligro"), utiliser UN SEUL APPEL avec supplier_name contenant tous les fournisseurs séparés par " et ". Ex: {supplier_name: "Uber et Takeaway"} ou {supplier_name: "Colruyt et Sligro"}. NE PAS utiliser compare_supplier_expenses.\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro", "Foster") → SPECIFIER supplier_name\n2. Si PLUSIEURS fournisseurs → utiliser supplier_name: "X et Y" (un seul appel)\n3. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n4. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n5. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année", "de l\'année") → NE PAS spécifier month\n6. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n7. ⚠️ Si utilisateur demande "LA LISTE", "FACTURES", "TOUTES" explicitement → METTRE include_details: true\n8. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Liste des factures de Foster" → {supplier_name: "Foster", include_details: true}\n- "Toutes les factures de l\'année de Foster" → {supplier_name: "Foster", include_details: true}\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Factures Uber et Takeaway" → {supplier_name: "Uber et Takeaway"}\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {}\n- "Dépenses de novembre" → {month: "novembre"}',
           parameters: {
             type: 'object',
             properties: {
@@ -559,7 +629,7 @@ export class AIAgentServiceV2 {
               },
               year: {
                 type: 'string',
-                description: 'Année (2025, 2024). Défaut: année en cours.',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
               },
               include_details: {
                 type: 'boolean',
@@ -589,7 +659,7 @@ export class AIAgentServiceV2 {
               },
               year: {
                 type: 'string',
-                description: 'Année (2025, 2024). Défaut: année en cours.',
+                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
               },
             },
             required: ['supplier_names'],
@@ -831,6 +901,7 @@ export class AIAgentServiceV2 {
         case 'get_recent_invoices': {
           try {
             const limit = (args.limit as number) || 5;
+            const supplierName = args.supplier_name as string | undefined;
 
             // Récupérer toutes les factures (Max 120 pour l'API Billit)
             const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
@@ -843,10 +914,18 @@ export class AIAgentServiceV2 {
               break;
             }
 
-            console.log(`📊 get_recent_invoices: ${allInvoices.length} factures récupérées, demande de ${limit}`);
+            console.log(`📊 get_recent_invoices: ${allInvoices.length} factures récupérées, demande de ${limit}${supplierName ? ` pour ${supplierName}` : ''}`);
+
+            // Filtrer par fournisseur si spécifié
+            let filteredInvoices = allInvoices;
+            if (supplierName) {
+              const { matchesSupplier } = await import('./supplier-aliases');
+              filteredInvoices = allInvoices.filter(inv => matchesSupplier(inv.supplier_name, supplierName));
+              console.log(`🔍 Filtrage par fournisseur "${supplierName}": ${filteredInvoices.length} factures trouvées`);
+            }
 
             // Filtrer les factures avec une date valide et trier par date (la plus récente en premier)
-            const sortedInvoices = allInvoices
+            const sortedInvoices = filteredInvoices
               .filter(inv => inv.invoice_date && !isNaN(new Date(inv.invoice_date).getTime()))
               .sort((a, b) => {
                 const dateA = new Date(a.invoice_date).getTime();
@@ -886,6 +965,32 @@ export class AIAgentServiceV2 {
         case 'get_overdue_invoices': {
           const invoices = await this.billitClient.getOverdueInvoices();
           const total = invoices.reduce((sum, inv) => sum + inv.total_amount, 0);
+
+          // 🔍 Détecter si l'utilisateur veut les détails ou juste le résumé
+          const questionLower = this.currentQuestion.toLowerCase();
+          const wantsDetails = questionLower.includes('liste') || questionLower.includes('détail') ||
+                               questionLower.includes('details') || questionLower.includes('donne') ||
+                               questionLower.includes('montre') || questionLower.includes('voir') ||
+                               (questionLower.includes('facture') && (questionLower.includes('quelle') || questionLower.includes('quelles')));
+
+          let directResponse = '';
+
+          if (wantsDetails && invoices.length > 0) {
+            // Afficher les détails de chaque facture
+            directResponse = `📋 Vous avez **${invoices.length} facture${invoices.length > 1 ? 's' : ''} en retard** pour un total de **${total.toFixed(2).replace('.', ',')} €**.\n\n`;
+            directResponse += `**Détails des factures :**\n`;
+
+            invoices.forEach((inv, index) => {
+              const daysOverdue = Math.floor(
+                (new Date().getTime() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24)
+              );
+              directResponse += `${index + 1}. ${inv.supplier_name} - ${inv.total_amount.toFixed(2).replace('.', ',')} € (en retard de ${daysOverdue} jour${daysOverdue > 1 ? 's' : ''})\n`;
+            });
+          } else {
+            // Réponse courte sans détails
+            directResponse = `📋 Vous avez **${invoices.length} facture${invoices.length > 1 ? 's' : ''} en retard** pour un total de **${total.toFixed(2).replace('.', ',')} €**.`;
+          }
+
           result = {
             count: invoices.length,
             total_amount: total,
@@ -897,6 +1002,7 @@ export class AIAgentServiceV2 {
                 (new Date().getTime() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24)
               ),
             })),
+            direct_response: directResponse
           };
           break;
         }
@@ -1008,30 +1114,104 @@ export class AIAgentServiceV2 {
         }
 
         case 'get_monthly_balance': {
-          const bankStats = await this.bankClient.getMonthlyStats();
+          const monthMap: { [key: string]: number } = {
+            'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
+            'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
+            'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
+          };
+
+          let targetMonth: number;
+          let targetYear: number;
+
+          if (args.month) {
+            const monthInput = args.month.toLowerCase();
+            if (monthMap[monthInput] !== undefined) {
+              targetMonth = monthMap[monthInput];
+            } else if (!isNaN(parseInt(monthInput))) {
+              targetMonth = parseInt(monthInput) - 1;
+            } else {
+              return JSON.stringify({ error: `Mois invalide: ${args.month}` });
+            }
+
+            // Si aucune année spécifiée, déduire intelligemment l'année
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si le mois demandé est dans le futur, utiliser l'année précédente
+              if (targetMonth > currentMonth) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+          } else {
+            const now = new Date();
+            targetMonth = now.getMonth();
+            targetYear = now.getFullYear();
+          }
+
+          const startDate = new Date(targetYear, targetMonth, 1);
+          const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+
+          const transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
+          const credits = transactions.filter(tx => tx.type === 'Credit');
+          const debits = transactions.filter(tx => tx.type === 'Debit');
+          const totalCredits = credits.reduce((sum, tx) => sum + tx.amount, 0);
+          const totalDebits = debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+          const balance = totalCredits - totalDebits;
+
           result = {
-            month: new Date().toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' }),
-            credits: bankStats.credits,
-            debits: bankStats.debits,
-            balance: bankStats.balance,
-            credit_count: bankStats.creditCount,
-            debit_count: bankStats.debitCount,
+            month: startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' }),
+            credits: totalCredits,
+            debits: totalDebits,
+            balance: balance,
+            credit_count: credits.length,
+            debit_count: debits.length,
             currency: 'EUR',
           };
           break;
         }
 
         case 'get_monthly_credits': {
-          // ✅ CORRECTION: Utiliser des dates précises pour éviter la limite de 120 transactions
-          const now = new Date();
-          const startDate = new Date(now.getFullYear(), now.getMonth(), 1); // 1er du mois
-          const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Dernier jour du mois
+          // ✅ CORRECTION: Utiliser les paramètres month/year transmis par l'IA
+          const monthMap: { [key: string]: number } = {
+            'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
+            'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
+            'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
+          };
+
+          let targetMonth: number;
+          let targetYear: number;
+
+          if (args.month) {
+            const monthInput = args.month.toLowerCase();
+            if (monthMap[monthInput] !== undefined) {
+              targetMonth = monthMap[monthInput];
+            } else if (!isNaN(parseInt(monthInput))) {
+              targetMonth = parseInt(monthInput) - 1;
+            } else {
+              return JSON.stringify({ error: `Mois invalide: ${args.month}` });
+            }
+
+            targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+          } else {
+            const now = new Date();
+            targetMonth = now.getMonth();
+            targetYear = now.getFullYear();
+          }
+
+          const startDate = new Date(targetYear, targetMonth, 1);
+          const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
 
           const monthCredits = await this.bankClient.getCredits(startDate, endDate);
           const total = monthCredits.reduce((sum, tx) => sum + tx.amount, 0);
 
           result = {
-            month: now.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' }),
+            month: startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' }),
             total_amount: total,
             transaction_count: monthCredits.length,
             currency: 'EUR',
@@ -1122,16 +1302,41 @@ export class AIAgentServiceV2 {
         }
 
         case 'get_monthly_debits': {
-          // ✅ CORRECTION: Utiliser des dates précises pour éviter la limite de 120 transactions
-          const now = new Date();
-          const startDate = new Date(now.getFullYear(), now.getMonth(), 1); // 1er du mois
-          const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Dernier jour du mois
+          // ✅ CORRECTION: Utiliser les paramètres month/year transmis par l'IA
+          const monthMap: { [key: string]: number } = {
+            'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
+            'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
+            'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
+          };
+
+          let targetMonth: number;
+          let targetYear: number;
+
+          if (args.month) {
+            const monthInput = args.month.toLowerCase();
+            if (monthMap[monthInput] !== undefined) {
+              targetMonth = monthMap[monthInput];
+            } else if (!isNaN(parseInt(monthInput))) {
+              targetMonth = parseInt(monthInput) - 1;
+            } else {
+              return JSON.stringify({ error: `Mois invalide: ${args.month}` });
+            }
+
+            targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+          } else {
+            const now = new Date();
+            targetMonth = now.getMonth();
+            targetYear = now.getFullYear();
+          }
+
+          const startDate = new Date(targetYear, targetMonth, 1);
+          const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
 
           const monthDebits = await this.bankClient.getDebits(startDate, endDate);
           const total = monthDebits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
           result = {
-            month: now.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' }),
+            month: startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' }),
             total_amount: total,
             transaction_count: monthDebits.length,
             currency: 'EUR',
@@ -1151,14 +1356,25 @@ export class AIAgentServiceV2 {
             });
           }
 
-          const accounts = Object.values(balances.accounts).map(account => ({
-            name: account.name,
-            iban: account.iban,
-            balance: account.balance,
-            last_update: account.lastUpdate
-          }));
+          const accounts = [];
+          let total = 0;
 
-          const total = balanceService.getTotalBalance();
+          // Récupérer le solde réel pour chaque compte depuis l'API Billit
+          for (const account of Object.values(balances.accounts)) {
+            // Essayer de récupérer le solde réel depuis l'API Billit
+            const realTimeBalance = await this.bankClient.getRealTimeBalance(account.iban);
+            const finalBalance = realTimeBalance !== null ? realTimeBalance : account.balance;
+
+            accounts.push({
+              name: account.name,
+              iban: account.iban,
+              balance: finalBalance,
+              last_update: account.lastUpdate,
+              source: realTimeBalance !== null ? 'API Billit (temps réel)' : 'Cache local'
+            });
+
+            total += finalBalance;
+          }
 
           result = {
             accounts,
@@ -1326,20 +1542,27 @@ export class AIAgentServiceV2 {
                                     questionLower.includes('détail') ||
                                     questionLower.includes('détaillé');
 
+          // Pagination : si offset > 1, on affiche toujours la liste détaillée
+          const isPaginated = args.offset && args.offset > 1;
+
           let directResponse: string;
 
-          if (wantsDetailedList || transactions.length <= 10) {
+          if (wantsDetailedList || transactions.length <= 10 || isPaginated) {
             // Afficher la liste détaillée si demandée OU si peu de transactions (<=10)
             const sortedTransactions = transactions
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-            const maxTransactions = 30;
-            const transactionsToShow = sortedTransactions.slice(0, maxTransactions);
-            const hasMore = transactions.length > maxTransactions;
+            // Pagination
+            const page = args.offset || 1;
+            const limit = args.limit || 30;
+            const startIndex = (page - 1) * limit;
+            const transactionsToShow = sortedTransactions.slice(startIndex, startIndex + limit);
+            const hasMore = startIndex + limit < transactions.length;
+            const totalPages = Math.ceil(transactions.length / limit);
 
             const transactionsList = transactionsToShow
               .map((tx, index) => {
-                const num = String(index + 1).padStart(3, ' ');
+                const num = String(startIndex + index + 1).padStart(3, ' ');
                 const date = new Date(tx.date).toLocaleDateString('fr-BE');
                 const type = tx.type === 'Credit' ? '💰' : '💸';
                 const amount = tx.type === 'Credit'
@@ -1351,7 +1574,9 @@ export class AIAgentServiceV2 {
               .join('\n\n');
 
             const moreMessage = hasMore
-              ? `\n\n... et ${transactions.length - maxTransactions} autres transactions\n(Affichage limité aux ${maxTransactions} plus récentes)`
+              ? `\n\n📄 Page ${page}/${totalPages} — Transactions ${startIndex + 1}-${startIndex + transactionsToShow.length} sur ${transactions.length}\n💡 Tapez "suivantes" ou "page suivante" pour voir la suite`
+              : totalPages > 1
+              ? `\n\n📄 Page ${page}/${totalPages} — Fin de la liste`
               : '';
 
             directResponse = `📊 Transactions du ${startDate.toLocaleDateString('fr-BE')} au ${endDate.toLocaleDateString('fr-BE')}\n\n` +
@@ -1426,7 +1651,24 @@ export class AIAgentServiceV2 {
               return JSON.stringify({ error: `Mois invalide: ${args.month}` });
             }
 
-            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            // Si aucune année spécifiée, déduire intelligemment l'année
+            let targetYear: number;
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si le mois demandé est dans le futur, utiliser l'année précédente
+              // Exemple: janvier 2026, demande "décembre" → décembre 2025
+              if (targetMonth > currentMonth) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+
             startDate = new Date(targetYear, targetMonth, 1);
             endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
           } else if (args.start_month && args.end_month) {
@@ -1438,16 +1680,32 @@ export class AIAgentServiceV2 {
               return JSON.stringify({ error: `Mois invalide: ${args.start_month} ou ${args.end_month}` });
             }
 
-            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            // Si aucune année spécifiée, déduire intelligemment l'année
+            let targetYear: number;
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si le mois de FIN est dans le futur, utiliser l'année précédente
+              // Exemple: janvier 2026, demande "octobre à décembre" → 2025
+              if (endMonth > currentMonth) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+
             startDate = new Date(targetYear, startMonth, 1);
             endDate = new Date(targetYear, endMonth + 1, 0, 23, 59, 59);
           } else if (args.start_date && args.end_date) {
             startDate = BankClient.parseDate(args.start_date) || new Date();
             endDate = BankClient.parseDate(args.end_date) || new Date();
           } else {
-            // Par défaut: année courante complète
-            const currentYear = new Date().getFullYear();
-            startDate = new Date(currentYear, 0, 1);
+            // Par défaut: toutes les transactions disponibles (pour "dernier paiement", "total", etc.)
+            startDate = new Date(2020, 0, 1);  // Date arbitraire dans le passé
             endDate = new Date();
           }
 
@@ -2016,9 +2274,24 @@ export class AIAgentServiceV2 {
             startDate = new Date(targetYear, targetMonth, 1);
             endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
           } else {
-            const currentYear = args.year ? parseInt(args.year) : new Date().getFullYear();
-            startDate = new Date(currentYear, 0, 1);
-            endDate = new Date();
+            // Par défaut: année intelligente
+            let targetYear: number;
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si on est en janvier (mois 0), utiliser l'année précédente par défaut
+              if (currentMonth === 0) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+            startDate = new Date(targetYear, 0, 1);
+            endDate = new Date(targetYear, 11, 31, 23, 59, 59);
           }
 
           // Récupérer toutes les transactions
@@ -2155,6 +2428,21 @@ export class AIAgentServiceV2 {
         }
 
         case 'analyze_supplier_expenses': {
+          // 🔍 DÉTECTION AUTOMATIQUE DE PLUSIEURS FOURNISSEURS
+          // Si supplier_name contient " et ", extraire tous les fournisseurs
+          let suppliersToProcess: string[] = [];
+          let isMultiSupplier = false;
+
+          if (args.supplier_name && args.supplier_name.includes(' et ')) {
+            // Extraire tous les fournisseurs séparés par " et ", ",", "&"
+            const parts = args.supplier_name.split(/\s+(?:et|,|&)\s+/i);
+            suppliersToProcess = parts.map((p: string) => p.trim()).filter((p: string) => p.length > 0);
+            isMultiSupplier = suppliersToProcess.length > 1;
+            console.log(`🔍 Détection: ${suppliersToProcess.length} fournisseurs à traiter:`, suppliersToProcess);
+          } else if (args.supplier_name) {
+            suppliersToProcess = [args.supplier_name];
+          }
+
           // Gérer month/year ou start_month/end_month
           let startDate: Date;
           let endDate: Date;
@@ -2182,7 +2470,24 @@ export class AIAgentServiceV2 {
               return JSON.stringify({ error: `Mois invalide: ${args.month}` });
             }
 
-            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            // Si aucune année spécifiée, déduire intelligemment l'année
+            let targetYear: number;
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si le mois demandé est dans le futur, utiliser l'année précédente
+              // Exemple: janvier 2026, demande "décembre" → 2025
+              if (targetMonth > currentMonth) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+
             startDate = new Date(targetYear, targetMonth, 1);
             endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
           } else if (args.start_month && args.end_month) {
@@ -2194,14 +2499,46 @@ export class AIAgentServiceV2 {
               return JSON.stringify({ error: `Mois invalide: ${args.start_month} ou ${args.end_month}` });
             }
 
-            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            // Si aucune année spécifiée, déduire intelligemment l'année
+            let targetYear: number;
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si le mois de FIN est dans le futur, utiliser l'année précédente
+              // Exemple: janvier 2026, demande "octobre à décembre" → 2025
+              if (endMonth > currentMonth) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+
             startDate = new Date(targetYear, startMonth, 1);
             endDate = new Date(targetYear, endMonth + 1, 0, 23, 59, 59);
           } else {
-            // Par défaut: année courante complète
-            const currentYear = args.year ? parseInt(args.year) : new Date().getFullYear();
-            startDate = new Date(currentYear, 0, 1);
-            endDate = new Date();
+            // Par défaut: année intelligente
+            let targetYear: number;
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si on est en janvier (mois 0), utiliser l'année précédente par défaut
+              // Exemple: janvier 2026, demande "top 10 dépenses" → 2025
+              if (currentMonth === 0) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+            startDate = new Date(targetYear, 0, 1);
+            endDate = new Date(targetYear, 11, 31, 23, 59, 59);
           }
 
           if (!startDate || !endDate) {
@@ -2215,12 +2552,11 @@ export class AIAgentServiceV2 {
           const { matchesSupplier, SUPPLIER_ALIASES } = await import('./supplier-aliases');
           const suppliers = Object.keys(SUPPLIER_ALIASES);
 
-          // Filtrer les transactions du fournisseur (TOUS types : crédit ET débit)
-          let supplierTransactions: any[];
-
-          if (args.supplier_name) {
-            // Filtrer pour un fournisseur spécifique
-            const searchTerm = args.supplier_name.toLowerCase();
+          // 🔍 Fonction pour analyser UN fournisseur spécifique
+          const analyzeSingleSupplier = (supplierName: string) => {
+            // Filtrer les transactions du fournisseur (TOUS types : crédit ET débit)
+            let supplierTransactions: any[];
+            const searchTerm = supplierName.toLowerCase();
 
             // Recherche floue de fournisseur
             let matchingSuppliers = suppliers.filter((sup: any) =>
@@ -2238,9 +2574,27 @@ export class AIAgentServiceV2 {
             } else {
               // Recherche directe dans les descriptions
               supplierTransactions = transactions.filter(tx =>
-                matchesSupplier(tx.description || '', args.supplier_name)
+                matchesSupplier(tx.description || '', supplierName)
               );
             }
+
+            return supplierTransactions;
+          };
+
+          // Filtrer les transactions du fournisseur (TOUS types : crédit ET débit)
+          let supplierTransactions: any[];
+
+          if (isMultiSupplier && suppliersToProcess.length > 0) {
+            // Plusieurs fournisseurs : combiner tous les résultats
+            let allTransactions: any[] = [];
+            for (const supplier of suppliersToProcess) {
+              const txs = analyzeSingleSupplier(supplier);
+              allTransactions = allTransactions.concat(txs);
+            }
+            supplierTransactions = allTransactions;
+          } else if (args.supplier_name) {
+            // Filtrer pour un fournisseur spécifique
+            supplierTransactions = analyzeSingleSupplier(args.supplier_name);
           } else {
             // Obtenir TOUTES les transactions vers fournisseurs connus (débits uniquement pour le top global)
             supplierTransactions = transactions.filter(tx => {
@@ -2432,17 +2786,81 @@ export class AIAgentServiceV2 {
           const isSingleMonthManyExpenses = args.month && supplierExpenses.length > 10;
           const includeDetailedList = !userAsksForTopOnly && !isSingleMonthManyExpenses && (userWantsDetails || isSpecificSupplierSearch);
 
-          // Adapter le titre selon le type (dépenses ou revenus)
-          const titleIcon = isRevenuePartner ? '💰' : '💸';
-          const titleType = isRevenuePartner ? 'Revenus' : 'Dépenses fournisseurs';
-          const countLabel = isRevenuePartner ? 'versements' : 'paiements';
+          let directResponse = '';
 
-          let directResponse = `${titleIcon} ${titleType} de ${periodTitle}\n\n` +
-            `Total: ${totalSpent.toFixed(2)}€ (${supplierExpenses.length} ${countLabel})` +
-            analysisText;
+          // 🔍 CAS: PLUSIEURS FOURNISSEURS → Générer une section par fournisseur
+          if (isMultiSupplier && suppliersToProcess.length > 0) {
+            directResponse = `📊 Analyse de ${suppliersToProcess.length} fournisseurs - ${periodTitle}\n\n`;
 
-          if (includeDetailedList) {
-            directResponse += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` + expenseList;
+            for (const supplierName of suppliersToProcess) {
+              // Analyser ce fournisseur spécifique
+              const singleSupplierTxs = analyzeSingleSupplier(supplierName);
+              const singleDebits = singleSupplierTxs.filter(tx => tx.type === 'Debit');
+              const singleCredits = singleSupplierTxs.filter(tx => tx.type === 'Credit');
+              const singleTotalDebits = singleDebits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+              const singleTotalCredits = singleCredits.reduce((sum, tx) => sum + tx.amount, 0);
+
+              const singleIsRevenue = singleTotalCredits > singleTotalDebits;
+              const singleExpenses = singleIsRevenue ? singleCredits : singleDebits;
+              const singleTotal = singleExpenses.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+              const singleCount = singleExpenses.length;
+
+              if (singleCount === 0) {
+                directResponse += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                directResponse += `🔍 ${supplierName}\n`;
+                directResponse += `❌ Aucune transaction trouvée pour ce fournisseur.\n`;
+                continue;
+              }
+
+              // Trier par date
+              singleExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+              const icon = singleIsRevenue ? '💰' : '💸';
+              const typeLabel = singleIsRevenue ? 'Revenus' : 'Dépenses';
+              const countLabel = singleIsRevenue ? 'versements' : 'paiements';
+
+              directResponse += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+              directResponse += `${icon} ${supplierName} - ${typeLabel} de ${periodTitle}\n\n`;
+              directResponse += `Total: ${singleTotal.toFixed(2)}€ (${singleCount} ${countLabel})\n`;
+
+              // Ajouter quelques statistiques
+              const amounts = singleExpenses.map(tx => Math.abs(tx.amount));
+              const avgAmount = singleTotal / singleCount;
+              directResponse += `   • Moyenne: ${avgAmount.toFixed(2)}€\n`;
+              directResponse += `   • Min: ${Math.min(...amounts).toFixed(2)}€ | Max: ${Math.max(...amounts).toFixed(2)}€\n`;
+
+              // Afficher les 5 dernières transactions
+              const recentTxs = singleExpenses.slice(0, 5);
+              directResponse += `\n💳 Derniers ${countLabel}:\n`;
+              recentTxs.forEach((tx, i) => {
+                const date = new Date(tx.date).toLocaleDateString('fr-BE');
+                const amount = Math.abs(tx.amount).toFixed(2);
+                directResponse += `   ${i + 1}. ${date}: ${amount}€\n`;
+              });
+              if (singleCount > 5) {
+                directResponse += `   ... et ${singleCount - 5} autres\n`;
+              }
+            }
+          } else {
+            // CAS: FOURNISSEUR UNIQUE OU TOUS
+            // Adapter le titre selon le type (dépenses ou revenus)
+            const titleIcon = isRevenuePartner ? '💰' : '💸';
+            const titleType = isRevenuePartner ? 'Revenus' : 'Dépenses fournisseurs';
+            const countLabel = isRevenuePartner ? 'versements' : 'paiements';
+
+            // 📝 Construire le titre avec le nom du fournisseur si spécifié
+            let titleWithSupplier = `${titleIcon} ${titleType} de ${periodTitle}`;
+            if (args.supplier_name && !isMultiSupplier) {
+              titleWithSupplier = `${titleIcon} ${args.supplier_name} - ${titleType} de ${periodTitle}`;
+            }
+
+            directResponse = `${titleWithSupplier}\n\n` +
+              `Total: ${totalSpent.toFixed(2)}€ (${supplierExpenses.length} ${countLabel})` +
+              analysisText;
+
+            if (includeDetailedList) {
+              directResponse += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` + expenseList;
+            }
           }
 
           result = {
@@ -2491,13 +2909,44 @@ export class AIAgentServiceV2 {
               targetMonth = parseInt(monthInput) - 1;
             }
 
-            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            // Si aucune année spécifiée, déduire intelligemment l'année
+            let targetYear: number;
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si le mois demandé est dans le futur, utiliser l'année précédente
+              if (targetMonth > currentMonth) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+
             startDate = new Date(targetYear, targetMonth, 1);
             endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
           } else {
-            const currentYear = args.year ? parseInt(args.year) : new Date().getFullYear();
-            startDate = new Date(currentYear, 0, 1);
-            endDate = new Date();
+            // Par défaut: année intelligente
+            let targetYear: number;
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si on est en janvier (mois 0), utiliser l'année précédente par défaut
+              if (currentMonth === 0) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+            startDate = new Date(targetYear, 0, 1);
+            endDate = new Date(targetYear, 11, 31, 23, 59, 59);
           }
 
           // Récupérer toutes les transactions
@@ -2624,13 +3073,33 @@ export class AIAgentServiceV2 {
               return JSON.stringify({ error: `Mois invalide: ${args.month}` });
             }
 
-            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            // Si aucune année spécifiée, déduire intelligemment l'année
+            let targetYear: number;
+            if (args.year) {
+              targetYear = parseInt(args.year);
+            } else {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth();
+
+              // Si le mois demandé est dans le futur, utiliser l'année précédente
+              if (targetMonth > currentMonth) {
+                targetYear = currentYear - 1;
+              } else {
+                targetYear = currentYear;
+              }
+            }
+
             startDate = new Date(targetYear, targetMonth, 1);
             endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+          } else if (args.year) {
+            // Année spécifique uniquement
+            const targetYear = parseInt(args.year);
+            startDate = new Date(targetYear, 0, 1);
+            endDate = new Date(targetYear, 11, 31, 23, 59, 59);
           } else {
-            // Par défaut: année courante complète
-            const currentYear = new Date().getFullYear();
-            startDate = new Date(currentYear, 0, 1);
+            // Par défaut: toutes les transactions disponibles (pour "dernier paiement", "total", etc.)
+            startDate = new Date(2020, 0, 1);  // Date arbitraire dans le passé
             endDate = new Date();
           }
 
@@ -2645,6 +3114,32 @@ export class AIAgentServiceV2 {
 
           // Calculer le total (débits sont négatifs, on prend la valeur absolue)
           const totalPaid = supplierPayments.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+          // 🔍 DÉTECTION: Si 0 paiements VERS le fournisseur, vérifier s'il y a des paiements DE sa part
+          if (totalPaid === 0 && supplierPayments.length === 0) {
+            const supplierReceived = transactions.filter(tx =>
+              tx.type === 'Credit' &&
+              matchesSupplier(tx.description || '', args.supplier_name)
+            );
+
+            if (supplierReceived.length > 0) {
+              const totalReceived = supplierReceived.reduce((sum, tx) => sum + tx.amount, 0);
+              result = {
+                supplier_name: args.supplier_name,
+                period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
+                total_paid: 0,
+                payment_count: 0,
+                payments: [],
+                currency: 'EUR',
+                // 💡 INFORMATION CLÉ: C'est un partenaire de revenus (pas un fournisseur de dépenses)
+                is_revenue_partner: true,
+                total_received: totalReceived,
+                received_count: supplierReceived.length,
+                direct_response: `💰 ${args.supplier_name} est un **partenaire de revenus** (pas une dépense).\n\nVous avez reçu **${totalReceived.toFixed(2)}€** de ${args.supplier_name} sur cette période (${supplierReceived.length} versements).\n\nC'est un revenu, pas une dépense.`
+              };
+              break;
+            }
+          }
 
           result = {
             supplier_name: args.supplier_name,
@@ -2688,10 +3183,14 @@ export class AIAgentServiceV2 {
             const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
             startDate = new Date(targetYear, targetMonth, 1);
             endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+          } else if (args.year) {
+            // Année spécifique uniquement
+            const targetYear = parseInt(args.year);
+            startDate = new Date(targetYear, 0, 1);
+            endDate = new Date(targetYear, 11, 31, 23, 59, 59);
           } else {
-            // Par défaut: année courante complète
-            const currentYear = new Date().getFullYear();
-            startDate = new Date(currentYear, 0, 1);
+            // Par défaut: toutes les transactions disponibles (pour "dernier paiement", "total", etc.)
+            startDate = new Date(2020, 0, 1);  // Date arbitraire dans le passé
             endDate = new Date();
           }
 
@@ -2723,18 +3222,66 @@ export class AIAgentServiceV2 {
         }
 
         case 'search_invoices': {
-          const invoices = await this.billitClient.searchInvoices(args.search_term);
-          result = {
-            search_term: args.search_term,
-            count: invoices.length,
-            invoices: invoices.slice(0, 10).map(inv => ({
-              supplier: inv.supplier_name,
-              invoice_number: inv.invoice_number,
-              amount: inv.total_amount,
-              status: inv.status,
-              date: inv.invoice_date,
-            })),
-          };
+          // 🎯 Gérer les filtres par montant
+          const hasAmountFilter = args.min_amount !== undefined || args.max_amount !== undefined;
+
+          if (hasAmountFilter) {
+            // Récupérer toutes les factures et filtrer par montant
+            const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+
+            // Pagination pour récupérer toutes les factures si nécessaire
+            let invoices = [...allInvoices];
+            let page = 2;
+            while (allInvoices.length === 120) {
+              const nextPage = await this.billitClient.getInvoices({ limit: 120, page });
+              if (nextPage.length === 0) break;
+              invoices.push(...nextPage);
+              page++;
+              if (page > 10) break; // Sécurité
+            }
+
+            // Filtrer par montant
+            const filteredInvoices = invoices.filter(inv => {
+              const amount = inv.total_amount;
+              if (args.min_amount !== undefined && amount < args.min_amount) return false;
+              if (args.max_amount !== undefined && amount > args.max_amount) return false;
+              return true;
+            });
+
+            result = {
+              search_term: args.search_term || `montant ${args.min_amount || 0}+`,
+              min_amount: args.min_amount,
+              max_amount: args.max_amount,
+              count: filteredInvoices.length,
+              invoices: filteredInvoices.map(inv => ({
+                supplier: inv.supplier_name,
+                invoice_number: inv.invoice_number,
+                amount: inv.total_amount,
+                status: inv.status,
+                date: inv.invoice_date,
+              })),
+              direct_response: filteredInvoices.length === 0
+                ? `📋 Il n'y a pas de factures avec un montant ${args.min_amount ? `supérieur à ${args.min_amount} €` : args.max_amount ? `inférieur à ${args.max_amount} €` : ''}.`
+                : `📋 **${filteredInvoices.length} facture${filteredInvoices.length > 1 ? 's' : ''} trouvée${filteredInvoices.length > 1 ? 's' : ''}**\n\n` +
+                  filteredInvoices.map((inv, i) =>
+                    `${i + 1}. ${inv.supplier_name} - ${inv.total_amount.toFixed(2).replace('.', ',')} € (${inv.invoice_number}) - ${new Date(inv.invoice_date).toLocaleDateString('fr-BE')}`
+                  ).join('\n')
+            };
+          } else {
+            // Recherche classique par terme
+            const invoices = await this.billitClient.searchInvoices(args.search_term || '');
+            result = {
+              search_term: args.search_term || '',
+              count: invoices.length,
+              invoices: invoices.slice(0, 10).map(inv => ({
+                supplier: inv.supplier_name,
+                invoice_number: inv.invoice_number,
+                amount: inv.total_amount,
+                status: inv.status,
+                date: inv.invoice_date,
+              })),
+            };
+          }
           break;
         }
 
@@ -2848,6 +3395,148 @@ export class AIAgentServiceV2 {
               message: `❌ Erreur lors de la récupération des fournisseurs: ${error.message}`,
             };
           }
+          break;
+        }
+
+        case 'get_user_guide': {
+          // Envoyer le guide utilisateur complet en plusieurs parties
+          const guideParts = [
+            `📖 <b>GUIDE UTILISATEUR - PARTIE 1</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>📋 FACTURES</b>
+
+<b>👤 Impayées et en retard</b>
+• "Quelles factures sont impayées ?"
+• "Donne-moi les factures en retard"
+• "Combien de factures en retard ?"
+• "Montre-moi les factures impayées"
+
+<b>🔍 Recherche de factures</b>
+• "Cherche les factures de Foster"
+• "Trouve la facture 12345"
+• "Factures de Coca-Cola"
+• "Recherche facture SLG-2024-001"
+
+<b>💰 Par montant</b>
+• "Factures de plus de 3000€"
+• "Factures moins de 500€"
+• "Factures entre 1000 et 5000€"
+• "Montre les factures supérieures à 10000€"
+
+<b>📅 Par période</b>
+• "Factures de novembre"
+• "Factures de décembre 2025"
+• "Factures entre octobre et décembre"
+
+<b>📦 Plusieurs fournisseurs</b>
+• "Factures de Colruyt et Sligro"
+• "Donne-moi les factures Uber et Takeaway"
+• "Factures Foster, Coca-Cola et Engie"`,
+
+            `📖 <b>GUIDE UTILISATEUR - PARTIE 2</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>🏢 FOURNISSEURS</b>
+
+<b>📊 Analyse des dépenses</b>
+• "Analyse les dépenses chez Sligro"
+• "Combien j'ai dépensé chez Colruyt ?"
+• "Dépenses Foster pour l'année 2025"
+• "Analyse Uber Eats en novembre"
+
+<b>🏆 Classement</b>
+• "Top 10 fournisseurs"
+• "Top 5 des dépenses fournisseurs"
+• "Les 10 fournisseurs les plus chers"
+• "Classement des fournisseurs par dépenses"
+
+<b>⚖️ Comparaison</b>
+• "Compare Colruyt et Sligro"
+• "Différence entre Makro et Metro"
+• "Comparaison des dépenses chez Uber et Takeaway"
+
+<b>📋 Liste</b>
+• "Liste tous les fournisseurs"
+• "Quels fournisseurs dans la base ?"
+• "Montre-moi tous les fournisseurs"
+
+<b>➕ Gestion</b>
+• "Ajoute le fournisseur Delhaize"
+• "Ajoute Colruyt avec l'alias Colryt, Colruyt SA"
+• "Supprime le fournisseur Coca-Cola"`,
+
+            `📖 <b>GUIDE UTILISATEUR - PARTIE 3</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>💵 SALAIRES</b>
+
+<b>💰 Salaires d'un employé</b>
+• "Salaire de Mokhlis Jamhoun"
+• "Combien je paie à Soufiane ?"
+• "Salaires de Lina"
+• "Combien j'ai payé en salaire à Kalide Chami en 2025"
+
+<b>📊 Analyse</b>
+• "Analyse les salaires de décembre"
+• "Salaires de novembre 2025"
+• "Top 10 des salaires"
+• "Les 5 employés les mieux payés"
+
+<b>⚖️ Comparaison</b>
+• "Compare les salaires de Mokhlis et Soufiane"
+• "Différence entre Lina et Tag Lina"
+• "Compare Kalide, Mokhlis et Soufiane"
+
+<b>📍 Classement</b>
+• "Où se situe Mokhlis par rapport aux autres ?"
+• "Quel est le classement de Soufiane ?"
+• "Position de Lina parmi les employés"
+
+<b>📅 Par période</b>
+• "Salaires entre octobre et décembre"
+• "Salaires du premier trimestre 2025"
+• "Analyse des salaires de 2025"`,
+
+            `📖 <b>GUIDE UTILISATEUR - PARTIE 4</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>🏦 BANQUE</b>
+
+<b>💳 Transactions</b>
+• "Montre les dernières transactions"
+• "Derniers paiements bancaires"
+• "Transactions d'hier"
+• "Paiements de cette semaine"
+
+<b>🏦 Soldes</b>
+• "Balance du mois de décembre"
+• "Solde actuel du compte Europabank"
+• "Soldes de tous les comptes"
+• "Balance de novembre 2025"
+
+<b>📊 Analyse</b>
+• "Total des dépenses du mois"
+• "Résumé des dépenses de 2025"
+• "Analyse des transactions bancaires"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>💡 CONSEILS</b>
+• Utilisez "et" pour plusieurs fournisseurs
+• Précisez l'année si nécessaire
+• Vous pouvez envoyer des messages vocaux !`
+          ];
+
+          result = {
+            guide_parts: guideParts,
+            total_parts: guideParts.length,
+            direct_response: `📖 Envoi du guide utilisateur en ${guideParts.length} parties...`
+          };
           break;
         }
 
@@ -3784,9 +4473,16 @@ export class AIAgentServiceV2 {
 
       // 🔄 NOUVEAU: Tester aussi l'ordre inversé (ex: "Mokhlis Jamhoun" → "Jamhoun Mokhlis")
       if (searchParts.length === 2 && nameParts.length === 2) {
+        // Test 1: Ordre inversé de la recherche
         const reversedSearch = `${searchParts[1]} ${searchParts[0]}`;
         const reversedDistance = this.levenshteinDistance(reversedSearch, empNameLower);
         distance = Math.min(distance, reversedDistance);
+
+        // Test 2: Si les noms correspondent mais dans l'ordre inverse (distance 0 pour l'ordre inversé)
+        if (reversedDistance === 0) {
+          // Correspondance parfaite avec ordre inversé - distance très faible
+          distance = 1; // Distance minimale pour indiquer une correspondance
+        }
       }
 
       // Accepter seulement si la distance est raisonnable (max 3 caractères de différence)
@@ -3815,28 +4511,33 @@ export class AIAgentServiceV2 {
     }
 
     const searchLower = searchName.toLowerCase();
+    const searchParts = searchLower.split(' ');
     const matches: Array<{ employee: any; distance: number }> = [];
 
     for (const emp of employees) {
       const empNameLower = emp.name.toLowerCase();
+      const nameParts = empNameLower.split(' ');
 
       // Calculer la distance pour le nom complet
       let distance = this.levenshteinDistance(searchLower, empNameLower);
 
       // Vérifier aussi si le terme de recherche correspond à une partie du nom
-      const nameParts = empNameLower.split(' ');
       for (const part of nameParts) {
         const partDistance = this.levenshteinDistance(searchLower, part);
         distance = Math.min(distance, partDistance);
       }
 
       // 🔄 NOUVEAU: Tester aussi l'ordre inversé (ex: "Mokhlis Jamhoun" → "Jamhoun Mokhlis")
-      const searchParts = searchLower.split(' ');
       if (searchParts.length === 2 && nameParts.length === 2) {
         // Inverser l'ordre du nom recherché
         const reversedSearch = `${searchParts[1]} ${searchParts[0]}`;
         const reversedDistance = this.levenshteinDistance(reversedSearch, empNameLower);
         distance = Math.min(distance, reversedDistance);
+
+        // Si correspondance parfaite avec ordre inversé, distance minimale
+        if (reversedDistance === 0) {
+          distance = 1;
+        }
       }
 
       // Accepter si la distance est raisonnable
@@ -3883,6 +4584,17 @@ export class AIAgentServiceV2 {
       if (isComparisonQuery) {
         console.log('🔍 Détection: Question de comparaison de salaires - ajout d\'un hint pour l\'IA');
         question = `[HINT: Cette question nécessite compare_employee_salaries, pas get_employee_salaries] ${question}`;
+      }
+
+      // 🔍 Détection de plusieurs fournisseurs (ex: "Uber et Takeaway", "X et Y")
+      // Détecter si la question contient "X et Y" pour les fournisseurs
+      const multipleSuppliersInQuestion = /(?:facture|dépense|analyse|donne|montre|voir|liste).*?(\w+(?:\s+\w+)?)\s+et\s+(\w+(?:\s+\w+)?)/i;
+      const multipleSuppliersMatch = question.match(multipleSuppliersInQuestion);
+      if (multipleSuppliersMatch && !questionLower.includes('comparaison') && !questionLower.includes('compare')) {
+        const supplier1 = multipleSuppliersMatch[1];
+        const supplier2 = multipleSuppliersMatch[2];
+        console.log(`🔍 Détection: Plusieurs fournisseurs demandés ("${supplier1}" et "${supplier2}") - hint pour l'IA`);
+        question = `[HINT: CRITIQUE - L'utilisateur demande des informations sur PLUSIEURS fournisseurs: "${supplier1}" et "${supplier2}". Tu DOIS utiliser analyze_supplier_expenses avec supplier_name contenant TOUS les fournisseurs en une seule fois, séparés par " et ". Exemple: {supplier_name: "${supplier1} et ${supplier2}"}. NE PAS faire d'appels séparés.] ${question}`;
       }
 
       // Détection de période multi-mois (ex: "entre octobre et décembre")
@@ -3968,6 +4680,37 @@ export class AIAgentServiceV2 {
         question = `[HINT: L'utilisateur demande une analyse des dépenses fournisseurs. Utiliser analyze_supplier_expenses pour obtenir l'analyse complète avec statistiques.] ${question}`;
       }
 
+      // ========== DÉTECTIONS POUR "X DERNIÈRES FACTURES" ==========
+      // Détection de "X dernières factures", "les X dernières", "factures récentes", etc.
+      // Ex: "les 3 dernières factures", "donne-moi les 5 dernières factures", "factures récentes"
+      // Mapping des nombres en lettres vers chiffres
+      const numberWords: { [key: string]: string } = {
+        'une': '1', 'un': '1', 'deux': '2', 'trois': '3', 'quatre': '4', 'cinq': '5',
+        'six': '6', 'sept': '7', 'huit': '8', 'neuf': '9', 'dix': '10'
+      };
+
+      // Chercher d'abord les chiffres, puis les mots
+      let limit = '10';
+      const digitMatch = question.match(/(\d+)\s+derni[èe]res?\s+factures|les?\s+(\d+)\s+derni[èe]res?/i);
+      if (digitMatch) {
+        limit = digitMatch[1] || digitMatch[2] || '10';
+      } else {
+        // Chercher les nombres en lettres avant "dernières factures"
+        for (const [word, num] of Object.entries(numberWords)) {
+          if (questionLower.includes(word + ' dernières') || questionLower.includes(word + ' derniere')) {
+            limit = num;
+            break;
+          }
+        }
+      }
+
+      const lastInvoicesPattern = /(\d+|\w+)\s+derni[èe]res?\s+factures|les?\s+(\d+|\w+)\s+derni[èe]res?|factures?\s+r[ée]centes?|derni[èe]res?\s+factures/i;
+      const lastInvoicesMatch = question.match(lastInvoicesPattern);
+      if (lastInvoicesMatch && !questionLower.includes('analyse') && !questionLower.includes('dépense')) {
+        console.log(`🔍 Détection: ${limit} dernières factures demandées - ajout d'un hint pour l'IA`);
+        question = `[HINT: CRITIQUE - L'utilisateur demande les ${limit} DERNIÈRES FACTURES (pas une analyse). Tu DOIS utiliser get_last_n_invoices avec limit=${limit}. NE PAS utiliser analyze_supplier_expenses ni get_period_transactions. Si un fournisseur est mentionné, l'ajouter au paramètre supplier_name.] ${question}`;
+      }
+
       // ========== DÉTECTIONS POUR LES BALANCES MENSUELLES ==========
 
       // Détection de demande de balances pour PLUSIEURS mois (minimum 2)
@@ -3988,6 +4731,55 @@ export class AIAgentServiceV2 {
       if (hasRevenuesKeyword && (hasMultipleMonths || questionLower.match(/\d+\s*(derniers?|précédents?)\s*mois/))) {
         console.log(`🔍 Détection: Recettes multi-mois - ajout d'un hint pour l'IA`);
         question = `[HINT: L'utilisateur demande les recettes de PLUSIEURS mois. Utiliser get_multi_month_revenues avec la liste des mois concernés (format YYYY-MM). NE PAS utiliser get_period_transactions.] ${question}`;
+      }
+
+      // ========== DÉTECTION DE LA BALANCE ANNUELLE ==========
+      // Détection de demande de balance, bénéfice, chiffre d'affaires pour une année complète
+      // Patterns: "balance de 2025", "bénéfice pour l'année 2025", "chiffre d'affaires 2025", "CA 2025", "recettes 2025"
+      const annualBalancePattern = /(balance|bénéfice|benefice|profit|chiffre d'affaires|CA|recettes|dépenses|revenus?|résultat).*?(?:pour l'année\s+|de l'année\s+|de\s+|en\s+)?(\d{4})/i;
+      const annualBalanceMatch = question.match(annualBalancePattern);
+      if (annualBalanceMatch && !hasMultipleMonths) {
+        // Extraire l'année
+        const year = annualBalanceMatch[2];
+        console.log(`🔍 Détection: Analyse annuelle (${annualBalanceMatch[1]}) pour ${year} - ajout d'un hint pour l'IA`);
+        question = `[HINT: CRITIQUE - L'utilisateur demande une analyse annuelle (${annualBalanceMatch[1]}) pour l'année ${year} COMPLÈTE.
+Tu DOIS utiliser get_period_transactions avec:
+- start_date: "${year}-01-01"
+- end_date: "${year}-12-31"
+- NE PAS utiliser de filtre_type (pour avoir les crédits ET débits)
+- NE PAS utiliser de limite (laisser la pagination récupérer toutes les transactions)
+- NE PAS utiliser get_monthly_credits ni get_monthly_debits (ne donnent que les totaux par mois, pas les transactions détaillées)
+- La réponse doit montrer TOUTES les transactions de l'année ${year}, pas seulement quelques-unes.
+- Calculer: Recettes totales - Dépenses totales = Bénéfice
+] ${question}`;
+      }
+
+      // ========== DÉTECTION DE LA DERNIÈRE TRANSACTION ==========
+      // Détection de demande de la dernière transaction ou dernières transactions bancaires
+      const lastTransactionPattern = /(?:dernière|dernier|le? derni[eè]re?|plus?[ -]r[eé]cente?).*?(?:transaction|paiement|op[eé]ration)|transaction.*?(?:derni[eè]re?|r[eé]cente?|effectu[ée]e?)/i;
+      if (lastTransactionPattern.test(question) && !questionLower.includes('facture')) {
+        console.log('🔍 Détection: Dernière transaction bancaire demandée - ajout d\'un hint pour l\'IA');
+        question = `[HINT: CRITIQUE - L'utilisateur demande la dernièRE transaction bancaire (pas une facture, pas une balance).
+Tu DOIS utiliser get_period_transactions avec:
+- start_date: Utilise la date d'hier ou une date récente (ex: 2026-01-03)
+- end_date: Utilise la date d'aujourd'hui (ex: 2026-01-04)
+- limit: 10 (pour récupérer les 10 dernières transactions)
+- offset: 1 (première page)
+- NE PAS utiliser de filtre_type
+- Affiche SEULEMENT la première transaction (la plus récente) avec sa date, montant, description et type.
+] ${question}`;
+      }
+
+      // ========== DÉTECTION DE LA PAGINATION ==========
+      // Détecte quand l'utilisateur demande la page suivante des transactions
+      const paginationPattern = /(suivantes|suite|continue|page suivante|autre page|ensuite|suivante)/i;
+      if (paginationPattern.test(question)) {
+        console.log('🔍 Détection: Demande de pagination');
+        question = `[HINT: PAGINATION - L'utilisateur veut la page SUIVANTE.
+Cherche EXACTEMENT le pattern "📄 Page X/Y" dans ta dernière réponse (X est le numéro de page actuel).
+Utilise get_period_transactions avec offset: X+1.
+Exemples: "📄 Page 1/11" → offset: 2 | "📄 Page 5/11" → offset: 6
+IMPORTANT: Garde les mêmes start_date et end_date.] ${question}`;
       }
 
       // Construire les messages avec l'historique de conversation
@@ -4242,6 +5034,7 @@ INTERDICTIONS:
           console.log(`📞 Appel de ${message.tool_calls.length} fonction(s)`);
 
           let directResponse: string | null = null;
+          let guideParts: string[] | null = null;
 
           for (const toolCall of message.tool_calls) {
             const functionName = toolCall.function.name;
@@ -4250,10 +5043,14 @@ INTERDICTIONS:
             const result = await this.executeFunction(functionName, functionArgs);
             console.log(`✓ ${functionName}:`, result.substring(0, 100) + '...');
 
-            // Vérifier si le résultat contient un direct_response (ne prendre que le premier)
+            // Vérifier si le résultat contient un direct_response ou guide_parts
             try {
               const parsedResult = JSON.parse(result);
-              if (parsedResult.direct_response && !directResponse) {
+              if (parsedResult.guide_parts && !guideParts) {
+                // Guide utilisateur à envoyer en plusieurs parties
+                guideParts = parsedResult.guide_parts;
+                console.log(`📖 guide_parts détecté - ${guideParts!.length} parties à envoyer`);
+              } else if (parsedResult.direct_response && !directResponse) {
                 // Prendre seulement le PREMIER direct_response, ignorer les suivants
                 directResponse = parsedResult.direct_response;
                 console.log('📝 direct_response détecté - court-circuit de l\'IA');
@@ -4267,6 +5064,30 @@ INTERDICTIONS:
               tool_call_id: toolCall.id,
               content: result,
             });
+          }
+
+          // Si on a des guide_parts, les envoyer directement à Telegram
+          if (guideParts) {
+            const summaryMessage = `📖 Envoi du guide utilisateur en ${guideParts.length} parties...`;
+            this.conversationHistory.push(
+              { role: 'user', content: question },
+              { role: 'assistant', content: summaryMessage }
+            );
+            if (this.conversationHistory.length > this.MAX_HISTORY) {
+              this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY);
+            }
+            this.saveConversationState();
+
+            // Envoyer chaque partie du guide à Telegram
+            for (let i = 0; i < guideParts.length; i++) {
+              await this.telegramBot.sendMessage(guideParts[i]);
+              if (i < guideParts.length - 1) {
+                // Attendre 500ms entre les parties pour éviter le rate limiting
+                await new Promise(resolve => setTimeout(resolve, 500));
+              }
+            }
+
+            return summaryMessage;
           }
 
           // Si on a un direct_response, le retourner immédiatement
