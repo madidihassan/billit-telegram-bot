@@ -1589,8 +1589,15 @@ export class AIAgentServiceV2 {
               moreMessage;
           } else {
             // Afficher uniquement le résumé (pas de liste détaillée)
-            const monthName = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
-            directResponse = `📊 Balance de ${monthName}\n\n` +
+            // Détecter si c'est une année complète
+            const isFullYear = startDate.getMonth() === 0 && startDate.getDate() === 1 &&
+                               endDate.getMonth() === 11 && endDate.getDate() === 31 &&
+                               startDate.getFullYear() === endDate.getFullYear();
+            const periodTitle = isFullYear
+              ? `l'année ${startDate.getFullYear()}`
+              : startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+
+            directResponse = `📊 Balance de ${periodTitle}\n\n` +
               `Total: ${transactions.length} transactions\n` +
               `💰 Crédits: ${totalCredits.toFixed(2)}€ (${credits.length} tx)\n` +
               `💸 Débits: ${totalDebits.toFixed(2)}€ (${debits.length} tx)\n` +
@@ -4734,7 +4741,6 @@ export class AIAgentServiceV2 {
       }
 
       // ========== DÉTECTION DE LA BALANCE ANNUELLE ==========
-<<<<<<< HEAD
       // Détection de demande de balance, bénéfice, chiffre d'affaires pour une année complète
       // Patterns: "balance de 2025", "bénéfice pour l'année 2025", "chiffre d'affaires 2025", "CA 2025", "recettes 2025"
       const annualBalancePattern = /(balance|bénéfice|benefice|profit|chiffre d'affaires|CA|recettes|dépenses|revenus?|résultat).*?(?:pour l'année\s+|de l'année\s+|de\s+|en\s+)?(\d{4})/i;
@@ -4745,27 +4751,13 @@ export class AIAgentServiceV2 {
         console.log(`🔍 Détection: Analyse annuelle (${annualBalanceMatch[1]}) pour ${year} - ajout d'un hint pour l'IA`);
         question = `[HINT: CRITIQUE - L'utilisateur demande une analyse annuelle (${annualBalanceMatch[1]}) pour l'année ${year} COMPLÈTE.
 Tu DOIS utiliser get_period_transactions avec:
-=======
-      // Détection de demande de balance pour une année complète (ex: "balance de 2025", "balance de l'année 2025")
-      const annualBalancePattern = /balance.*?(?:de\s+l'année\s+)?(\d{4})|balance\s+(?:de\s+)?l'année\s+(\d{4})/i;
-      const annualBalanceMatch = question.match(annualBalancePattern);
-      if (annualBalanceMatch && !hasMultipleMonths) {
-        // Extraire l'année
-        const year = annualBalanceMatch[1] || annualBalanceMatch[2];
-        console.log(`🔍 Détection: Balance annuelle pour ${year} - ajout d'un hint pour l'IA`);
-        question = `[HINT: CRITIQUE - L'utilisateur demande la balance de l'année ${year} COMPLÈTE. Tu DOIS utiliser get_period_transactions avec:
->>>>>>> b4e654c1b6ca475f4e887a66b2f46f232f5ef60b
 - start_date: "${year}-01-01"
 - end_date: "${year}-12-31"
 - NE PAS utiliser de filtre_type (pour avoir les crédits ET débits)
 - NE PAS utiliser de limite (laisser la pagination récupérer toutes les transactions)
-<<<<<<< HEAD
 - NE PAS utiliser get_monthly_credits ni get_monthly_debits (ne donnent que les totaux par mois, pas les transactions détaillées)
 - La réponse doit montrer TOUTES les transactions de l'année ${year}, pas seulement quelques-unes.
 - Calculer: Recettes totales - Dépenses totales = Bénéfice
-=======
-- La réponse doit montrer TOUTES les transactions de l'année ${year}, pas seulement quelques-unes.
->>>>>>> b4e654c1b6ca475f4e887a66b2f46f232f5ef60b
 ] ${question}`;
       }
 
