@@ -4750,6 +4750,22 @@ export class AIAgentServiceV2 {
 ] ${question}`;
       }
 
+      // ========== DÉTECTION DE LA DERNIÈRE TRANSACTION ==========
+      // Détection de demande de la dernière transaction ou dernières transactions bancaires
+      const lastTransactionPattern = /(?:dernière|dernier|le? derni[eè]re?|plus?[ -]r[eé]cente?).*?(?:transaction|paiement|op[eé]ration)|transaction.*?(?:derni[eè]re?|r[eé]cente?|effectu[ée]e?)/i;
+      if (lastTransactionPattern.test(question) && !questionLower.includes('facture')) {
+        console.log('🔍 Détection: Dernière transaction bancaire demandée - ajout d\'un hint pour l\'IA');
+        question = `[HINT: CRITIQUE - L'utilisateur demande la dernièRE transaction bancaire (pas une facture, pas une balance).
+Tu DOIS utiliser get_period_transactions avec:
+- start_date: Utilise la date d'hier ou une date récente (ex: 2026-01-03)
+- end_date: Utilise la date d'aujourd'hui (ex: 2026-01-04)
+- limit: 10 (pour récupérer les 10 dernières transactions)
+- offset: 1 (première page)
+- NE PAS utiliser de filtre_type
+- Affiche SEULEMENT la première transaction (la plus récente) avec sa date, montant, description et type.
+] ${question}`;
+      }
+
       // ========== DÉTECTION DE LA PAGINATION ==========
       // Détecte quand l'utilisateur demande la page suivante des transactions
       const paginationPattern = /(suivantes|suite|continue|page suivante|autre page|ensuite|suivante)/i;
