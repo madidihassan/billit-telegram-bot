@@ -161,60 +161,74 @@ export class CommandHandler {
    */
   private handleHelp(): string {
     return `
-🤖 <b>Bot Billit - Commandes disponibles</b>
+🤖 <b>Billit Bot - Guide d'utilisation</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>💬 MODE CONVERSATIONNEL</b>
+
+Vous pouvez me poser des questions en langage naturel ! Essayez :
+
+<b>📋 FACTURES</b>
+• "Quelles factures sont impayées ?"
+• "Factures de plus de 3000€"
+• "Cherche les factures de Foster"
+• "Factures de Sligro en novembre"
+• "Factures de Colruyt et Makro"
+
+<b>🏢 FOURNISSEURS</b>
+• "Top 10 fournisseurs"
+• "Analyse les dépenses chez Sligro"
+• "Compare Colruyt et Sligro"
+• "Combien j'ai dépensé chez Uber Eats ?"
+• "Liste tous les fournisseurs"
+
+<b>💵 SALAIRES</b>
+• "Salaire de Mokhlis Jamhoun"
+• "Top 10 des employés les mieux payés"
+• "Analyse les salaires de décembre"
+• "Compare Mokhlis et Soufiane"
+• "Salaires entre octobre et décembre"
+
+<b>🏦 BANQUE</b>
+• "Balance du mois de décembre"
+• "Montre les dernières transactions"
+• "Solde du compte Europabank"
+• "Total des dépenses du mois"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>🎯 COMMANDES RAPIDES</b>
 
 <b>📋 Factures</b>
 /unpaid - Factures impayées
-/paid - Factures payées
 /overdue - Factures en retard
-/markpaid [numéro] - Marquer une facture comme payée
-/list_suppliers - Liste de tous les fournisseurs
-/list_employees - Liste de tous les employés
-/lastinvoice [fournisseur] - Dernière facture
-/invoice [numéro] - Détails complets
 /search [terme] - Rechercher
+/lastinvoice [n] - Dernières factures
 
-<b>💰 Transactions bancaires</b>
-/transactions_mois - Transactions du mois
-/recettes_mois - Rentrées du mois
-/depenses_mois - Sorties du mois
-/balance_mois - Balance du mois
-/transactions_fournisseur [nom] - Transactions d'un fournisseur
-/transactions_periode [debut] [fin] - Période spécifique
+<b>👥 Gestion</b>
+/list_suppliers - Liste fournisseurs
+/list_employees - Liste employés
+/listusers - Utilisateurs autorisés
 
-<b>📊 Statistiques</b>
-/stats - Statistiques factures du mois
-/supplier [nom] - Factures d'un fournisseur
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-<b>⚙️ Gestion des fournisseurs</b>
-/addsupplier [clé] [nom] [aliases...] - Ajouter un fournisseur
-/deletesupplier [clé] - Supprimer un fournisseur
+<b>💡 CONSEILS</b>
+• Utilisez "et" pour plusieurs fournisseurs
+• Précisez l'année si nécessaire
+• Vous pouvez envoyer des messages vocaux !
 
-<b>👥 Gestion des utilisateurs</b>
-/adduser [chat_id] - Ajouter un utilisateur autorisé
-/removeuser [chat_id] - Supprimer un utilisateur autorisé
-/listusers - Liste tous les utilisateurs autorisés
+<b>📖 Guide complet</b>
+Voir GUIDE_UTILISATEUR.md pour tous les exemples
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-<b>💰 Soldes bancaires</b>
-/init_balances - Initialiser les soldes des comptes
-/balances - Voir les soldes actuels
-/update_balances - Mettre à jour avec les nouvelles transactions
-/set_balance [IBAN] [montant] - Modifier un solde manuellement
-
-<b>🤖 Agent IA</b>
+<b>🤖 Outils IA</b>
 /tools - Liste tous les outils IA disponibles
 
 <b>ℹ️ Aide</b>
 /help - Afficher cette aide
 
-<b>Exemples :</b>
-<code>/unpaid</code> ou 🎤 "Factures impayées"
-<code>/list_suppliers</code> ou 🎤 "Liste des fournisseurs"
-<code>/recettes_mois</code> ou 🎤 "Recettes de ce mois"
-<code>/markpaid 9901329189</code> pour marquer une facture comme payée
-<code>/addsupplier pluxee "Pluxee Belgium" pluxi pluxee</code>
-<code>/transactions_fournisseur Foster</code>
-<code>/transactions_periode 2025-01-01 2025-12-01</code>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     `.trim();
   }
 

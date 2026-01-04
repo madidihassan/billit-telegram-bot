@@ -411,6 +411,48 @@ export class BankClient {
   }
 
   /**
+   * Récupère le solde actuel d'un compte depuis l'API Billit
+   * utilise l'endpoint /v1/bankaccounts pour obtenir le solde réel
+   */
+  async getRealTimeBalance(iban: string): Promise<number | null> {
+    try {
+      const ibanClean = iban.replace(/\s/g, '');
+
+      console.log(`🔍 Récupération du solde réel pour ${ibanClean}...`);
+
+      // Essayer l'endpoint /v1/bankaccounts avec filtre sur l'IBAN
+      const response = await this.axiosInstance.get('/v1/bankaccounts', {
+        params: {
+          $filter: `IBAN eq '${ibanClean}'`,
+          $top: 1,
+        },
+      });
+
+      const accounts = response.data?.Items || response.data?.items || response.data || [];
+
+      if (Array.isArray(accounts) && accounts.length > 0) {
+        const account = accounts[0];
+        // Le solde peut être dans différents champs selon la version de l'API
+        const balance = account.Balance || account.CurrentBalance || account.BalanceEUR || account.Amount || 0;
+        const balanceNum = parseFloat(String(balance));
+
+        console.log(`✅ Solde réel trouvé pour ${ibanClean}: €${balanceNum.toFixed(2)}`);
+        return balanceNum;
+      }
+
+      console.log(`⚠️ Aucun compte trouvé pour l'IBAN ${ibanClean}`);
+      return null;
+    } catch (error: any) {
+      console.error(`❌ Erreur lors de la récupération du solde pour ${iban}:`, error.message);
+      // Si l'endpoint n'existe pas (404), retourner null pour utiliser l'ancienne méthode
+      if (error.response?.status === 404) {
+        console.log(`ℹ️ Endpoint /v1/bankaccounts non disponible, solde réel non récupérable`);
+      }
+      return null;
+    }
+  }
+
+  /**
    * Parse une date depuis différents formats
    */
   static parseDate(dateStr: string): Date | null {

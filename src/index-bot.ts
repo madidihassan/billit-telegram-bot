@@ -133,15 +133,16 @@ class BillitNotifierWithBot {
 
     this.isRunning = true;
 
+    // ⚠️ ANCIEN SYSTÈME DÉSACTIVÉ - Causait des doublons
     // Première vérification immédiate
-    await this.checkForNewInvoices();
+    // await this.checkForNewInvoices();
 
     // Ensuite, vérification périodique
-    this.intervalId = setInterval(async () => {
-      await this.checkForNewInvoices();
-    }, config.checkInterval);
+    // this.intervalId = setInterval(async () => {
+    //   await this.checkForNewInvoices();
+    // }, config.checkInterval);
 
-    // Démarrer le nouveau service de monitoring des factures
+    // ✅ NOUVEAU SYSTÈME DE MONITORING (avec PDF automatique)
     await this.telegramBot.startMonitoring();
 
     // Démarrer le service de mise à jour automatique des soldes bancaires

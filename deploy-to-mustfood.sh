@@ -22,15 +22,15 @@ rsync -av --exclude='.env' \
     --exclude='node_modules/' \
     --exclude='.git/' \
     --exclude='*.log' \
-    src/ /home/ubuntu/Billit/mustfood/src/
+    src/ /home/ubuntu/Billit/bot_mustfood/src/
 
 # Copier les fichiers de config nécessaires
 echo "📋 Copie des fichiers de configuration..."
-cp package.json package-lock.json tsconfig.json /home/ubuntu/Billit/mustfood/
-cp .env.example /home/ubuntu/Billit/mustfood/
+cp package.json package-lock.json tsconfig.json /home/ubuntu/Billit/bot_mustfood/
+cp .env.example /home/ubuntu/Billit/bot_mustfood/
 
 # Se déplacer dans mustfood
-cd /home/ubuntu/Billit/mustfood
+cd /home/ubuntu/Billit/bot_mustfood
 
 # Installer les dépendances si nécessaire
 if [ ! -d "node_modules" ]; then
@@ -47,8 +47,8 @@ echo "✅ Déploiement vers Mustfood terminé !"
 echo "⚠️  N'oubliez pas de vérifier le fichier .env dans mustfood"
 echo ""
 echo "🔄 Pour redémarrer le bot mustfood, utilisez:"
-echo "   cd /home/ubuntu/Billit/mustfood && ./start-bot-wrapper.sh"
+echo "   cd /home/ubuntu/Billit/bot_mustfood && ./start-bot-wrapper.sh"
 echo ""
 
 # Retourner à la branche d'origine
-cd /home/ubuntu/Billit/tonton202
+cd /home/ubuntu/Billit/bot_tonton202

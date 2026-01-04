@@ -51,9 +51,9 @@ echo "✅ Code compilé"
 
 # 3. Copier vers l'instance de développement
 if [ "$TARGET_BOT" = "tonton202" ]; then
-    DEV_PATH="/home/ubuntu/Billit/tonton202"
+    DEV_PATH="/home/ubuntu/Billit/bot_tonton202"
 elif [ "$TARGET_BOT" = "mustfood" ]; then
-    DEV_PATH="/home/ubuntu/Billit/mustfood"
+    DEV_PATH="/home/ubuntu/Billit/bot_mustfood"
 fi
 
 if [ -d "$DEV_PATH" ] && [ "$DEV_PATH" != "$(pwd)" ]; then

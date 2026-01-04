@@ -15,7 +15,7 @@ Le wrapper `start-bot-wrapper.sh` a été modifié pour redémarrer dans **tous 
 
 ```bash
 # Démarrer le bot avec auto-redémarrage
-cd /home/ubuntu/Billit/mustfood  # ou tonton202
+cd /home/ubuntu/Billit/bot_mustfood  # ou tonton202
 ./start-bot-safe.sh
 ```
 
@@ -27,7 +27,7 @@ Le bot redémarrera automatiquement :
 
 **Pour arrêter définitivement** :
 ```bash
-pkill -f "/home/ubuntu/Billit/mustfood.*start-bot-wrapper"
+pkill -f "/home/ubuntu/Billit/bot_mustfood.*start-bot-wrapper"
 ```
 
 ---
@@ -47,7 +47,7 @@ pkill -f "/home/ubuntu/Billit/mustfood.*start-bot-wrapper"
 
 ```bash
 # Créer le fichier .env.watchdog
-cd /home/ubuntu/Billit/mustfood
+cd /home/ubuntu/Billit/bot_mustfood
 cat > .env.watchdog << EOF
 WATCHDOG_TOKEN=YOUR_WATCHDOG_BOT_TOKEN
 WATCHDOG_CHAT_ID=7887749968
@@ -93,12 +93,12 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/Billit/mustfood
+WorkingDirectory=/home/ubuntu/Billit/bot_mustfood
 ExecStart=/usr/bin/npm run start:bot
 Restart=always
 RestartSec=10
-StandardOutput=append:/home/ubuntu/Billit/mustfood/systemd.log
-StandardError=append:/home/ubuntu/Billit/mustfood/systemd-error.log
+StandardOutput=append:/home/ubuntu/Billit/bot_mustfood/systemd.log
+StandardError=append:/home/ubuntu/Billit/bot_mustfood/systemd-error.log
 
 [Install]
 WantedBy=multi-user.target
@@ -148,7 +148,7 @@ npm install -g pm2
 
 **Démarrer le bot avec PM2** :
 ```bash
-cd /home/ubuntu/Billit/mustfood
+cd /home/ubuntu/Billit/bot_mustfood
 
 # Démarrer
 pm2 start dist/index-bot.js --name "mustfood-bot"
@@ -205,7 +205,7 @@ app.use((req, res, next) => {
 });
 
 app.post('/start', (req, res) => {
-  exec('cd /home/ubuntu/Billit/mustfood && ./start-bot-safe.sh', (err, stdout) => {
+  exec('cd /home/ubuntu/Billit/bot_mustfood && ./start-bot-safe.sh', (err, stdout) => {
     res.json({ success: !err, output: stdout });
   });
 });
@@ -263,7 +263,7 @@ Si rien ne fonctionne, connecte-toi en SSH :
 ssh ubuntu@your-server
 
 # Aller dans le dossier
-cd /home/ubuntu/Billit/mustfood
+cd /home/ubuntu/Billit/bot_mustfood
 
 # Démarrer manuellement
 ./start-bot-safe.sh
