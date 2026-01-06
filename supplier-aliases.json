@@ -57,6 +57,16 @@
       "amazonmarketplace"
     ]
   },
+  "amzn mktp be 1855": {
+    "aliases": [
+      "amzn mktp be 1855",
+      "amzn",
+      "amzn mktp"
+    ],
+    "patterns": [
+      "amznmktpbe1855"
+    ]
+  },
   "apple store r486": {
     "aliases": [
       "apple store r486",
@@ -904,6 +914,16 @@
       "ozfoodsa"
     ]
   },
+  "p v assurances pol": {
+    "aliases": [
+      "p v assurances pol",
+      "p",
+      "p v"
+    ],
+    "patterns": [
+      "pvassurancespol"
+    ]
+  },
   "paiement bit mastercard": {
     "aliases": [
       "paiement debit mastercard",
@@ -1078,6 +1098,16 @@
     ],
     "patterns": [
       "soufianemadidi"
+    ]
+  },
+  "speos belgium 1000": {
+    "aliases": [
+      "speos belgium 1000",
+      "speos",
+      "speos belgium"
+    ],
+    "patterns": [
+      "speosbelgium1000"
     ]
   },
   "taglina": {

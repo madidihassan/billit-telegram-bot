@@ -44,10 +44,13 @@ export class BillitClient {
         filter += ` and LastModified ge DateTime'${params.from_date}'`;
       }
 
+      // IMPORTANT: Trier par OrderDate décroissant pour avoir les plus récentes en premier
+      // et augmenter la limite à 120 (max autorisé par l'API Billit)
       const response = await this.axiosInstance.get<BillitOrdersResponse>('/v1/orders', {
         params: {
           $filter: filter,
-          $top: params?.limit || 100,
+          $top: params?.limit || 120,
+          $orderby: 'OrderDate desc',
         },
       });
 
