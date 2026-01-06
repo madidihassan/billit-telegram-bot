@@ -7,6 +7,40 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# ========================================
+# PRÉVENTION DES DOUBLONS
+# ========================================
+echo "🔍 Vérification des processus existants dans $SCRIPT_DIR..."
+
+# Fonction pour tuer les processus d'un type donné dans ce répertoire
+kill_processes_in_dir() {
+  local pattern="$1"
+  local description="$2"
+
+  pgrep -f "$pattern" 2>/dev/null | while read pid; do
+    # Vérifier le répertoire de travail du processus
+    dir=$(pwdx "$pid" 2>/dev/null | awk '{print $2}')
+
+    # Si le processus tourne dans notre répertoire, le tuer (sauf nous-même)
+    if [ "$dir" = "$SCRIPT_DIR" ] && [ "$pid" != "$$" ]; then
+      parent_pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+      if [ "$parent_pid" != "$$" ]; then
+        echo "  ⚠️  Arrêt de $description existant (PID $pid)"
+        kill -9 "$pid" 2>/dev/null
+      fi
+    fi
+  done
+}
+
+# Tuer les anciens wrappers (sauf le processus actuel)
+kill_processes_in_dir "start-bot-wrapper" "wrapper"
+
+# Tuer les anciens bots Node.js
+kill_processes_in_dir "node dist/index-bot" "bot"
+
+echo "✅ Nettoyage terminé - démarrage du nouveau bot"
+echo ""
+
 echo "🚀 Démarrage du Billit Bot avec auto-redémarrage..."
 echo "📝 Le bot sera redémarré automatiquement quel que soit le code de sortie"
 echo "📝 Pour arrêter définitivement : pkill -f 'start-bot-wrapper'"
