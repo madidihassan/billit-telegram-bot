@@ -3539,6 +3539,51 @@ export class AIAgentServiceV2 {
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+<b>📊 ANALYSE PAR CATÉGORIE</b>
+
+<b>🏷️ Toutes les catégories</b>
+• "Analyse mes dépenses par catégorie"
+• "Montre-moi mes dépenses par catégorie"
+• "Répartition de mes dépenses"
+• "Aperçu de toutes mes dépenses"
+
+<b>⚡ Utilities (Électricité, Gaz, Eau)</b>
+• "Combien j'ai dépensé en utilities ?"
+• "Analyse mes utilities le mois dernier"
+• "Dépenses d'électricité sur 3 mois"
+• "Consommation gaz et eau"
+
+<b>🏠 Loyers et charges fixes</b>
+• "Montre-moi mes loyers"
+• "Analyse mes loyers et charges fixes"
+• "Dépenses de loyer cette année"
+
+<b>🍔 Alimentation</b>
+• "Dépenses d'alimentation"
+• "Combien je dépense en alimentation par mois ?"
+• "Analyse des achats alimentaires"
+
+<b>📱 Télécom et Internet</b>
+• "Dépenses télécom"
+• "Factures internet et téléphone"
+
+<b>🔒 Assurances</b>
+• "Dépenses d'assurances"
+• "Combien coûtent mes assurances"
+
+<b>💼 Salaires</b>
+• "Analyse des salaires par catégorie"
+• "Total des salaires du mois"
+
+<b>📈 Évolution et comparaisons</b>
+• "Compare mes dépenses avec l'an dernier"
+• "Évolution des dépenses sur 6 mois"
+• "Tendance de mes utilities"`,
+
+            `📖 <b>GUIDE UTILISATEUR - PARTIE 5</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 <b>🏦 BANQUE</b>
 
 <b>💳 Transactions</b>
