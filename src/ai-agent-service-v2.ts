@@ -4,6 +4,7 @@ import { CommandHandler } from './command-handler';
 import { BillitClient } from './billit-client';
 import { BankClient } from './bank-client';
 import { OpenRouterClient } from './openrouter-client';
+import { ExpenseCategorizer, ExpenseCategoryType } from './expense-categorizer';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -495,6 +496,32 @@ export class AIAgentServiceV2 {
           name: 'get_user_guide',
           description: '⚠️ APPEL OBLIGATOIRE: Envoyer le guide utilisateur complet avec tous les exemples de questions et commandes. Tu DOIS appeler cet outil quand l\'utilisateur demande "donne moi le guide", "guide", "aide complète", "comment utiliser le bot", "quelles questions poser", "que puis-je demander". Le guide sera envoyé en plusieurs parties automatiquement.',
           parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'analyze_expenses_by_category',
+          description: '⚠️ APPEL OBLIGATOIRE: Analyser les dépenses par catégorie (loyers, utilities, alimentation, salaires, etc.). Tu DOIS appeler cet outil pour: "analyse mes dépenses par catégorie", "dépenses par catégorie", "montre-moi mes loyers et charges fixes", "combien je dépense en électricité", "analyse mes utilities", "dépenses alimentaires". Permet de voir la répartition des dépenses et leur évolution.',
+          parameters: {
+            type: 'object',
+            properties: {
+              category: {
+                type: 'string',
+                description: 'Catégorie spécifique à analyser (optionnel). Peut être: "loyers", "utilities", "alimentation", "salaires", "telecom", "assurance", "services", "taxes", ou "tout" pour toutes les catégories.',
+                enum: ['loyers', 'utilities', 'telecom', 'assurance', 'alimentation', 'salaires', 'services', 'taxes', 'tout']
+              },
+              months: {
+                type: 'number',
+                description: 'Nombre de mois à analyser (par défaut 6 mois pour voir la tendance). Ex: 3, 6, 12.',
+              },
+              compare_with_previous: {
+                type: 'boolean',
+                description: 'Comparer avec la même période de l\'année précédente (ex: janvier 2026 vs janvier 2025).'
+              }
+            },
+            required: [],
+          },
         },
       },
       {
@@ -3544,6 +3571,167 @@ export class AIAgentServiceV2 {
             total_parts: guideParts.length,
             direct_response: `📖 Envoi du guide utilisateur en ${guideParts.length} parties...`
           };
+          break;
+        }
+
+        case 'analyze_expenses_by_category': {
+          try {
+            console.log('📊 analyze_expenses_by_category: Analyse des dépenses par catégorie');
+
+            const category = args.category as ExpenseCategoryType | 'tout' | undefined;
+            const months = (args.months as number) || 6;
+            const compareWithPrevious = args.compare_with_previous as boolean || false;
+
+            // Initialiser le catégoriseur
+            const categorizer = new ExpenseCategorizer();
+
+            // Calculer la période d'analyse
+            const now = new Date();
+            const startDate = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+            const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+            console.log(`📅 Période d'analyse: ${startDate.toLocaleDateString('fr-BE')} au ${endDate.toLocaleDateString('fr-BE')}`);
+
+            // Récupérer toutes les factures
+            const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+            const invoicesInPeriod = allInvoices.filter(inv => {
+              const invDate = new Date(inv.invoice_date);
+              return invDate >= startDate && invDate <= endDate;
+            });
+
+            console.log(`📄 ${invoicesInPeriod.length} factures dans la période`);
+
+            // Catégoriser chaque facture
+            const categoryData: { [key: string]: { total: number; count: number; suppliers: Set<string>; monthly: { [key: string]: number } } } = {};
+
+            for (const invoice of invoicesInPeriod) {
+              const categorization = categorizer.categorizeSupplier(invoice.supplier_name);
+              const catKey = categorization.category;
+
+              if (!categoryData[catKey]) {
+                categoryData[catKey] = {
+                  total: 0,
+                  count: 0,
+                  suppliers: new Set(),
+                  monthly: {},
+                };
+              }
+
+              categoryData[catKey].total += invoice.total_amount;
+              categoryData[catKey].count += 1;
+              categoryData[catKey].suppliers.add(invoice.supplier_name);
+
+              // Par mois
+              const monthKey = `${new Date(invoice.invoice_date).getFullYear()}-${String(new Date(invoice.invoice_date).getMonth() + 1).padStart(2, '0')}`;
+              categoryData[catKey].monthly[monthKey] = (categoryData[catKey].monthly[monthKey] || 0) + invoice.total_amount;
+            }
+
+            // Filtrer par catégorie si demandé
+            const categoriesToShow = category && category !== 'tout' ? [category] : Object.keys(categoryData);
+
+            // Préparer le résultat
+            const analysis: any = {
+              period: {
+                start: startDate.toISOString().split('T')[0],
+                end: endDate.toISOString().split('T')[0],
+                months: months,
+              },
+              categories: [],
+              total_expenses: 0,
+            };
+
+            for (const catKey of categoriesToShow) {
+              const cat = categoryData[catKey];
+              const categoryInfo = categorizer.getCategory(catKey as ExpenseCategoryType);
+
+              if (!cat || cat.count === 0) continue;
+
+              // Calculer la tendance
+              const monthKeys = Object.keys(cat.monthly).sort();
+              const trend = monthKeys.length >= 2
+                ? (cat.monthly[monthKeys[monthKeys.length - 1]] || 0) > (cat.monthly[monthKeys[0]] || 0)
+                  ? 'up'
+                  : (cat.monthly[monthKeys[monthKeys.length - 1]] || 0) < (cat.monthly[monthKeys[0]] || 0)
+                    ? 'down'
+                    : 'stable'
+                : 'stable';
+
+              const categoryResult: any = {
+                id: catKey,
+                name: categoryInfo?.name || catKey,
+                description: categoryInfo?.description || '',
+                total: Math.round(cat.total * 100) / 100,
+                count: cat.count,
+                average: Math.round((cat.total / cat.count) * 100) / 100,
+                type: categoryInfo?.type || 'variable',
+                frequency: categoryInfo?.frequency || 'ponctuel',
+                suppliers: Array.from(cat.suppliers).slice(0, 10),
+                monthly_breakdown: cat.monthly,
+                trend: trend,
+              };
+
+              // Calculer l'évolution en %
+              if (monthKeys.length >= 2) {
+                const firstMonth = cat.monthly[monthKeys[0]] || 0;
+                const lastMonth = cat.monthly[monthKeys[monthKeys.length - 1]] || 0;
+                if (firstMonth > 0) {
+                  categoryResult.evolution_percent = Math.round(((lastMonth - firstMonth) / firstMonth) * 100);
+                }
+              }
+
+              analysis.categories.push(categoryResult);
+              analysis.total_expenses += cat.total;
+            }
+
+            // Trier par montant décroissant
+            analysis.categories.sort((a: any, b: any) => b.total - a.total);
+
+            // Comparaison avec période précédente si demandé
+            if (compareWithPrevious && months <= 12) {
+              const prevStartDate = new Date(startDate.getFullYear() - 1, startDate.getMonth(), 1);
+              const prevEndDate = new Date(endDate.getFullYear() - 1, endDate.getMonth(), endDate.getDate());
+
+              const prevInvoices = allInvoices.filter(inv => {
+                const invDate = new Date(inv.invoice_date);
+                return invDate >= prevStartDate && invDate <= prevEndDate;
+              });
+
+              const prevCategoryData: { [key: string]: number } = {};
+              for (const invoice of prevInvoices) {
+                const categorization = categorizer.categorizeSupplier(invoice.supplier_name);
+                prevCategoryData[categorization.category] = (prevCategoryData[categorization.category] || 0) + invoice.total_amount;
+              }
+
+              analysis.comparison = {
+                previous_period: {
+                  start: prevStartDate.toISOString().split('T')[0],
+                  end: prevEndDate.toISOString().split('T')[0],
+                },
+                categories: analysis.categories.map((cat: any) => ({
+                  id: cat.id,
+                  name: cat.name,
+                  current: cat.total,
+                  previous: Math.round((prevCategoryData[cat.id] || 0) * 100) / 100,
+                  difference: Math.round((cat.total - (prevCategoryData[cat.id] || 0)) * 100) / 100,
+                  percent: prevCategoryData[cat.id] > 0
+                    ? Math.round(((cat.total - prevCategoryData[cat.id]) / prevCategoryData[cat.id]) * 100)
+                    : null,
+                })),
+              };
+            }
+
+            result = {
+              success: true,
+              analysis: analysis,
+            };
+          } catch (error: any) {
+            console.error('❌ Erreur analyze_expenses_by_category:', error);
+            result = {
+              success: false,
+              error: 'analysis_error',
+              message: `Erreur lors de l'analyse des dépenses: ${error.message}`,
+            };
+          }
           break;
         }
 
