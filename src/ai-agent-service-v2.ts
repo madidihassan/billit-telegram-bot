@@ -2644,8 +2644,24 @@ export class AIAgentServiceV2 {
           const totalDebits = debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
           const totalCredits = credits.reduce((sum, tx) => sum + tx.amount, 0);
 
-          // Si plus de crédits que de débits, c'est un partenaire qui verse (revenus)
-          const isRevenuePartner = totalCredits > totalDebits;
+          // 📋 MOTS-CLÉS: Si l'utilisateur demande "factures" = dépenses, "revenus"/"recettes" = crédits
+          const questionLower = this.currentQuestion.toLowerCase();
+          const userWantsInvoices = questionLower.includes('facture') || questionLower.includes('dépense') ||
+                                   questionLower.includes('depense') || questionLower.includes('paiement');
+          const userWantsRevenue = questionLower.includes('revenu') || questionLower.includes('recette') ||
+                                   questionLower.includes('gain') || questionLower.includes('encaissé');
+
+          let isRevenuePartner = false;
+          if (userWantsRevenue) {
+            // Utilisateur veut explicitement les revenus
+            isRevenuePartner = totalCredits > 0;
+          } else if (userWantsInvoices) {
+            // Utilisateur veut explicitement les factures/dépenses
+            isRevenuePartner = false;
+          } else {
+            // Détection automatique: Si plus de crédits que de débits, c'est un partenaire qui verse (revenus)
+            isRevenuePartner = totalCredits > totalDebits;
+          }
           const supplierExpenses = isRevenuePartner ? credits : debits;
 
           const totalSpent = supplierExpenses.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
@@ -2654,7 +2670,6 @@ export class AIAgentServiceV2 {
           supplierExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
           // 📊 ANALYSE PAR FOURNISSEUR
-          const questionLower = this.currentQuestion.toLowerCase();
           const userAsksForAnalysis = questionLower.includes('analyse') || questionLower.includes('top');
           const isMultiSupplierQuery = !args.supplier_name && supplierExpenses.length > 0;
           const isSpecificSupplierAnalysis = args.supplier_name && supplierExpenses.length > 0;
