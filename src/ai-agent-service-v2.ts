@@ -4966,6 +4966,19 @@ export class AIAgentServiceV2 {
         question = `[HINT: CRITIQUE - L'utilisateur demande les ${limit} DERNIÈRES FACTURES (pas une analyse). Tu DOIS utiliser get_last_n_invoices avec limit=${limit}. NE PAS utiliser analyze_supplier_expenses ni get_period_transactions. Si un fournisseur est mentionné, l'ajouter au paramètre supplier_name.] ${question}`;
       }
 
+      // ========== DÉTECTION POUR "FACTURES [FOURNISSEUR]" ==========
+      // Détection de "factures Uber", "donne-moi les factures de Coca-Cola", etc.
+      // MAIS PAS "analyse" ou "dépenses" (pour éviter conflit avec analyze_supplier_expenses)
+      const simpleInvoicesPattern = /factures?\s+(?:de\s+)?(?:[a-zàâäéèêëïîôùûüç\s-]+)|(?:donne|montre|liste|voir)?\s*(?:moi|les?\s*)?factures?\s+(?:de\s+)?[a-zàâäéèêëïîôùûüç\s-]+/i;
+      const simpleInvoicesMatch = question.match(simpleInvoicesPattern);
+      const hasExplicitAnalysisWord = questionLower.includes('analyse') || questionLower.includes('dépense') ||
+                                      questionLower.includes('statistiques') || questionLower.includes('top') ||
+                                      questionLower.includes('évolution') || questionLower.includes('mensuel');
+      if (simpleInvoicesMatch && !hasExplicitAnalysisWord && !questionLower.includes('dernières') && !questionLower.includes('récentes')) {
+        console.log(`🔍 Détection: Factures d'un fournisseur demandées - ajout d'un hint pour l'IA`);
+        question = `[HINT: CRITIQUE - L'utilisateur demande les FACTURES d'un fournisseur spécifique (pas une analyse avec statistiques). Tu DOIS utiliser get_recent_invoices avec supplier_name. NE PAS utiliser analyze_supplier_expenses (qui donne des statistiques). Retourner la liste des factures avec dates, montants et numéros.] ${question}`;
+      }
+
       // ========== DÉTECTIONS POUR LES BALANCES MENSUELLES ==========
 
       // Détection de demande de balances pour PLUSIEURS mois (minimum 2)
