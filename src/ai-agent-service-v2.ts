@@ -4519,6 +4519,13 @@ TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
 2. **NE DIS JAMAIS "je n'ai pas accès"** - Tu as TOUTES les données via tes outils. Appelle-les.
 2b. **LISTE DES OUTILS** - Si on te demande "liste les outils", "quels outils as-tu", "liste les fonctions IA", réponds directement avec la liste de tes 25 outils disponibles (factures, paiements, recherche, gestion utilisateurs, etc.) SANS appeler de fonction
 3. **SYNTHÈSE** - Réponds en 2-4 phrases (sauf pour les listes explicites)
+3b. ⚠️ **LISTES COMPLÈTES - RÈGLE ABSOLUE** - Quand l'utilisateur demande "liste toutes", "liste toutes les factures", "toutes les factures", "liste complète":
+   - Tu DOIS afficher CHAQUE élément de la liste, sans exception
+   - Ne JAMAIS tronquer, résumer ou dire "il y a X factures" sans les lister
+   - Si l'outil retourne 28 factures, affiche LES 28 factures avec tous les détails
+   - Format: Numéro, Fournisseur, Montant, Date pour CHAQUE facture
+   - Même si la réponse est très longue (>4000 caractères), continue jusqu'à la fin
+   - La pagination Telegram se chargera de découper automatiquement
 4. **FORMAT NATUREL** - Parle comme un humain
 5. **ÉMOJIS** - 2-3 max pour la clarté
 6. **COHÉRENCE** - Même montant = même réponse
@@ -4707,7 +4714,7 @@ INTERDICTIONS:
             tools: this.tools,
             tool_choice: 'auto',
             temperature: 0.3,
-            max_tokens: 500,
+            max_tokens: 2000, // ⚡ Augmenté de 500 → 2000 pour listes complètes
           });
         } else if (this.groq) {
           response = await this.groq.chat.completions.create({
@@ -4716,7 +4723,7 @@ INTERDICTIONS:
             tools: this.tools,
             tool_choice: 'auto',
             temperature: 0.3,
-            max_tokens: 500,
+            max_tokens: 2000, // ⚡ Augmenté de 500 → 2000 pour listes complètes
           });
         } else {
           throw new Error('Aucun provider IA disponible');
