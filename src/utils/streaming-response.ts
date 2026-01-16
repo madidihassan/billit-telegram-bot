@@ -50,8 +50,8 @@ export class StreamingResponse {
     this.bot = bot;
     this.chatId = chatId;
     this.options = {
-      updateInterval: options.updateInterval ?? 300,
-      minChunkSize: options.minChunkSize ?? 50,
+      updateInterval: options.updateInterval ?? 150, // ⚡ 150ms au lieu de 300ms (plus fluide)
+      minChunkSize: options.minChunkSize ?? 25,      // ⚡ 25 chars au lieu de 50 (chunks plus petits = streaming plus visible)
       showProgressEmojis: options.showProgressEmojis ?? true,
       sendTypingIndicator: options.sendTypingIndicator ?? true,
     };
@@ -84,18 +84,17 @@ export class StreamingResponse {
    * Streame une réponse texte en chunks
    *
    * @param fullText - Texte complet à streamer
-   * @param progressMessage - Message de progression initial (optionnel)
+   * @param existingMessageId - ID du message existant à éditer (pour continuer un message de progression)
    * @returns Message final envoyé
    */
-  async streamText(fullText: string, progressMessage?: string): Promise<TelegramBot.Message> {
+  async streamText(fullText: string, existingMessageId?: number): Promise<TelegramBot.Message> {
     try {
-      // 1. Envoyer message de progression initial
       let message: TelegramBot.Message;
 
-      if (progressMessage && this.options.showProgressEmojis) {
-        message = await this.bot.sendMessage(this.chatId, progressMessage);
-        this.currentMessageId = message.message_id;
-        await this.sleep(500); // Laisser l'utilisateur voir le message
+      // 1. Utiliser le message existant s'il est fourni (au lieu de créer un nouveau)
+      if (existingMessageId) {
+        this.currentMessageId = existingMessageId;
+        logDebug(`Streaming sur message existant ${existingMessageId}`, 'streaming-response');
       }
 
       // 2. Découper le texte en chunks intelligents (par phrase)
@@ -103,43 +102,46 @@ export class StreamingResponse {
 
       logDebug(`Streaming ${chunks.length} chunks`, 'streaming-response');
 
-      // 3. Envoyer le premier chunk
+      // 3. Éditer/Envoyer le premier chunk
       const firstChunk = chunks[0];
-      if (!this.currentMessageId) {
-        message = await this.bot.sendMessage(this.chatId, firstChunk);
-        this.currentMessageId = message.message_id;
-      } else {
+      if (this.currentMessageId) {
+        // Éditer le message existant (message de progression)
         message = await this.bot.editMessageText(firstChunk, {
           chat_id: this.chatId,
           message_id: this.currentMessageId,
-          parse_mode: 'Markdown',
         }) as TelegramBot.Message;
+      } else {
+        // Créer un nouveau message
+        message = await this.bot.sendMessage(this.chatId, firstChunk);
+        this.currentMessageId = message.message_id;
       }
 
       this.lastUpdateTime = Date.now();
 
-      // 4. Streamer les chunks suivants
-      for (let i = 1; i < chunks.length; i++) {
-        const accumulatedText = chunks.slice(0, i + 1).join('');
+      // 4. Streamer les chunks suivants (si plus d'un chunk)
+      if (chunks.length > 1) {
+        for (let i = 1; i < chunks.length; i++) {
+          const accumulatedText = chunks.slice(0, i + 1).join('');
 
-        // Attendre le délai entre updates
-        await this.sleep(this.options.updateInterval);
+          // Attendre le délai entre updates
+          await this.sleep(this.options.updateInterval);
 
-        // Envoyer typing indicator pendant l'attente
-        await this.sendTyping();
+          // Envoyer typing indicator pendant l'attente
+          await this.sendTyping();
 
-        try {
-          message = await this.bot.editMessageText(accumulatedText, {
-            chat_id: this.chatId,
-            message_id: this.currentMessageId!,
-            parse_mode: 'Markdown',
-          }) as TelegramBot.Message;
+          try {
+            message = await this.bot.editMessageText(accumulatedText, {
+              chat_id: this.chatId,
+              message_id: this.currentMessageId!,
+            }) as TelegramBot.Message;
 
-          this.lastUpdateTime = Date.now();
-        } catch (error: any) {
-          // Si l'édition échoue (trop rapide ou message identique), ignorer
-          if (!error.message?.includes('message is not modified')) {
-            logError('Erreur lors du streaming', error, 'streaming-response');
+            this.lastUpdateTime = Date.now();
+          } catch (error: any) {
+            // Si l'édition échoue (trop rapide ou message identique), ignorer
+            if (!error.message?.includes('message is not modified') &&
+                !error.message?.includes('message to edit not found')) {
+              logError('Erreur lors du streaming', error, 'streaming-response');
+            }
           }
         }
       }
@@ -150,8 +152,18 @@ export class StreamingResponse {
     } catch (error: any) {
       logError('Erreur lors du streaming de la réponse', error, 'streaming-response');
 
-      // Fallback : envoyer le texte complet d'un coup
-      return await this.bot.sendMessage(this.chatId, fullText, { parse_mode: 'Markdown' });
+      // Fallback : envoyer/éditer le texte complet d'un coup
+      if (this.currentMessageId) {
+        try {
+          return await this.bot.editMessageText(fullText, {
+            chat_id: this.chatId,
+            message_id: this.currentMessageId,
+          }) as TelegramBot.Message;
+        } catch {
+          return await this.bot.sendMessage(this.chatId, fullText);
+        }
+      }
+      return await this.bot.sendMessage(this.chatId, fullText);
     }
   }
 

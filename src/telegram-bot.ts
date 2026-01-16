@@ -795,12 +795,11 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
           String(this.currentChatId)
         );
 
-        await streamer.deleteCurrentMessage();
-        await streamer.streamText(strictResponse);
+        // ✅ STREAMING : Éditer le message existant
+        await streamer.streamText(strictResponse, progressMsg.message_id);
       } else {
-        // 📺 Streaming de la réponse
-        await streamer.deleteCurrentMessage();
-        await streamer.streamText(response);
+        // 📺 STREAMING : Éditer le message de progression
+        await streamer.streamText(response, progressMsg.message_id);
       }
 
       // 📊 Métriques
@@ -904,17 +903,13 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
           String(this.currentChatId)
         );
 
-        // Streamer la réponse corrigée
-        await streamer.deleteCurrentMessage();
-        await streamer.streamText(strictResponse);
+        // ✅ STREAMING : Éditer le message existant au lieu de supprimer/créer
+        await streamer.streamText(strictResponse, progressMsg.message_id);
 
       } else {
         // 📺 ÉTAPE 4: STREAMING de la réponse (UX ChatGPT-like)
-        // Supprimer le message de progression
-        await streamer.deleteCurrentMessage();
-
-        // Streamer la réponse en chunks
-        await streamer.streamText(response);
+        // ✅ Éditer le message de progression au lieu de le supprimer
+        await streamer.streamText(response, progressMsg.message_id);
       }
 
       // 📊 ÉTAPE 5: Métriques et logging
