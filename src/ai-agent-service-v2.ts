@@ -26,6 +26,10 @@ import { logInfo, logDebug, logError, logWarn, logAudit } from './utils/logger';
 import { globalCache, CacheKeys, CacheTTL } from './cache/smart-cache';
 import { globalMetrics } from './monitoring/bot-metrics';
 
+// NIVEAU 2: Intelligence contextuelle
+import { ConversationManager } from './services/conversation-manager';
+import { ContextDetector } from './services/context-detector';
+
 /**
  * Service d'agent IA autonome AMÉLIORÉ avec données structurées
  * Supporte OpenRouter (GPT-4o-mini) ET Groq
@@ -41,8 +45,14 @@ export class AIAgentServiceV2 {
   private chatId: string | null = null; // Chat ID actuel pour envoyer les PDFs
   private currentQuestion: string = ''; // Question actuelle de l'utilisateur
   private tools: any[];
+
+  // NIVEAU 2: Nouveau système de conversation intelligent
+  private conversationManager: ConversationManager;
+  private contextDetector: ContextDetector;
+
+  // ANCIEN SYSTÈME (conservé temporairement pour compatibilité)
   private conversationHistory: Array<{ role: string; content: string }> = [];
-  private readonly MAX_HISTORY = 20; // Garder les 10 derniers échanges (20 messages)
+  private readonly MAX_HISTORY = 20;
   private readonly CONVERSATION_STATE_FILE = 'data/conversation-state.json';
 
   constructor(commandHandler: CommandHandler, telegramBot?: any) {
@@ -65,6 +75,10 @@ export class AIAgentServiceV2 {
 
     this.tools = this.defineTools();
 
+    // NIVEAU 2: Initialiser les services intelligents
+    this.conversationManager = new ConversationManager();
+    this.contextDetector = new ContextDetector();
+
     // Afficher le provider utilisé
     if (this.aiProvider === 'openrouter') {
       console.log(`✓ Agent IA autonome V2.5 (OpenRouter ${openRouterClient.getModel()}) - ${this.tools.length} outils`);
@@ -72,8 +86,10 @@ export class AIAgentServiceV2 {
       console.log(`✓ Agent IA autonome V2.5 (Groq fallback) - ${this.tools.length} outils`);
     }
 
-    // Charger l'état de conversation sauvegardé
+    // Charger l'état de conversation sauvegardé (ancien système, conservé)
     this.loadConversationState();
+
+    logInfo('NIVEAU 2 activé: Mémoire contextuelle + Détection de références', 'ai-agent-v2');
   }
 
   /**
@@ -4248,6 +4264,21 @@ Vérifiez:
         this.chatId = chatId;
       }
 
+      // Utiliser chatId comme userId (ou fallback à "default")
+      const userId = chatId || 'default';
+
+      // NIVEAU 2: Détecter et résoudre les références contextuelles
+      const userContext = this.conversationManager.getContext(userId);
+      const contextResult = this.contextDetector.detect(question, userContext);
+
+      if (contextResult.hasReference) {
+        logInfo(
+          `Référence contextuelle détectée (${contextResult.referenceType}): "${question}" → "${contextResult.enrichedQuestion}"`,
+          'ai-agent-v2'
+        );
+        question = contextResult.enrichedQuestion;
+      }
+
       // Stocker la question actuelle pour la détection automatique de "liste"
       this.currentQuestion = question;
 
@@ -4692,7 +4723,8 @@ INTERDICTIONS:
 ❌ Ne dépasse JAMAIS 10 lignes (sauf pour les listes explicitement demandées)
 ❌ JAMAIS d'incohérence entre les montants dans la même conversation`,
         },
-        ...this.conversationHistory, // Inclure l'historique récent
+        // NIVEAU 2: Utiliser l'historique par utilisateur (avec résumé intelligent si disponible)
+        ...this.conversationManager.getFormattedHistory(userId),
         {
           role: 'user',
           content: question,
@@ -4813,7 +4845,7 @@ INTERDICTIONS:
 
         if (message.content) {
           console.log('✅ Réponse finale générée');
-          // Sauvegarder l'échange dans l'historique
+          // Sauvegarder l'échange dans l'historique (ancien système)
           this.conversationHistory.push(
             { role: 'user', content: question },
             { role: 'assistant', content: message.content }
@@ -4824,6 +4856,11 @@ INTERDICTIONS:
           }
           // Sauvegarder l'état sur disque
           this.saveConversationState();
+
+          // NIVEAU 2: Sauvegarder dans le nouveau système de conversation par utilisateur
+          this.conversationManager.addUserMessage(userId, this.currentQuestion);
+          this.conversationManager.addAssistantMessage(userId, message.content);
+
           // Supprimer tous les ** du texte
           return message.content.replace(/\*\*/g, '');
         }
