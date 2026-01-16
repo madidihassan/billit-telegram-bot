@@ -20,6 +20,12 @@ import {
   getAllSuppliers,
 } from './database';
 
+// Nouveaux imports V3.0
+import { allTools } from './ai-agent/tools';
+import { logInfo, logDebug, logError, logWarn, logAudit } from './utils/logger';
+import { globalCache, CacheKeys, CacheTTL } from './cache/smart-cache';
+import { globalMetrics } from './monitoring/bot-metrics';
+
 /**
  * Service d'agent IA autonome AMÉLIORÉ avec données structurées
  * Supporte OpenRouter (GPT-4o-mini) ET Groq
@@ -72,752 +78,10 @@ export class AIAgentServiceV2 {
 
   /**
    * Définit tous les outils disponibles
+   * REFACTORÉ: Les outils sont maintenant définis dans src/ai-agent/tools/
    */
   private defineTools(): Groq.Chat.Completions.ChatCompletionTool[] {
-    return [
-      {
-        type: 'function',
-        function: {
-          name: 'get_unpaid_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures impayées RÉELLES. Tu DOIS appeler cet outil pour TOUTE question sur les factures impayées. Ne JAMAIS inventer de montants ou de nombres de factures. Exemples: "Factures impayées?", "Combien de factures à payer?", "Montant total impayé?"',
-          parameters: { type: 'object', properties: {}, required: [] },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_paid_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures payées RÉELLES récentes. Tu DOIS appeler cet outil pour TOUTE question sur les factures payées. Ne JAMAIS inventer de liste ou de montants. Exemples: "Factures payées?", "Combien de factures payées ce mois?", "Dernières factures payées?"',
-          parameters: { type: 'object', properties: {}, required: [] },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_latest_invoice',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir LA dernière facture RÉELLE (la plus récente par date). Tu DOIS appeler cet outil quand l\'utilisateur demande "la dernière facture", "la facture la plus récente", "dernière facture reçue". Ne JAMAIS utiliser get_paid_invoices pour cette question.',
-          parameters: { type: 'object', properties: {}, required: [] },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_recent_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les N dernières factures RÉELLES triées par date (les plus récentes en premier). Tu DOIS appeler cet outil pour: "les 5 dernières factures", "dernières factures", "factures récentes", "les 10 dernières", "les 3 dernières factures de Coca-Cola". Cette fonction retourne les factures (payées ET impayées) triées par date de facture. Si un fournisseur est mentionné, utilise supplier_name.',
-          parameters: {
-            type: 'object',
-            properties: {
-              limit: {
-                type: 'number',
-                description: 'Nombre de factures à retourner (par défaut 5)',
-              },
-              supplier_name: {
-                type: 'string',
-                description: 'Nom du fournisseur pour filtrer les factures (ex: "Coca-Cola", "Foster"). Utilise ce paramètre si l\'utilisateur mentionne un fournisseur spécifique.',
-              },
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_overdue_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures en retard RÉELLES. Tu DOIS appeler cet outil pour TOUTE question sur les factures en retard/overdue. Ne JAMAIS inventer de nombres ou montants. Exemples: "Factures en retard?", "Combien de factures overdue?", "Retards de paiement?"',
-          parameters: { type: 'object', properties: {}, required: [] },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_upcoming_due_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures impayées dont l\'échéance arrive bientôt (dans les X prochains jours). Tu DOIS appeler cet outil pour TOUTE question sur les factures à échéance prochaine. Exemples: "Factures dont l\'échéance arrive bientôt?", "Factures à payer cette semaine?", "Échéances à venir?"',
-          parameters: {
-            type: 'object',
-            properties: {
-              days: {
-                type: 'number',
-                description: 'Nombre de jours dans le futur pour vérifier les échéances (par défaut: 7 jours)',
-              },
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'mark_invoice_as_paid',
-          description: 'Marquer une facture comme payée. Utilisez le numéro de facture exact.',
-          parameters: {
-            type: 'object',
-            properties: {
-              invoice_number: {
-                type: 'string',
-                description: 'Numéro de facture exact (ex: 463799, 9901329189)',
-              },
-            },
-            required: ['invoice_number'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_invoice_stats',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les statistiques RÉELLES des factures du mois. Tu DOIS appeler cet outil pour TOUTE question sur les stats/statistiques de factures. Ne JAMAIS inventer de chiffres. Exemples: "Stats du mois?", "Statistiques factures?", "Combien de factures?"',
-          parameters: { type: 'object', properties: {}, required: [] },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_monthly_balance',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir la balance bancaire RÉELLE du mois (recettes - dépenses). Tu DOIS appeler cet outil pour TOUTE question sur la balance, solde ou résultat du mois. Ne JAMAIS calculer ou inventer. Exemples: "Balance du mois?", "Solde bancaire?", "Résultat mensuel?"',
-          parameters: {
-            type: 'object',
-            properties: {
-              month: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie un mois (ex: "décembre", "novembre", "12", "11"). Mois à analyser.',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année (ex: "2025", "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur.',
-              },
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_monthly_credits',
-          description: '⚠️ APPEL OBLIGATOIRE pour UN SEUL mois. Obtenir le total RÉEL des recettes/rentrées d\'un mois spécifique. Pour PLUSIEURS mois ou "derniers X mois", utilise get_multi_month_revenues. Ne JAMAIS inventer de montant. Exemples: "Recettes de décembre?", "Total rentrées décembre 2025?", "Combien d\'entrées en novembre?"',
-          parameters: {
-            type: 'object',
-            properties: {
-              month: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie un mois (ex: "décembre", "novembre", "12", "11"). Mois à analyser.',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année (ex: "2025", "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur.',
-              },
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_multi_month_revenues',
-          description: '⚠️ OUTIL POUR RECETTES DE PLUSIEURS MOIS. Utilise cet outil quand l\'utilisateur demande les recettes de PLUSIEURS mois (ex: "recettes des 3 derniers mois", "recettes d\'octobre, novembre et décembre", "recettes depuis octobre"). Retourne un résumé par mois + total cumulé. NE PAS utiliser pour un seul mois.',
-          parameters: {
-            type: 'object',
-            properties: {
-              months: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Liste des mois au format YYYY-MM (ex: ["2025-10", "2025-11", "2025-12"]). MINIMUM 2 mois requis.',
-              },
-            },
-            required: ['months'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_monthly_debits',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir le total RÉEL des dépenses/sorties d\'un mois spécifique. Tu DOIS appeler cet outil pour TOUTE question sur les dépenses, sorties ou débits. Ne JAMAIS inventer de montant. Exemples: "Dépenses de décembre?", "Total sorties novembre 2025?", "Combien de débits en octobre?"',
-          parameters: {
-            type: 'object',
-            properties: {
-              month: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie un mois (ex: "décembre", "novembre", "12", "11"). Mois à analyser.',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année (ex: "2025", "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur.',
-              },
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_bank_balances',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les soldes RÉELS actuels de TOUS les comptes bancaires (Europabank, BNP Paribas Fortis, ING). Tu DOIS appeler cet outil pour TOUTE question sur: "solde des comptes", "combien sur les comptes", "total en banque", "argent disponible", "soldes bancaires", "combien d\'argent". Ne JAMAIS inventer de montants. Retourne les soldes de CHAQUE compte + le total.',
-          parameters: { type: 'object', properties: {}, required: [] },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_monthly_summaries',
-          description: '⚠️⚠️⚠️ INTERDIT pour un seul mois ! Utilise cet outil UNIQUEMENT si l\'utilisateur demande EXPLICITEMENT 2 mois OU PLUS dans sa question (ex: "balances d\'octobre ET novembre", "octobre, novembre et décembre"). ⚠️ Si l\'utilisateur dit "balance d\'octobre" (1 seul mois), utilise get_period_transactions à la place. ⚠️ NE PAS "enrichir" en ajoutant des mois non demandés (ex: si l\'utilisateur demande octobre, NE PAS afficher novembre et décembre). Retourne un résumé par mois + total cumulé.',
-          parameters: {
-            type: 'object',
-            properties: {
-              months: {
-                type: 'array',
-                items: { type: 'string' },
-                description: '⚠️ Liste des mois EXPLICITEMENT mentionnés par l\'utilisateur au format YYYY-MM. MINIMUM 2 mois requis. NE PAS ajouter de mois supplémentaires.',
-              },
-            },
-            required: ['months'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_period_transactions',
-          description: '⚠️ OUTIL PAR DÉFAUT pour les balances mensuelles. Utilise cet outil pour: (1) balance d\'UN SEUL mois (ex: "balance d\'octobre", "balance du mois de novembre"), (2) transactions sur une période spécifique, (3) filtrer par fournisseur. Retourne un résumé (crédits, débits, balance) + liste des transactions. Si l\'utilisateur demande SEULEMENT la balance sans mentionner "liste" ou "transactions", tu PEUX limiter l\'affichage au résumé.',
-          parameters: {
-            type: 'object',
-            properties: {
-              start_date: {
-                type: 'string',
-                description: 'Date de début (YYYY-MM-DD). Pour un mois complet: premier jour du mois (ex: 2025-10-01 pour octobre).',
-              },
-              end_date: {
-                type: 'string',
-                description: 'Date de fin (YYYY-MM-DD). Pour un mois complet: dernier jour du mois (ex: 2025-10-31 pour octobre).',
-              },
-              filter_type: {
-                type: 'string',
-                description: 'Type: recettes, depenses, salaires',
-                enum: ['recettes', 'depenses', 'salaires', ''],
-              },
-              supplier_name: {
-                type: 'string',
-                description: 'Nom du fournisseur ou employé pour filtrer. ⚠️ UTILISE CE PARAMÈTRE quand l\'utilisateur mentionne un fournisseur spécifique (ex: Foster, Alkhoomsy, Engie) ou un terme générique comme "loyer", "électricité" (après avoir demandé le nom du fournisseur).',
-              },
-              offset: {
-                type: 'number',
-                description: '⚠️ PAGINATION: Numéro de la page à afficher (1 = première page, 2 = deuxième page, etc.). Utilise quand l\'utilisateur demande "les suivantes", "suite", "continue", "page suivante". Par défaut: 1.',
-              },
-              limit: {
-                type: 'number',
-                description: 'Nombre de transactions par page (30 par défaut). Ne changer que si l\'utilisateur le demande explicitement.',
-              },
-            },
-            required: ['start_date', 'end_date'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_employee_salaries',
-          description: '⚠️ APPEL OBLIGATOIRE pour salaires d\'employés. ⚠️ FAIRE UN SEUL APPEL, PAS PLUSIEURS ⚠️\n\n🎯 UTILISER CET OUTIL QUAND la question contient le mot "salaire" ou "salaires" (ex: "Combien j\'ai payé en salaire à X", "Salaire de Soufiane", "Salaires des Madidi").\n\nRÈGLES:\n1. Si NOM SPÉCIFIQUE mentionné (ex: "Soufiane", "Hassan") → SPECIFIER employee_name\n2. ⚠️ Si "TOUS les [NOM_FAMILLE]" (ex: "tous les Madidi") → FAIRE UN SEUL APPEL avec le nom de famille seul {employee_name: "Madidi"}. NE PAS faire d\'appels supplémentaires pour chaque employé individuel ⚠️\n3. Si "TOUS les salaires" (sans précision) → NE PAS spécifier employee_name\n4. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année") → NE PAS spécifier month\n5. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n6. ⚠️ Si utilisateur demande "LA LISTE" explicitement → METTRE include_details: true\n\nEXEMPLES:\n- "Salaires de Soufiane sur l\'année 2025" → UN SEUL APPEL: {employee_name: "Soufiane Madidi", year: "2025"}\n- "Salaires de tous les Madidi" → UN SEUL APPEL: {employee_name: "Madidi"} (trouvera automatiquement Hassan, Soufiane, Jawad)\n- "Tous les salaires des Madidi de novembre" → UN SEUL APPEL: {employee_name: "Madidi", month: "novembre"}\n- "Salaires de Hassan en décembre" → UN SEUL APPEL: {employee_name: "Hassan Madidi", month: "décembre"}\n- "Combien j\'ai payé en salaire à X" → UN SEUL APPEL: {employee_name: "X"}\n- "Donne-moi LA LISTE de tous les salaires" → UN SEUL APPEL: {include_details: true}\n- "Tous les salaires" → UN SEUL APPEL: {}',
-          parameters: {
-            type: 'object',
-            properties: {
-              employee_name: {
-                type: 'string',
-                description: '⚠️ Nom complet OU nom de famille seul. EXEMPLES: "Soufiane Madidi" (exact), "Madidi" (tous les Madidi), "Hassan Madidi" (exact). Recherche partielle automatique si pas d\'espace.',
-              },
-              month: {
-                type: 'string',
-                description: '⚠️ À OMETTRE si période annuelle OU période multi-mois: Mois unique (novembre, décembre, 11, 12). NE PAS spécifier si "année", "entre X et Y".',
-              },
-              start_month: {
-                type: 'string',
-                description: '⚠️ Pour période multi-mois (ex: "entre octobre et décembre"): Mois de début (octobre, novembre, 10, 11). Utiliser avec end_month.',
-              },
-              end_month: {
-                type: 'string',
-                description: '⚠️ Pour période multi-mois (ex: "entre octobre et décembre"): Mois de fin (décembre, novembre, 12, 11). Utiliser avec start_month.',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
-              },
-              include_details: {
-                type: 'boolean',
-                description: 'Mettre à true si l\'utilisateur demande EXPLICITEMENT "la liste", "liste détaillée", "détails". Par défaut: false (affiche seulement l\'analyse).',
-              },
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'compare_employee_salaries',
-          description: '⚠️⚠️⚠️ APPEL PRIORITAIRE si les mots "comparaison", "comparer", "entre X et Y", "X, Y et Z", "vs", "différence" sont présents ⚠️⚠️⚠️\n\nUtiliser pour comparer les salaires entre 2 OU PLUSIEURS employés.\n\nEXEMPLES OBLIGATOIRES:\n- "Compare Khalid et Mokhlis" → {employee_names: ["Khalid", "Mokhlis"]}\n- "Comparaison entre Soufiane, Khalid et Mokhlis" → {employee_names: ["Soufiane", "Khalid", "Mokhlis"]}\n- "Différence entre Hassan et Jawad" → {employee_names: ["Hassan", "Jawad"]}\n\n⚠️ NE PAS utiliser get_employee_salaries pour ces questions ⚠️',
-          parameters: {
-            type: 'object',
-            properties: {
-              employee_names: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Liste des noms d\'employés à comparer (minimum 2, maximum 10). Exemples: ["Khalid", "Mokhlis"], ["Hassan", "Soufiane", "Jawad"]',
-              },
-              month: {
-                type: 'string',
-                description: 'Mois à analyser (optionnel). Si omis, analyse l\'année entière.',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
-              },
-            },
-            required: ['employee_names'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_supplier_payments',
-          description: 'UTILISE CETTE FONCTION pour les paiements que VOUS avez faits VERS un fournisseur (dépenses/débits). Répond aux questions: "Combien payé à Foster?", "Paiements à Coca-Cola?", "Combien jai payé à Edenred?", "Combien jai versé à Foster?". ⚠️ IMPORTANT: NE PAS UTILISER pour les SALAIRES. Si la question contient le mot "salaire" ou "salaire" + nom de personne, utiliser get_employee_salaries à la place. ⚠️ Si lutilisateur demande des versements REÇUS dun fournisseur (ex: "Versements de Takeaway", "Combien Takeaway ma versé?", "Versements faits PAR Pluxee"), utilise get_supplier_received_payments à la place.',
-          parameters: {
-            type: 'object',
-            properties: {
-              supplier_name: {
-                type: 'string',
-                description: 'Nom du fournisseur (Foster, Coca-Cola, Edenred...)',
-              },
-              month: {
-                type: 'string',
-                description: 'Mois en français (novembre, décembre) ou numéro (11, 12).',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
-              },
-            },
-            required: ['supplier_name'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_supplier_received_payments',
-          description: 'UTILISE CETTE FONCTION pour les versements/recettes REÇUS dun fournisseur/partenaire (entrées dargent/crédits). Répond aux questions: "Versements de Takeaway?", "Combien Uber ma versé?", "Recettes de Deliveroo?", "Versements faits PAR Pluxee?", "Dernier versement de Pluxee?". IMPORTANT: "Versement fait PAR X" = argent reçu DE X. Si lutilisateur demande des paiements que VOUS avez faits VERS un fournisseur (ex: "Combien jai payé à Foster", "Paiements à Coca-Cola"), utilise get_supplier_payments à la place.',
-          parameters: {
-            type: 'object',
-            properties: {
-              supplier_name: {
-                type: 'string',
-                description: 'Nom du fournisseur ou partenaire (Takeaway, Uber, Deliveroo...)',
-              },
-              month: {
-                type: 'string',
-                description: 'Mois en français (novembre, décembre) ou numéro (11, 12).',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
-              },
-            },
-            required: ['supplier_name'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'search_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Rechercher des factures RÉELLES par fournisseur, numéro ou montant. Tu DOIS appeler cet outil pour TOUTE recherche de facture. Ne JAMAIS inventer de résultats.\n\n🎯 UTILISER pour filtres par MONTANT:\n- "Factures de plus de 3000€" → {min_amount: 3000}\n- "Factures moins de 500€" → {max_amount: 500}\n- "Factures entre 1000 et 5000€" → {min_amount: 1000, max_amount: 5000}\n\nExemples: "Cherche factures Foster", "Trouve facture 123", "Recherche Coca-Cola", "Factures plus de 10000€"',
-          parameters: {
-            type: 'object',
-            properties: {
-              search_term: {
-                type: 'string',
-                description: 'Terme à rechercher (fournisseur, numéro). Optionnel si filtre par montant.'
-              },
-              min_amount: {
-                type: 'number',
-                description: 'Montant minimum (ex: 3000 pour "plus de 3000€"). Optionnel.'
-              },
-              max_amount: {
-                type: 'number',
-                description: 'Montant maximum (ex: 500 pour "moins de 500€"). Optionnel.'
-              },
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_invoice_by_supplier_and_amount',
-          description: 'UTILISE CETTE FONCTION quand l\'utilisateur demande "le détail de cette facture" ou "plus d\'infos sur cette facture" après avoir parlé d\'un paiement spécifique. Cherche une facture par fournisseur et montant approximatif.',
-          parameters: {
-            type: 'object',
-            properties: {
-              supplier_name: {
-                type: 'string',
-                description: 'Nom du fournisseur (ex: Foster, Coca-Cola, CIERS)',
-              },
-              amount: {
-                type: 'number',
-                description: 'Montant approximatif de la facture (ex: 5903.70)',
-              },
-              month: {
-                type: 'string',
-                description: 'Mois concerné (novembre, décembre...) Optionnel',
-              },
-              year: {
-                type: 'string',
-                description: 'Année (2025, 2024...) Optionnel',
-              },
-            },
-            required: ['supplier_name'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'list_suppliers',
-          description: '⚠️ APPEL OBLIGATOIRE: Lister TOUS les fournisseurs RÉELS enregistrés. Tu DOIS appeler cet outil pour TOUTE question sur la liste des fournisseurs. Ne JAMAIS inventer de noms. Exemples: "Liste des fournisseurs", "Quels fournisseurs?", "Montre tous les fournisseurs", "Fournisseurs connus?". ⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction. C\'est un COPY-PASTE pur et dur.',
-          parameters: { type: 'object', properties: {}, required: [] },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_user_guide',
-          description: '⚠️ APPEL OBLIGATOIRE: Envoyer le guide utilisateur complet avec tous les exemples de questions et commandes. Tu DOIS appeler cet outil quand l\'utilisateur demande "donne moi le guide", "guide", "aide complète", "comment utiliser le bot", "quelles questions poser", "que puis-je demander". Le guide sera envoyé en plusieurs parties automatiquement.',
-          parameters: { type: 'object', properties: {}, required: [] },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'analyze_expenses_by_category',
-          description: '⚠️ APPEL OBLIGATOIRE: Analyser les dépenses par catégorie (loyers, utilities, alimentation, salaires, etc.). Tu DOIS appeler cet outil pour: "analyse mes dépenses par catégorie", "dépenses par catégorie", "montre-moi mes loyers et charges fixes", "combien je dépense en électricité", "analyse mes utilities", "dépenses alimentaires". Permet de voir la répartition des dépenses et leur évolution.',
-          parameters: {
-            type: 'object',
-            properties: {
-              category: {
-                type: 'string',
-                description: 'Catégorie spécifique à analyser (optionnel). Peut être: "loyers", "utilities", "alimentation", "salaires", "telecom", "assurance", "services", "taxes", ou "tout" pour toutes les catégories.',
-                enum: ['loyers', 'utilities', 'telecom', 'assurance', 'alimentation', 'salaires', 'services', 'taxes', 'tout']
-              },
-              months: {
-                type: 'number',
-                description: 'Nombre de mois à analyser (par défaut 6 mois pour voir la tendance). Ex: 3, 6, 12.',
-              },
-              compare_with_previous: {
-                type: 'boolean',
-                description: 'Comparer avec la même période de l\'année précédente (ex: janvier 2026 vs janvier 2025).'
-              }
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_monthly_invoices',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir TOUTES les factures RÉELLES du mois en cours. Tu DOIS appeler cet outil pour TOUTE question sur les factures du mois actuel. Ne JAMAIS inventer de liste ou de nombres. Exemples: "Combien de factures ce mois?", "Factures du mois", "Liste les factures"',
-          parameters: { type: 'object', properties: {}, required: [] },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_invoices_by_month',
-          description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures RÉELLES d\'un mois spécifique. Tu DOIS TOUJOURS appeler cet outil quand un mois est mentionné dans la question. Ne JAMAIS inventer de données. Exemples: "factures de décembre", "combien en novembre", "factures octobre 2024"',
-          parameters: {
-            type: 'object',
-            properties: {
-              month: {
-                type: 'string',
-                description: 'Nom du mois en français (décembre, novembre, octobre...) ou numéro (12, 11, 10...)',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
-              },
-            },
-            required: ['month'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'send_invoice_pdf',
-          description: 'UTILISE CETTE FONCTION pour envoyer le fichier PDF d\'une facture directement sur Telegram. À utiliser quand l\'utilisateur demande "envoie-moi le PDF", "je veux la facture", "donne-moi le fichier PDF", etc. IMPORTANT: Cette fonction ENVOIE réellement le fichier - ne pas donner de lien, dire simplement que le fichier a été envoyé.',
-          parameters: {
-            type: 'object',
-            properties: {
-              invoice_number: {
-                type: 'string',
-                description: 'Numéro de la facture (ex: 463799, UBERBELEATS-FHHEEJCJ-01-2025-0000051)',
-              },
-              invoice_id: {
-                type: 'string',
-                description: 'ID de la facture si connu (ex: 85653045)',
-              },
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'search_by_communication',
-          description: 'UTILISE CETTE FONCTION pour rechercher une facture par son numéro de communication (référence de paiement structurée). Répond aux questions: "Trouve la facture avec la communication 9991316838", "Donne-moi la facture qui se termine par 838", "Recherche la communication 9901309927". La communication est le numéro de référence utilisé pour les paiements (souvent format +++XXX/XXXX/XXXX+++).',
-          parameters: {
-            type: 'object',
-            properties: {
-              communication_number: {
-                type: 'string',
-                description: 'Numéro de communication (partiel ou complet, ex: "9991316838", "838", "9901309927")',
-              },
-            },
-            required: ['communication_number'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'add_supplier',
-          description: 'Ajoute manuellement un fournisseur à la base de données. Utilise cette fonction quand l\'utilisateur demande: "Ajoute Coca-Cola", "Ajoute le fournisseur X", "Crée un nouveau fournisseur", "Enregistre ce fournisseur". Le fournisseur sera immédiatement utilisable pour les recherches.',
-          parameters: {
-            type: 'object',
-            properties: {
-              supplier_name: {
-                type: 'string',
-                description: 'Nom complet du fournisseur (ex: "Coca-Cola", "KBC BANK NV", "Mediwet")',
-              },
-              aliases: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Liste optionnelle d\'aliases supplémentaires (ex: ["cola", "coca"])',
-              },
-            },
-            required: ['supplier_name'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'delete_supplier',
-          description: 'Supprime un fournisseur de la base de données. Utilise cette fonction quand l\'utilisateur demande: "Supprime Coca-Cola", "Supprime le fournisseur X", "Efface ce fournisseur", "Retire Client 45". Attention: cette action est irréversible !',
-          parameters: {
-            type: 'object',
-            properties: {
-              supplier_key: {
-                type: 'string',
-                description: 'Clé du fournisseur à supprimer (ex: "cocacola", "kbc bank", "cliente 45"). Utilise le nom normalisé en minuscules sans les suffixes (SA, NV, etc.)',
-              },
-            },
-            required: ['supplier_key'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'analyze_supplier_expenses',
-          description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur ET lister les factures.\n\n🎯 UTILISE CET OUTIL POUR:\n- "Liste des factures de X" → {supplier_name: "X", include_details: true}\n- "Toutes les factures de X sur l\'année" → {supplier_name: "X", include_details: true}\n- "Factures de X en novembre" → {supplier_name: "X", month: "novembre", include_details: true}\n- "Dépenses chez X" → {supplier_name: "X"}\n- "Factures de X et Y" → {supplier_name: "X et Y"} (PLUSIEURS FOURNISSEURS en un seul appel !)\n\n⚠️ IMPORTANT: Si la question mentionne PLUSIEURS fournisseurs (ex: "Uber et Takeaway", "Colruyt et Sligro"), utiliser UN SEUL APPEL avec supplier_name contenant tous les fournisseurs séparés par " et ". Ex: {supplier_name: "Uber et Takeaway"} ou {supplier_name: "Colruyt et Sligro"}. NE PAS utiliser compare_supplier_expenses.\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro", "Foster") → SPECIFIER supplier_name\n2. Si PLUSIEURS fournisseurs → utiliser supplier_name: "X et Y" (un seul appel)\n3. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n4. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n5. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année", "de l\'année") → NE PAS spécifier month\n6. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n7. ⚠️ Si utilisateur demande "LA LISTE", "FACTURES", "TOUTES" explicitement → METTRE include_details: true\n8. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Liste des factures de Foster" → {supplier_name: "Foster", include_details: true}\n- "Toutes les factures de l\'année de Foster" → {supplier_name: "Foster", include_details: true}\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Factures Uber et Takeaway" → {supplier_name: "Uber et Takeaway"}\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {}\n- "Dépenses de novembre" → {month: "novembre"}',
-          parameters: {
-            type: 'object',
-            properties: {
-              supplier_name: {
-                type: 'string',
-                description: '⚠️ Nom du fournisseur (ex: "Colruyt", "Sligro"). Si omis, affiche le classement de tous les fournisseurs.',
-              },
-              month: {
-                type: 'string',
-                description: '⚠️ À OMETTRE si période annuelle OU période multi-mois: Mois unique (novembre, décembre, 11, 12). NE PAS spécifier si "année", "entre X et Y".',
-              },
-              start_month: {
-                type: 'string',
-                description: '⚠️ Pour période multi-mois (ex: "entre octobre et décembre"): Mois de début (octobre, novembre, 10, 11). Utiliser avec end_month.',
-              },
-              end_month: {
-                type: 'string',
-                description: '⚠️ Pour période multi-mois (ex: "entre octobre et décembre"): Mois de fin (décembre, novembre, 12, 11). Utiliser avec start_month.',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
-              },
-              include_details: {
-                type: 'boolean',
-                description: 'Mettre à true si l\'utilisateur demande EXPLICITEMENT "la liste", "liste détaillée", "détails". Par défaut: false (affiche seulement l\'analyse).',
-              },
-            },
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'compare_supplier_expenses',
-          description: '⚠️⚠️⚠️ APPEL PRIORITAIRE si les mots "comparaison", "comparer", "entre X et Y", "X, Y et Z", "vs", "différence" sont présents (pour fournisseurs) ⚠️⚠️⚠️\n\nUtiliser pour comparer les dépenses entre 2 OU PLUSIEURS fournisseurs.\n\nEXEMPLES OBLIGATOIRES:\n- "Compare Colruyt et Sligro" → {supplier_names: ["Colruyt", "Sligro"]}\n- "Comparaison entre Colruyt, Sligro et Metro" → {supplier_names: ["Colruyt", "Sligro", "Metro"]}\n- "Différence entre Makro et Metro" → {supplier_names: ["Makro", "Metro"]}\n\n⚠️ NE PAS utiliser analyze_supplier_expenses pour ces questions ⚠️',
-          parameters: {
-            type: 'object',
-            properties: {
-              supplier_names: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Liste des noms de fournisseurs à comparer (minimum 2, maximum 10). Exemples: ["Colruyt", "Sligro"], ["Makro", "Metro", "Transgourmet"]',
-              },
-              month: {
-                type: 'string',
-                description: 'Mois à analyser (optionnel). Si omis, analyse l\'année entière.',
-              },
-              year: {
-                type: 'string',
-                description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
-              },
-            },
-            required: ['supplier_names'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'add_user',
-          description: '⚠️ Ajoute un utilisateur à la liste blanche. Tu DOIS appeler list_users() après l\'ajout pour confirmer. Ne JAMAIS inventer de Chat IDs. Utilise cette fonction pour: "Ajoute 123456789", "Autorise ce Chat ID", "Donne accès à", "Ajoute cette personne".',
-          parameters: {
-            type: 'object',
-            properties: {
-              chat_id: {
-                type: 'string',
-                description: 'Chat ID Telegram EXACT de l\'utilisateur à ajouter (ex: "7887749968"). DOIT contenir uniquement des chiffres.',
-              },
-            },
-            required: ['chat_id'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'remove_user',
-          description: '⚠️ Supprime un utilisateur. WORKFLOW OBLIGATOIRE si position ("le 3", "le 2ème", "l\'utilisateur 3"):\n1. APPELLE list_users() pour obtenir la liste ACTUELLE\n2. EXTRAIS le Chat ID à la position demandée depuis le RÉSULTAT de list_users()\n3. APPELLE remove_user() avec ce Chat ID\n4. APPELLE list_users() à nouveau pour confirmer\n⚠️ NE JAMAIS utiliser CLAUDE.md ou ta mémoire pour les Chat IDs - UNIQUEMENT le résultat de list_users().\nExemples: "Supprime le 3ème" → list_users() → extrait le 3ème Chat ID → remove_user(ce_chat_id)',
-          parameters: {
-            type: 'object',
-            properties: {
-              chat_id: {
-                type: 'string',
-                description: 'Chat ID Telegram EXACT (ex: "7887749968"). DOIT provenir du résultat de list_users(), PAS de CLAUDE.md, PAS de ta mémoire, PAS d\'invention.',
-              },
-            },
-            required: ['chat_id'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'list_users',
-          description: '⚠️ OBLIGATOIRE: Liste tous les utilisateurs autorisés. TU DOIS APPELER cette fonction AVANT de répondre à toute question sur les utilisateurs. Ne JAMAIS inventer de liste. Utilise cette fonction pour: "Qui a accès ?", "Liste des utilisateurs", "Montre les utilisateurs", "Quels utilisateurs ?", ou toute question concernant les utilisateurs autorisés.',
-          parameters: {
-            type: 'object',
-            properties: {},
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'list_employees',
-          description: '⚠️ OBLIGATOIRE: Liste tous les employés. TU DOIS APPELER cette fonction AVANT de répondre à toute question sur les employés ou salariés. Ne JAMAIS inventer de liste. Utilise cette fonction pour: "Liste des employés", "Qui sont les employés ?", "Montre les salariés", "Quels employés ?", ou toute question concernant les employés. ⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction. C\'est un COPY-PASTE pur et dur.',
-          parameters: {
-            type: 'object',
-            properties: {},
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'add_employee',
-          description: 'Ajoute un nouvel employé dans la base de données. Utilise cette fonction pour: "Ajoute un employé", "Nouvel employé", "Enregistre cet employé". Tu DOIS appeler list_employees() après l\'ajout pour confirmer.',
-          parameters: {
-            type: 'object',
-            properties: {
-              name: {
-                type: 'string',
-                description: 'Nom complet de l\'employé (ex: "Mohamed Ali", "Sarah Dupont")',
-              },
-              chat_id: {
-                type: 'string',
-                description: 'Chat ID Telegram de l\'employé (optionnel, ex: "123456789")',
-              },
-              position: {
-                type: 'string',
-                description: 'Poste/Position de l\'employé (optionnel, ex: "Employé", "Manager", "Caissier")',
-              },
-            },
-            required: ['name'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'remove_employee',
-          description: 'Supprime un employé de la base de données (désactivation). Utilise cette fonction pour: "Supprime l\'employé", "Retire cet employé", "Enlève X de la liste". Le nom DOIT provenir du résultat de list_employees(), PAS d\'invention. Tu DOIS appeler list_employees() après la suppression pour confirmer.',
-          parameters: {
-            type: 'object',
-            properties: {
-              name: {
-                type: 'string',
-                description: 'Nom EXACT de l\'employé à supprimer (doit correspondre exactement à celui de list_employees())',
-              },
-            },
-            required: ['name'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'detect_new_suppliers',
-          description: '⚠️ APPEL OBLIGATOIRE: Détecter les nouveaux fournisseurs RÉELS dans les transactions bancaires qui ne sont pas encore dans la base de données. Tu DOIS appeler cet outil quand l\'utilisateur demande: "Détecte les nouveaux fournisseurs", "Nouveaux fournisseurs?", "Y a-t-il de nouveaux fournisseurs?", "Cherche nouveaux fournisseurs", "Scan fournisseurs". Cette fonction analyse TOUTES les transactions bancaires et filtre automatiquement les salaires, taxes, et paiements récurrents.',
-          parameters: {
-            type: 'object',
-            properties: {},
-            required: [],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'restart_bot',
-          description: 'Redémarre le bot Telegram. Utilise cette fonction quand l\'utilisateur demande: "Redémarre le bot", "Relance le bot", "Reboot le bot", "Redémarrage". Attention: le bot sera temporairement indisponible pendant quelques secondes.',
-          parameters: {
-            type: 'object',
-            properties: {},
-            required: [],
-          },
-        },
-      },
-    ];
+    return allTools;
   }
 
   /**
@@ -2586,10 +1850,52 @@ export class AIAgentServiceV2 {
           const { matchesSupplier, SUPPLIER_ALIASES } = await import('./supplier-aliases');
           const suppliers = Object.keys(SUPPLIER_ALIASES);
 
+          // 🔄 NOUVEAU: Pour un fournisseur spécifique, chercher aussi dans les factures Billit si pas de dépenses bancaires
+          const getSupplierExpensesFromInvoices = async (supplierName: string): Promise<any[]> => {
+            try {
+              console.log(`🔍 Recherche de factures Billit pour "${supplierName}"...`);
+              const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+
+              // Filtrer par fournisseur
+              const supplierInvoices = allInvoices.filter(inv => {
+                const invDate = new Date(inv.invoice_date);
+                return invDate >= startDate && invDate <= endDate && matchesSupplier(inv.supplier_name, supplierName);
+              });
+
+              console.log(`📄 ${supplierInvoices.length} facture(s) trouvée(s) pour "${supplierName}"`);
+
+              // Convertir les factures au format des transactions (pour compatibilité avec le code d'analyse)
+              return supplierInvoices.map(inv => ({
+                date: inv.invoice_date,
+                amount: -inv.total_amount,  // Négatif car c'est une dépense
+                type: 'Debit',
+                description: `Facture ${inv.invoice_number} - ${inv.supplier_name}`,
+                communication: inv.communication || '',
+                invoice_number: inv.invoice_number,
+                supplier_name: inv.supplier_name,
+              }));
+            } catch (error) {
+              console.error(`❌ Erreur lors de la récupération des factures:`, error);
+              return [];
+            }
+          };
+
+          // 🔍 Vérifier d'abord s'il y a des factures Billit pour décider quoi afficher
+          const hasInvoicesForSupplier = async (supplierName: string): Promise<boolean> => {
+            try {
+              const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+              const supplierInvoices = allInvoices.filter(inv => {
+                const invDate = new Date(inv.invoice_date);
+                return invDate >= startDate && invDate <= endDate && matchesSupplier(inv.supplier_name, supplierName);
+              });
+              return supplierInvoices.length > 0;
+            } catch {
+              return false;
+            }
+          };
+
           // 🔍 Fonction pour analyser UN fournisseur spécifique
-          const analyzeSingleSupplier = (supplierName: string) => {
-            // Filtrer les transactions du fournisseur (TOUS types : crédit ET débit)
-            let supplierTransactions: any[];
+          const analyzeSingleSupplier = async (supplierName: string): Promise<any[]> => {
             const searchTerm = supplierName.toLowerCase();
 
             // Recherche floue de fournisseur
@@ -2600,16 +1906,28 @@ export class AIAgentServiceV2 {
 
             console.log(`🔍 Recherche fournisseur "${searchTerm}": ${matchingSuppliers.length} fournisseur(s) trouvé(s)`);
 
+            let supplierTransactions: any[];
             if (matchingSuppliers.length > 0) {
               supplierTransactions = transactions.filter(tx => {
-                // ✅ CHANGEMENT: Accepter TOUS les types (Credit et Debit)
                 return matchingSuppliers.some((sup: string) => matchesSupplier(tx.description || '', sup));
               });
             } else {
-              // Recherche directe dans les descriptions
               supplierTransactions = transactions.filter(tx =>
                 matchesSupplier(tx.description || '', supplierName)
               );
+            }
+
+            // 🔄 NOUVEAU: Si pas de débits bancaires, chercher dans les factures Billit
+            const debits = supplierTransactions.filter((tx: any) => tx.type === 'Debit');
+            if (debits.length === 0) {
+              console.log(`⚠️ Aucun débit bancaire pour "${supplierName}", recherche dans les factures Billit...`);
+              const invoiceExpenses = await getSupplierExpensesFromInvoices(supplierName);
+              if (invoiceExpenses.length > 0) {
+                console.log(`✅ ${invoiceExpenses.length} facture(s) trouvée(s) dans Billit`);
+                // Combiner avec les crédits existants (revenus)
+                const credits = supplierTransactions.filter((tx: any) => tx.type === 'Credit');
+                return [...invoiceExpenses, ...credits];
+              }
             }
 
             return supplierTransactions;
@@ -2622,13 +1940,13 @@ export class AIAgentServiceV2 {
             // Plusieurs fournisseurs : combiner tous les résultats
             let allTransactions: any[] = [];
             for (const supplier of suppliersToProcess) {
-              const txs = analyzeSingleSupplier(supplier);
+              const txs = await analyzeSingleSupplier(supplier);
               allTransactions = allTransactions.concat(txs);
             }
             supplierTransactions = allTransactions;
           } else if (args.supplier_name) {
             // Filtrer pour un fournisseur spécifique
-            supplierTransactions = analyzeSingleSupplier(args.supplier_name);
+            supplierTransactions = await analyzeSingleSupplier(args.supplier_name);
           } else {
             // Obtenir TOUTES les transactions vers fournisseurs connus (débits uniquement pour le top global)
             supplierTransactions = transactions.filter(tx => {
@@ -2638,114 +1956,192 @@ export class AIAgentServiceV2 {
             });
           }
 
-          // ✨ DÉTECTION AUTOMATIQUE: Dépenses ou Revenus ?
+          // ✨ DÉTECTION: Afficher Dépenses SEULEMENT, Revenus SEULEMENT, ou les DEUX ?
           const debits = supplierTransactions.filter(tx => tx.type === 'Debit');
           const credits = supplierTransactions.filter(tx => tx.type === 'Credit');
           const totalDebits = debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
           const totalCredits = credits.reduce((sum, tx) => sum + tx.amount, 0);
 
-          // 📋 MOTS-CLÉS: Si l'utilisateur demande "factures" = dépenses, "revenus"/"recettes" = crédits
+          // 📋 MOTS-CLÉS: Déterminer quoi afficher
           const questionLower = this.currentQuestion.toLowerCase();
-          const userWantsInvoices = questionLower.includes('facture') || questionLower.includes('dépense') ||
-                                   questionLower.includes('depense') || questionLower.includes('paiement');
           const userWantsRevenue = questionLower.includes('revenu') || questionLower.includes('recette') ||
-                                   questionLower.includes('gain') || questionLower.includes('encaissé');
+                                   questionLower.includes('gain') || questionLower.includes('encaissé') ||
+                                   questionLower.includes('chiffre d\'affaires') || questionLower.includes('ca ');
+          const userWantsExpenses = questionLower.includes('dépense') || questionLower.includes('depense') ||
+                                    questionLower.includes('paiement') || questionLower.includes('facture');
+          const userAsksForAnalysis = questionLower.includes('analyse') || questionLower.includes('top');
 
-          let isRevenuePartner = false;
-          if (userWantsRevenue) {
-            // Utilisateur veut explicitement les revenus
-            isRevenuePartner = totalCredits > 0;
-          } else if (userWantsInvoices) {
-            // Utilisateur veut explicitement les factures/dépenses
-            isRevenuePartner = false;
-          } else {
-            // Détection automatique: Si plus de crédits que de débits, c'est un partenaire qui verse (revenus)
-            isRevenuePartner = totalCredits > totalDebits;
+          // 🔍 Vérifier si des factures existent dans Billit (pour les fournisseurs comme Uber)
+          const hasBillitInvoices = args.supplier_name ? await hasInvoicesForSupplier(args.supplier_name) : false;
+          console.log(`📊 hasBillitInvoices pour "${args.supplier_name || 'multi'}": ${hasBillitInvoices}`);
+
+          // 🎯 LOGIQUE D'AFFICHAGE:
+          // - "analyse Uber" → Afficher les DEUX (Dépenses + Revenus)
+          // - "revenus Uber" → Afficher les Revenus SEULEMENT
+          // - "dépenses Uber" → Afficher les Dépenses SEULEMENT (même si totalDebits = 0 mais factures existent)
+          // - Par défaut → Afficher les Dépenses (sauf si pas de dépenses mais des revenus)
+          const hasExpenseData = totalDebits > 0 || hasBillitInvoices;
+          const showBothSections = userAsksForAnalysis && hasExpenseData && totalCredits > 0;
+          const showRevenueOnly = userWantsRevenue && !userWantsExpenses && totalCredits > 0;
+          const showExpensesOnly = userWantsExpenses || (!showBothSections && !showRevenueOnly);
+
+          let sectionsToDisplay: any[] = [];
+          if (showBothSections || (!userWantsRevenue && !userWantsExpenses)) {
+            // Afficher les Dépenses (par défaut ou analyse complète)
+            sectionsToDisplay.push({ type: 'expenses', data: debits, total: totalDebits, icon: '💸', label: 'Dépenses' });
           }
-          const supplierExpenses = isRevenuePartner ? credits : debits;
+          if (showBothSections || showRevenueOnly) {
+            // Afficher les Revenus (si analyse complète ou demande explicite)
+            sectionsToDisplay.push({ type: 'revenues', data: credits, total: totalCredits, icon: '💰', label: 'Revenus' });
+          }
 
-          const totalSpent = supplierExpenses.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+          // Pour la compatibilité avec le code existant, utiliser les dépenses par défaut
+          const supplierExpenses = debits;
+          const totalSpent = totalDebits;
+          const isRevenuePartner = showRevenueOnly;
 
           // Trier par date décroissante
           supplierExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
           // 📊 ANALYSE PAR FOURNISSEUR
-          const userAsksForAnalysis = questionLower.includes('analyse') || questionLower.includes('top');
           const isMultiSupplierQuery = !args.supplier_name && supplierExpenses.length > 0;
-          const isSpecificSupplierAnalysis = args.supplier_name && supplierExpenses.length > 0;
+          const isSpecificSupplierAnalysis = args.supplier_name;  // Changé pour vérifier aussi le cas 0 transaction
 
           let analysisText = '';
           const showSupplierAnalysis = !args.supplier_name && isMultiSupplierQuery;
 
+          // Générer le titre de période
+          let periodTitle: string;
+          if (args.month) {
+            periodTitle = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+          } else if (args.start_month && args.end_month) {
+            const startMonthName = startDate.toLocaleDateString('fr-BE', { month: 'long' });
+            const endMonthName = endDate.toLocaleDateString('fr-BE', { month: 'long' });
+            const year = startDate.getFullYear();
+            periodTitle = `${startMonthName} à ${endMonthName} ${year}`;
+          } else if (args.year) {
+            periodTitle = `année ${args.year}`;
+          } else {
+            periodTitle = `année ${startDate.getFullYear()}`;
+          }
+
           if (isSpecificSupplierAnalysis) {
-            // ✨ ANALYSE DÉTAILLÉE D'UN FOURNISSEUR SPÉCIFIQUE ✨
-            const amounts = supplierExpenses.map(tx => Math.abs(tx.amount));
-            const minAmount = Math.min(...amounts);
-            const maxAmount = Math.max(...amounts);
-            const avgAmount = totalSpent / supplierExpenses.length;
+            // ✅ Vérifier s'il y a des données avant de faire l'analyse
+            if (debits.length === 0 && credits.length === 0) {
+              // Aucune donnée trouvée (ni transactions, ni factures)
+              const supplierName = args.supplier_name || 'Ce fournisseur';
+              result = {
+                supplier_name: supplierName,
+                period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
+                total_spent: 0,
+                transaction_count: 0,
+                type: 'dépenses',
+                direct_response: `🔍 ${supplierName}
 
-            // Label adapté selon le type
-            const transactionLabel = isRevenuePartner ? 'versements' : 'paiements';
-            const lastTransactionsLabel = isRevenuePartner ? 'Derniers versements' : 'Derniers paiements';
+❌ Aucune donnée trouvée pour ce fournisseur (ni transactions bancaires, ni factures).
 
-            // Calculer l'évolution mensuelle
-            const monthlyBreakdown: { [key: string]: { total: number; count: number } } = {};
-            supplierExpenses.forEach(tx => {
-              const monthKey = new Date(tx.date).toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
-              if (!monthlyBreakdown[monthKey]) {
-                monthlyBreakdown[monthKey] = { total: 0, count: 0 };
-              }
-              monthlyBreakdown[monthKey].total += Math.abs(tx.amount);
-              monthlyBreakdown[monthKey].count++;
-            });
-
-            // Trier les mois par date
-            const sortedMonths = Object.entries(monthlyBreakdown)
-              .map(([month, data]) => ({ month, ...data }))
-              .sort((a, b) => {
-                // Parser les dates pour les comparer
-                const dateA = new Date(a.month.split(' ').reverse().join('-'));
-                const dateB = new Date(b.month.split(' ').reverse().join('-'));
-                return dateB.getTime() - dateA.getTime(); // Plus récent en premier
-              });
-
-            analysisText = `\n\n📊 ANALYSE DÉTAILLÉE\n\n`;
-            analysisText += `💰 Statistiques:\n`;
-            analysisText += `   • Montant total: ${totalSpent.toFixed(2)}€\n`;
-            analysisText += `   • Nombre de ${transactionLabel}: ${supplierExpenses.length}\n`;
-            analysisText += `   • Montant moyen: ${avgAmount.toFixed(2)}€\n`;
-            analysisText += `   • Montant minimum: ${minAmount.toFixed(2)}€\n`;
-            analysisText += `   • Montant maximum: ${maxAmount.toFixed(2)}€\n`;
-
-            if (sortedMonths.length > 1) {
-              analysisText += `\n📅 Évolution mensuelle:\n`;
-              sortedMonths.forEach(m => {
-                const avgMonth = m.total / m.count;
-                analysisText += `   • ${m.month}: ${m.total.toFixed(2)}€ (${m.count} ${transactionLabel}, moy: ${avgMonth.toFixed(2)}€)\n`;
-              });
+Vérifiez:
+• Le nom du fournisseur est correct
+• Des factures existent dans Billit pour ce fournisseur`
+              };
+              break;
             }
 
-            // Afficher les dernières transactions (10 par défaut, toutes si demandé explicitement)
-            if (supplierExpenses.length > 0) {
-              const userAsksForAll = questionLower.includes('toutes') || questionLower.includes('liste') || args.include_details === true;
-              const maxToShow = userAsksForAll ? supplierExpenses.length : Math.min(10, supplierExpenses.length);
-              const recentPayments = supplierExpenses.slice(0, maxToShow);
+            // 🎯 Afficher une ou deux sections selon le cas
+            const supplierName = args.supplier_name || 'Ce fournisseur';
+            let directResponse = `📊 Analyse: ${supplierName}\n${periodTitle}\n\n`;
 
-              const listTitle = userAsksForAll && supplierExpenses.length > 10 ?
-                `📋 Tous les ${transactionLabel}` :
-                `💳 ${lastTransactionsLabel}`;
+            for (const section of sectionsToDisplay) {
+              const sectionData = section.data;
+              const sectionTotal = section.total;
+              const sectionIcon = section.icon;
+              const sectionLabel = section.label;
 
-              analysisText += `\n${listTitle}:\n`;
-              recentPayments.forEach((tx, i) => {
-                const date = new Date(tx.date).toLocaleDateString('fr-BE');
+              if (sectionData.length === 0) continue;
+
+              // Calculer les statistiques
+              const amounts = sectionData.map((tx: any) => Math.abs(tx.amount));
+              const avgAmount = sectionTotal / sectionData.length;
+              const minAmount = Math.min(...amounts);
+              const maxAmount = Math.max(...amounts);
+
+              directResponse += `${sectionIcon} **${sectionLabel}**\n`;
+              directResponse += `Total: ${sectionTotal.toFixed(2)}€ • ${sectionData.length} transaction${sectionData.length > 1 ? 's' : ''}\n`;
+              directResponse += `Moyenne: ${avgAmount.toFixed(2)}€\n`;
+              directResponse += `Min: ${minAmount.toFixed(2)}€\n`;
+              directResponse += `Max: ${maxAmount.toFixed(2)}€\n`;
+
+              // Évolution mensuelle (compacte)
+              const monthlyBreakdown: { [key: string]: { total: number; count: number; fullDate: Date } } = {};
+              sectionData.forEach((tx: any) => {
+                const txDate = new Date(tx.date);
+                const monthKey = txDate.toLocaleDateString('fr-BE', { month: 'short', year: 'numeric' });
+                if (!monthlyBreakdown[monthKey]) {
+                  monthlyBreakdown[monthKey] = { total: 0, count: 0, fullDate: txDate };
+                }
+                monthlyBreakdown[monthKey].total += Math.abs(tx.amount);
+                monthlyBreakdown[monthKey].count++;
+              });
+
+              const sortedMonths = Object.entries(monthlyBreakdown)
+                .map(([month, data]) => ({ month, ...data }))
+                .sort((a: any, b: any) => b.fullDate.getTime() - a.fullDate.getTime());
+
+              if (sortedMonths.length > 0) {
+                directResponse += `📅 Évolution mensuelle:\n`;
+                sortedMonths.forEach((m: any) => {
+                  directResponse += `  ${m.month}: ${m.total.toFixed(0)}€\n`;
+                });
+              }
+
+              // Dernières transactions (format compact)
+              const maxToShow = Math.min(5, sectionData.length);
+              const recentPayments = sectionData.slice(0, maxToShow);
+              directResponse += `💳 Derniers:\n`;
+              recentPayments.forEach((tx: any, i: number) => {
+                const date = new Date(tx.date).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' });
                 const amount = Math.abs(tx.amount).toFixed(2);
-                analysisText += `   ${i + 1}. ${date}: ${amount}€\n`;
+                // Raccourcir la description
+                let desc = tx.description || tx.supplier_name || '-';
+                if (desc.length > 50) {
+                  desc = desc.substring(0, 47) + '...';
+                }
+                // Pour les revenus Uber, simplifier
+                if (desc.includes('STICHTING CUSTODIAN UBER PAYMENTS')) {
+                  desc = 'Uber Payments';
+                }
+                directResponse += `  ${date}: ${amount}€ - ${desc}\n`;
               });
 
-              if (!userAsksForAll && supplierExpenses.length > 10) {
-                analysisText += `   ... et ${supplierExpenses.length - 10} autres ${transactionLabel}\n`;
+              if (sectionData.length > 5) {
+                directResponse += `  ... et ${sectionData.length - 5} autres\n`;
+              }
+
+              // Séparateur entre sections
+              if (sectionsToDisplay.length > 1 && sectionsToDisplay.indexOf(section) < sectionsToDisplay.length - 1) {
+                directResponse += `\n`;
               }
             }
+
+            // Calculer le solde net (revenus - dépenses)
+            if (showBothSections) {
+              const netBalance = totalCredits - totalDebits;
+              const marginPercent = totalDebits > 0 ? ((netBalance / totalDebits) * 100).toFixed(1) : '0.0';
+              directResponse += `\n💰 **Solde net**: ${netBalance >= 0 ? '+' : ''}${netBalance.toFixed(2)}€`;
+              directResponse += ` (Marge: ${marginPercent}%)\n`;
+            }
+
+            result = {
+              supplier_name: supplierName,
+              period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
+              total_spent: totalDebits,
+              transaction_count: debits.length,
+              total_revenue: totalCredits,
+              revenue_count: credits.length,
+              net_balance: totalCredits - totalDebits,
+              direct_response: directResponse.trimStart()
+            };
+            break;
           } else if (showSupplierAnalysis) {
             // Grouper par fournisseur
             const supplierTotals: { [key: string]: { total: number; count: number } } = {};
@@ -2812,21 +2208,6 @@ export class AIAgentServiceV2 {
             return `${num}. ${date} - ${amount}€ - ${supplierName}`;
           }).join('\n');
 
-          // Générer le titre de période
-          let periodTitle: string;
-          if (args.month) {
-            periodTitle = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
-          } else if (args.start_month && args.end_month) {
-            const startMonthName = startDate.toLocaleDateString('fr-BE', { month: 'long' });
-            const endMonthName = endDate.toLocaleDateString('fr-BE', { month: 'long' });
-            const year = startDate.getFullYear();
-            periodTitle = `${startMonthName} à ${endMonthName} ${year}`;
-          } else if (args.year) {
-            periodTitle = `année ${args.year}`;
-          } else {
-            periodTitle = `année ${startDate.getFullYear()}`;
-          }
-
           // Décider si on inclut la liste détaillée
           const userAsksForList = questionLower.includes('liste') || questionLower.includes('détail');
           const userWantsDetails = args.include_details === true || userAsksForList;
@@ -2843,26 +2224,26 @@ export class AIAgentServiceV2 {
 
             for (const supplierName of suppliersToProcess) {
               // Analyser ce fournisseur spécifique
-              const singleSupplierTxs = analyzeSingleSupplier(supplierName);
-              const singleDebits = singleSupplierTxs.filter(tx => tx.type === 'Debit');
-              const singleCredits = singleSupplierTxs.filter(tx => tx.type === 'Credit');
-              const singleTotalDebits = singleDebits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-              const singleTotalCredits = singleCredits.reduce((sum, tx) => sum + tx.amount, 0);
+              const singleSupplierTxs = await analyzeSingleSupplier(supplierName);
+              const singleDebits = singleSupplierTxs.filter((tx: any) => tx.type === 'Debit');
+              const singleCredits = singleSupplierTxs.filter((tx: any) => tx.type === 'Credit');
+              const singleTotalDebits = singleDebits.reduce((sum: number, tx: any) => sum + Math.abs(tx.amount), 0);
+              const singleTotalCredits = singleCredits.reduce((sum: number, tx: any) => sum + tx.amount, 0);
 
               const singleIsRevenue = singleTotalCredits > singleTotalDebits;
               const singleExpenses = singleIsRevenue ? singleCredits : singleDebits;
-              const singleTotal = singleExpenses.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+              const singleTotal = singleExpenses.reduce((sum: number, tx: any) => sum + Math.abs(tx.amount), 0);
               const singleCount = singleExpenses.length;
 
               if (singleCount === 0) {
                 directResponse += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
                 directResponse += `🔍 ${supplierName}\n`;
-                directResponse += `❌ Aucune transaction trouvée pour ce fournisseur.\n`;
+                directResponse += `❌ Aucune donnée trouvée pour ce fournisseur (ni transactions bancaires, ni factures).\n`;
                 continue;
               }
 
               // Trier par date
-              singleExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              singleExpenses.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
               const icon = singleIsRevenue ? '💰' : '💸';
               const typeLabel = singleIsRevenue ? 'Revenus' : 'Dépenses';
@@ -3164,8 +2545,48 @@ export class AIAgentServiceV2 {
           // Calculer le total (débits sont négatifs, on prend la valeur absolue)
           const totalPaid = supplierPayments.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
-          // 🔍 DÉTECTION: Si 0 paiements VERS le fournisseur, vérifier s'il y a des paiements DE sa part
+          // 🔍 DÉTECTION: Si 0 paiements VERS le fournisseur, vérifier d'abord les factures Billit (ex: Uber)
           if (totalPaid === 0 && supplierPayments.length === 0) {
+            // 📄 Vérifier d'abord s'il y a des factures dans Billit
+            try {
+              const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+              const supplierInvoices = allInvoices.filter(inv => {
+                const invDate = new Date(inv.invoice_date);
+                return invDate >= startDate && invDate <= endDate && matchesSupplier(inv.supplier_name, args.supplier_name);
+              });
+
+              if (supplierInvoices.length > 0) {
+                // 💡 Des factures existent dans Billit - les afficher comme dépenses
+                const totalInvoices = supplierInvoices.reduce((sum, inv) => sum + inv.total_amount, 0);
+                const invoiceList = supplierInvoices.map(inv => ({
+                  date: inv.invoice_date,
+                  amount: inv.total_amount,
+                  description: `Facture ${inv.invoice_number} - ${inv.supplier_name}`,
+                  invoice_number: inv.invoice_number,
+                  supplier_name: inv.supplier_name,
+                })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                result = {
+                  supplier_name: args.supplier_name,
+                  period: `${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}`,
+                  total_paid: totalInvoices,
+                  payment_count: supplierInvoices.length,
+                  payments: invoiceList,
+                  currency: 'EUR',
+                  // 💡 INFORMATION: Les dépenses viennent des factures Billit (pas de débits bancaires)
+                  is_invoice_based_expenses: true,
+                  direct_response: `💸 Dépenses: ${args.supplier_name}\n${startDate.toLocaleDateString('fr-BE')} - ${endDate.toLocaleDateString('fr-BE')}\n\nTotal: **${totalInvoices.toFixed(2)}€** (${supplierInvoices.length} facture${supplierInvoices.length > 1 ? 's' : ''})\n\n📄 Factures${supplierInvoices.length > 5 ? ' (5 premières)' : ''}:\n${invoiceList.slice(0, 5).map(inv => {
+                    const d = new Date(inv.date);
+                    return `  ${d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: '2-digit' })}: ${inv.amount.toFixed(2)}€ - ${inv.description}`;
+                  }).join('\n')}${supplierInvoices.length > 5 ? `\n  ... et ${supplierInvoices.length - 5} autres` : ''}\n\n💡 Note: Ces dépenses proviennent des factures Billit (commissions déduites à la source).`
+                };
+                break;
+              }
+            } catch (error) {
+              console.error('❌ Erreur lors de la vérification des factures Billit:', error);
+            }
+
+            // 📊 Si aucune facture Billit, vérifier s'il y a des paiements DE sa part (revenus)
             const supplierReceived = transactions.filter(tx =>
               tx.type === 'Credit' &&
               matchesSupplier(tx.description || '', args.supplier_name)
