@@ -3239,13 +3239,13 @@ Vérifiez:
             unpaid_count: unpaid.length,
             unpaid_amount: unpaid.reduce((sum, inv) => sum + inv.total_amount, 0),
             total_amount: monthInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
-            paid_invoices: paid.slice(0, 10).map(inv => ({
+            paid_invoices: paid.map(inv => ({
               supplier: inv.supplier_name,
               amount: inv.total_amount,
               invoice_number: inv.invoice_number,
               date: inv.invoice_date,
             })),
-            unpaid_invoices: unpaid.slice(0, 10).map(inv => ({
+            unpaid_invoices: unpaid.map(inv => ({
               supplier: inv.supplier_name,
               amount: inv.total_amount,
               invoice_number: inv.invoice_number,
