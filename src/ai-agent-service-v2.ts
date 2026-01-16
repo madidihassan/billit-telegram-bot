@@ -4403,7 +4403,7 @@ Vérifiez:
       const hasExplicitAnalysisWord = questionLower.includes('analyse') || questionLower.includes('dépense') ||
                                       questionLower.includes('statistiques') || questionLower.includes('top') ||
                                       questionLower.includes('évolution') || questionLower.includes('mensuel');
-      if (simpleInvoicesMatch && !hasExplicitAnalysisWord && !questionLower.includes('dernières') && !questionLower.includes('récentes')) {
+      if (simpleInvoicesMatch && !hasExplicitAnalysisWord && !questionLower.includes('dernières') && !questionLower.includes('récentes') && !questionLower.includes('toutes') && !questionLower.includes('tous')) {
         console.log(`🔍 Détection: Factures d'un fournisseur demandées - ajout d'un hint pour l'IA`);
         question = `[HINT: CRITIQUE - L'utilisateur demande les FACTURES d'un fournisseur spécifique (pas une analyse avec statistiques). Tu DOIS utiliser get_recent_invoices avec supplier_name. NE PAS utiliser analyze_supplier_expenses (qui donne des statistiques). Retourner la liste des factures avec dates, montants et numéros.] ${question}`;
       }
