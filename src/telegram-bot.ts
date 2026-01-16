@@ -11,6 +11,11 @@ import { InvoiceMonitoringService } from './invoice-monitoring-service';
 import { sanitizeError, logUnauthorizedAccess, logSuspiciousActivity, sanitizeUrl } from './utils/security';
 import { validateUserInput, sanitizeArgs } from './utils/validation';
 import { RateLimiterManager, RateLimiterFactory } from './utils/rate-limiter';
+import { StreamingResponseFactory } from './utils/streaming-response';
+import { ProgressMessages } from './utils/progress-messages';
+import { DataValidator, AIResponseGuard } from './utils/data-validator';
+import { logInfo, logDebug, logError as logErrorUtil } from './utils/logger';
+import { globalMetrics } from './monitoring/bot-metrics';
 import fs from 'fs';
 import path from 'path';
 
@@ -761,26 +766,60 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
 
   /**
    * Traite une commande vocale transcrite avec l'agent IA autonome
+   * NOUVEAU: Avec streaming ChatGPT-like pour UX améliorée
    */
   private async processVoiceCommand(text: string): Promise<void> {
-    try {
-      // Utiliser l'AGENT IA AUTONOME pour traiter la demande vocale
-      const processingMsg = await this.bot.sendMessage(this.currentChatId, '🤖 Analyse en cours...');
+    const startTime = Date.now();
 
-      // Traiter avec l'agent IA autonome (function calling)
+    try {
+      logDebug(`Commande vocale transcrite: "${text}"`, 'telegram-bot', { userId: this.currentChatId });
+
+      // 🎬 Indicateurs visuels avec streaming
+      const streamer = StreamingResponseFactory.create(this.bot, Number(this.currentChatId));
+      await streamer.sendTyping();
+
+      const progressMsg = await streamer.sendProgressMessage('🎤 Analyse de votre commande vocale...');
+
+      // 🧠 Traiter avec l'AGENT IA (DONNÉES RÉELLES)
       const response = await this.aiAgentService.processQuestion(text, String(this.currentChatId));
 
-      // Supprimer le message de traitement
-      try {
-        await this.bot.deleteMessage(this.currentChatId, processingMsg.message_id);
-      } catch (e) {
-        // Ignorer si le message ne peut pas être supprimé
+      // 🔒 Validation de la réponse
+      const validation = DataValidator.validateAIResponse(response);
+
+      if (!validation.isValid) {
+        logErrorUtil('Réponse vocale contient des estimations', { errors: validation.errors }, 'telegram-bot');
+
+        // Réessayer avec validation stricte
+        const strictResponse = await this.aiAgentService.processQuestion(
+          `[HINT: Utilise UNIQUEMENT les données EXACTES des outils. ZERO estimation.] ${text}`,
+          String(this.currentChatId)
+        );
+
+        await streamer.deleteCurrentMessage();
+        await streamer.streamText(strictResponse);
+      } else {
+        // 📺 Streaming de la réponse
+        await streamer.deleteCurrentMessage();
+        await streamer.streamText(response);
       }
 
-      await this.sendMessageWithButtons(response);
+      // 📊 Métriques
+      const duration = Date.now() - startTime;
+      globalMetrics.trackRequest(String(this.currentChatId), duration);
+      globalMetrics.trackAICall('voice_command');
+
+      logInfo('Commande vocale traitée', 'telegram-bot', {
+        userId: this.currentChatId,
+        duration: `${duration}ms`,
+      });
 
     } catch (error: any) {
-      console.error('Erreur lors du traitement de la commande vocale:', error);
+      const duration = Date.now() - startTime;
+      globalMetrics.trackRequest(String(this.currentChatId), duration);
+      globalMetrics.trackError('voice_command', error.message, String(this.currentChatId));
+
+      logErrorUtil('Erreur commande vocale', error, 'telegram-bot');
+
       const safeMessage = sanitizeError(error, 'Erreur lors du traitement de votre commande vocale');
       await this.sendMessage(`❌ ${safeMessage}`);
     }
@@ -825,27 +864,79 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
 
   /**
    * Traite une question avec l'IA autonome (function calling)
+   * NOUVEAU: Avec streaming ChatGPT-like pour UX améliorée
    */
   private async handleAIQuestion(question: string): Promise<void> {
-    try {
-      // Envoyer un message de traitement
-      const processingMsg = await this.bot.sendMessage(this.currentChatId, '🤖 Analyse en cours...');
+    const startTime = Date.now();
 
-      // Traiter la question avec l'AGENT IA autonome
+    try {
+      // ⏱️ TRACKING: Démarrer le suivi de la requête
+      logDebug(`Question IA reçue: "${question}"`, 'telegram-bot', { userId: this.currentChatId });
+
+      // 🎬 ÉTAPE 1: Indicateurs visuels de progression
+      const streamer = StreamingResponseFactory.create(this.bot, Number(this.currentChatId));
+
+      // Envoyer typing indicator
+      await streamer.sendTyping();
+
+      // Message de progression initial
+      const progressMsg = await streamer.sendProgressMessage(ProgressMessages.AI_WORKING);
+
+      // 🧠 ÉTAPE 2: Traiter avec l'AGENT IA (DONNÉES RÉELLES)
+      // ⚠️ CRITIQUE: Toutes les données viennent des outils IA - ZERO invention
       const response = await this.aiAgentService.processQuestion(question, String(this.currentChatId));
 
-      // Supprimer le message de traitement
-      try {
-        await this.bot.deleteMessage(this.currentChatId, processingMsg.message_id);
-      } catch (e) {
-        // Ignorer si le message ne peut pas être supprimé
+      // 🔒 ÉTAPE 3: VALIDATION - Garantir précision des données
+      const validation = DataValidator.validateAIResponse(response);
+
+      if (!validation.isValid) {
+        logErrorUtil('Réponse IA contient des estimations/inventions', { errors: validation.errors }, 'telegram-bot');
+
+        // Bloquer les réponses avec estimations
+        await this.bot.editMessageText(
+          `❌ Erreur: La réponse générée contient des estimations non fiables.\n\n💡 Je vais reformuler avec les données exactes.`,
+          { chat_id: Number(this.currentChatId), message_id: progressMsg.message_id }
+        );
+
+        // Réessayer avec un hint plus strict
+        const strictResponse = await this.aiAgentService.processQuestion(
+          `[HINT: Utilise UNIQUEMENT les données EXACTES des outils. ZERO estimation.] ${question}`,
+          String(this.currentChatId)
+        );
+
+        // Streamer la réponse corrigée
+        await streamer.deleteCurrentMessage();
+        await streamer.streamText(strictResponse);
+
+      } else {
+        // 📺 ÉTAPE 4: STREAMING de la réponse (UX ChatGPT-like)
+        // Supprimer le message de progression
+        await streamer.deleteCurrentMessage();
+
+        // Streamer la réponse en chunks
+        await streamer.streamText(response);
       }
 
-      // Envoyer la réponse
-      await this.sendMessageWithButtons(response);
+      // 📊 ÉTAPE 5: Métriques et logging
+      const duration = Date.now() - startTime;
+      globalMetrics.trackRequest(String(this.currentChatId), duration);
+      globalMetrics.trackAICall();
+
+      logInfo('Question IA traitée avec succès', 'telegram-bot', {
+        userId: this.currentChatId,
+        duration: `${duration}ms`,
+        responseLength: response.length,
+        validationStatus: validation.isValid ? 'OK' : 'WARNINGS',
+      });
 
     } catch (error: any) {
-      console.error('❌ Erreur lors du traitement IA:', error);
+      // 📊 Tracker l'erreur
+      const duration = Date.now() - startTime;
+      globalMetrics.trackRequest(String(this.currentChatId), duration);
+      globalMetrics.trackError('ai_question', error.message, String(this.currentChatId));
+
+      logErrorUtil('Erreur lors du traitement IA', error, 'telegram-bot', { question });
+
       const safeMessage = sanitizeError(error, 'Erreur lors du traitement de votre question');
       await this.sendMessage(`❌ ${safeMessage}\n\n💡 Essayez de reformuler ou utilisez /help`);
     }
