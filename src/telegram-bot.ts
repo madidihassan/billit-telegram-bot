@@ -14,6 +14,7 @@ import { RateLimiterManager, RateLimiterFactory } from './utils/rate-limiter';
 import { StreamingResponseFactory } from './utils/streaming-response';
 import { ProgressMessages } from './utils/progress-messages';
 import { DataValidator, AIResponseGuard } from './utils/data-validator';
+import { TelegramPaginationFactory } from './utils/telegram-pagination';
 import { logInfo, logDebug, logError as logErrorUtil } from './utils/logger';
 import { globalMetrics } from './monitoring/bot-metrics';
 import fs from 'fs';
@@ -795,11 +796,22 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
           String(this.currentChatId)
         );
 
-        // ✅ STREAMING : Éditer le message existant
-        await streamer.streamText(strictResponse, progressMsg.message_id);
+        // ✅ PAGINATION ou STREAMING selon la longueur
+        if (strictResponse.length > 4000) {
+          const paginator = TelegramPaginationFactory.create(this.bot, Number(this.currentChatId));
+          await paginator.sendLongMessage(strictResponse, progressMsg.message_id);
+        } else {
+          await streamer.streamText(strictResponse, progressMsg.message_id);
+        }
       } else {
-        // 📺 STREAMING : Éditer le message de progression
-        await streamer.streamText(response, progressMsg.message_id);
+        // 📺 PAGINATION ou STREAMING selon la longueur
+        if (response.length > 4000) {
+          logInfo(`Réponse vocale longue (${response.length} chars), pagination`, 'telegram-bot');
+          const paginator = TelegramPaginationFactory.create(this.bot, Number(this.currentChatId));
+          await paginator.sendLongMessage(response, progressMsg.message_id);
+        } else {
+          await streamer.streamText(response, progressMsg.message_id);
+        }
       }
 
       // 📊 Métriques
@@ -903,13 +915,30 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
           String(this.currentChatId)
         );
 
-        // ✅ STREAMING : Éditer le message existant au lieu de supprimer/créer
-        await streamer.streamText(strictResponse, progressMsg.message_id);
+        // ✅ PAGINATION : Si réponse trop longue (>4000 chars), découper automatiquement
+        if (strictResponse.length > 4000) {
+          const paginator = TelegramPaginationFactory.create(this.bot, Number(this.currentChatId));
+          await paginator.sendLongMessage(strictResponse, progressMsg.message_id);
+        } else {
+          // ✅ STREAMING : Éditer le message existant
+          await streamer.streamText(strictResponse, progressMsg.message_id);
+        }
 
       } else {
         // 📺 ÉTAPE 4: STREAMING de la réponse (UX ChatGPT-like)
-        // ✅ Éditer le message de progression au lieu de le supprimer
-        await streamer.streamText(response, progressMsg.message_id);
+        // ⚡ NOUVEAU: Détection automatique pagination pour réponses longues
+
+        if (response.length > 4000) {
+          // 📄 PAGINATION : Réponse trop longue, découper en plusieurs messages
+          logInfo(`Réponse longue (${response.length} chars), pagination automatique`, 'telegram-bot');
+
+          const paginator = TelegramPaginationFactory.create(this.bot, Number(this.currentChatId));
+          await paginator.sendLongMessage(response, progressMsg.message_id);
+
+        } else {
+          // 📺 STREAMING : Réponse courte, streaming normal
+          await streamer.streamText(response, progressMsg.message_id);
+        }
       }
 
       // 📊 ÉTAPE 5: Métriques et logging

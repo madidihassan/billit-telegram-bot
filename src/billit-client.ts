@@ -33,6 +33,9 @@ export class BillitClient {
     limit?: number;
     page?: number;
     from_date?: string;
+    to_date?: string;
+    order_date_from?: string;
+    order_date_to?: string;
   }): Promise<BillitInvoice[]> {
     try {
       console.log('🔍 Récupération des factures d\'achat depuis Billit...');
@@ -40,8 +43,20 @@ export class BillitClient {
       // Construire le filtre OData pour les factures d'achat
       let filter = "OrderType eq 'Invoice' and OrderDirection eq 'Cost'";
 
+      // Filtre par LastModified (pour les factures récentes)
       if (params?.from_date) {
         filter += ` and LastModified ge DateTime'${params.from_date}'`;
+      }
+      if (params?.to_date) {
+        filter += ` and LastModified le DateTime'${params.to_date}'`;
+      }
+
+      // Filtre par OrderDate (date réelle de la facture) - PRIORITAIRE pour périodes spécifiques
+      if (params?.order_date_from) {
+        filter += ` and OrderDate ge DateTime'${params.order_date_from}'`;
+      }
+      if (params?.order_date_to) {
+        filter += ` and OrderDate le DateTime'${params.order_date_to}'`;
       }
 
       // IMPORTANT: Trier par OrderDate décroissant pour avoir les plus récentes en premier

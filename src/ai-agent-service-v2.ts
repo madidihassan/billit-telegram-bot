@@ -3276,10 +3276,18 @@ Vérifiez:
 
           const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
 
-          const allInvoices = await this.billitClient.getInvoices({ limit: 120 }); // Max 100 pour Billit API
-          const monthInvoices = allInvoices.filter(inv => {
-            const invDate = new Date(inv.invoice_date);
-            return invDate.getMonth() === targetMonth && invDate.getFullYear() === targetYear;
+          // Construire les dates de début et fin du mois pour le filtre API
+          const startDate = new Date(targetYear, targetMonth, 1);
+          const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59); // Dernier jour du mois
+
+          const startDateStr = startDate.toISOString().split('T')[0];
+          const endDateStr = endDate.toISOString().split('T')[0];
+
+          // Utiliser le filtre par OrderDate pour récupérer TOUTES les factures du mois
+          const monthInvoices = await this.billitClient.getInvoices({
+            limit: 120,
+            order_date_from: startDateStr,
+            order_date_to: endDateStr
           });
 
           const paid = monthInvoices.filter(inv =>
