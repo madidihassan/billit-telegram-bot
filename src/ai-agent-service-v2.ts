@@ -29,6 +29,7 @@ import { globalMetrics } from './monitoring/bot-metrics';
 // NIVEAU 2: Intelligence contextuelle
 import { ConversationManager } from './services/conversation-manager';
 import { ContextDetector } from './services/context-detector';
+import { SemanticCache } from './services/semantic-cache';
 
 /**
  * Service d'agent IA autonome AMÉLIORÉ avec données structurées
@@ -49,6 +50,7 @@ export class AIAgentServiceV2 {
   // NIVEAU 2: Nouveau système de conversation intelligent
   private conversationManager: ConversationManager;
   private contextDetector: ContextDetector;
+  private semanticCache: SemanticCache;
 
   // ANCIEN SYSTÈME (conservé temporairement pour compatibilité)
   private conversationHistory: Array<{ role: string; content: string }> = [];
@@ -78,6 +80,7 @@ export class AIAgentServiceV2 {
     // NIVEAU 2: Initialiser les services intelligents
     this.conversationManager = new ConversationManager();
     this.contextDetector = new ContextDetector();
+    this.semanticCache = new SemanticCache();
 
     // Afficher le provider utilisé
     if (this.aiProvider === 'openrouter') {
@@ -4279,10 +4282,23 @@ Vérifiez:
         question = contextResult.enrichedQuestion;
       }
 
+      // NIVEAU 2: Vérifier le cache sémantique
+      const cachedResponse = await this.semanticCache.get(question, userId);
+      if (cachedResponse) {
+        // Sauvegarder dans l'historique même si c'est du cache
+        this.conversationManager.addUserMessage(userId, question);
+        this.conversationManager.addAssistantMessage(userId, cachedResponse);
+
+        return cachedResponse.replace(/\*\*/g, '');
+      }
+
       // Stocker la question actuelle pour la détection automatique de "liste"
       this.currentQuestion = question;
 
       console.log('🤖 Question V2:', question);
+
+      // Tracker le temps de réponse pour les métriques de cache
+      const startTime = Date.now();
 
       // 🔍 DÉTECTION SIMPLIFIÉE: Ajouter des hints pour guider l'IA
       const questionLower = question.toLowerCase();
@@ -4860,6 +4876,18 @@ INTERDICTIONS:
           // NIVEAU 2: Sauvegarder dans le nouveau système de conversation par utilisateur
           this.conversationManager.addUserMessage(userId, this.currentQuestion);
           this.conversationManager.addAssistantMessage(userId, message.content);
+
+          // NIVEAU 2: Mettre en cache la réponse
+          const responseTime = Date.now() - startTime;
+          this.semanticCache.set(
+            this.currentQuestion,
+            message.content,
+            userId,
+            {
+              responseTime,
+              toolsUsed: [] // TODO: tracker les outils utilisés
+            }
+          );
 
           // Supprimer tous les ** du texte
           return message.content.replace(/\*\*/g, '');
