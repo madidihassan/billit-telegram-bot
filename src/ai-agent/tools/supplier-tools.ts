@@ -1,7 +1,7 @@
 import type Groq from 'groq-sdk';
 
 /**
- * Outils IA pour la gestion des fournisseurs (12 outils)
+ * Outils IA pour la gestion des fournisseurs (15 outils)
  *
  * @module SupplierTools
  * @category AI Tools
@@ -109,7 +109,7 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'analyze_supplier_expenses',
-      description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur ET lister les factures.\n\n🎯 UTILISE CET OUTIL POUR:\n- "Liste des factures de X" → {supplier_name: "X", include_details: true}\n- "Toutes les factures de X sur l\'année" → {supplier_name: "X", include_details: true}\n- "Factures de X en novembre" → {supplier_name: "X", month: "novembre", include_details: true}\n- "Dépenses chez X" → {supplier_name: "X"}\n- "Factures de X et Y" → {supplier_name: "X et Y"} (PLUSIEURS FOURNISSEURS en un seul appel !)\n\n⚠️ IMPORTANT: Si la question mentionne PLUSIEURS fournisseurs (ex: "Uber et Takeaway", "Colruyt et Sligro"), utiliser UN SEUL APPEL avec supplier_name contenant tous les fournisseurs séparés par " et ". Ex: {supplier_name: "Uber et Takeaway"} ou {supplier_name: "Colruyt et Sligro"}. NE PAS utiliser compare_supplier_expenses.\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro", "Foster") → SPECIFIER supplier_name\n2. Si PLUSIEURS fournisseurs → utiliser supplier_name: "X et Y" (un seul appel)\n3. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n4. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n5. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année", "de l\'année") → NE PAS spécifier month\n6. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n7. ⚠️ Si utilisateur demande "LA LISTE", "FACTURES", "TOUTES" explicitement → METTRE include_details: true\n8. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Liste des factures de Foster" → {supplier_name: "Foster", include_details: true}\n- "Toutes les factures de l\'année de Foster" → {supplier_name: "Foster", include_details: true}\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Factures Uber et Takeaway" → {supplier_name: "Uber et Takeaway"}\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {}\n- "Dépenses de novembre" → {month: "novembre"}',
+      description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur ET lister les factures.\n\n🎯 UTILISE CET OUTIL POUR:\n- "Liste des factures de X" → {supplier_name: "X", include_details: true}\n- "Toutes les factures de X sur l\'année" → {supplier_name: "X", include_details: true}\n- "Factures de X en novembre" → {supplier_name: "X", month: "novembre", include_details: true}\n- "Dépenses chez X" → {supplier_name: "X"}\n- "Factures de X et Y" → {supplier_name: "X et Y"} (PLUSIEURS FOURNISSEURS en un seul appel !)\n- "Factures de nourriture/alimentation" → {category: "alimentation", include_details: true}\n- "Dépenses alimentaires" → {category: "alimentation"}\n- "Factures utilities/énergie" → {category: "utilities"}\n\n⚠️ IMPORTANT: Si la question mentionne PLUSIEURS fournisseurs (ex: "Uber et Takeaway", "Colruyt et Sligro"), utiliser UN SEUL APPEL avec supplier_name contenant tous les fournisseurs séparés par " et ". Ex: {supplier_name: "Uber et Takeaway"} ou {supplier_name: "Colruyt et Sligro"}. NE PAS utiliser compare_supplier_expenses.\n\n⚠️⚠️ CATÉGORIES: Si la question demande "nourriture", "alimentation", "énergie", "utilities", "télécom", etc. → utiliser category au lieu de supplier_name!\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro", "Foster") → SPECIFIER supplier_name\n2. Si CATÉGORIE mentionnée (ex: "nourriture", "alimentation", "énergie", "utilities", "télécom") → SPECIFIER category\n3. Si PLUSIEURS fournisseurs → utiliser supplier_name: "X et Y" (un seul appel)\n4. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n5. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n6. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année", "de l\'année") → NE PAS spécifier month\n7. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n8. ⚠️ Si utilisateur demande "LA LISTE", "FACTURES", "TOUTES" explicitement → METTRE include_details: true\n9. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Liste des factures de Foster" → {supplier_name: "Foster", include_details: true}\n- "Toutes les factures de l\'année de Foster" → {supplier_name: "Foster", include_details: true}\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Factures Uber et Takeaway" → {supplier_name: "Uber et Takeaway"}\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {}\n- "Dépenses de novembre" → {month: "novembre"}\n- "Factures de nourriture" → {category: "alimentation", include_details: true}\n- "Dépenses alimentaires" → {category: "alimentation"}\n- "Factures utilities/énergie" → {category: "utilities"}',
       parameters: {
         type: 'object',
         properties: {
@@ -136,6 +136,11 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
           include_details: {
             type: 'boolean',
             description: 'Mettre à true si l\'utilisateur demande EXPLICITEMENT "la liste", "liste détaillée", "détails". Par défaut: false (affiche seulement l\'analyse).',
+          },
+          category: {
+            type: 'string',
+            description: 'Catégorie de fournisseurs pour filtrer les résultats (optionnel). Valeurs: "alimentation" (Colruyt, Sligro, Foster, Coca-Cola...), "utilities" (Engie, Vivaqua...), "telecom" (Proximus, Orange...), "transport" (Uber, Takeaway...), "services" (KBC, BNP...). Si omis, affiche tous les fournisseurs sans filtrage.',
+            enum: ['alimentation', 'utilities', 'telecom', 'transport', 'services', 'assurance', 'loyers']
           },
         },
         required: [],
@@ -220,6 +225,81 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
       name: 'get_user_guide',
       description: '⚠️ APPEL OBLIGATOIRE: Envoyer le guide utilisateur complet avec tous les exemples de questions et commandes. Tu DOIS appeler cet outil quand l\'utilisateur demande "donne moi le guide", "guide", "aide complète", "comment utiliser le bot", "quelles questions poser", "que puis-je demander". Le guide sera envoyé en plusieurs parties automatiquement.',
       parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'analyze_supplier_trends',
+      description: '⚠️ APPEL OBLIGATOIRE pour analyser l\'évolution des dépenses d\'un fournisseur sur plusieurs mois. Répond aux questions: "Évolution des dépenses Foster?", "Tendance Colruyt sur 6 mois?", "Comment évoluent mes dépenses chez Sligro?", "Analyse l\'évolution de Foster sur 12 mois". Affiche un graphique textuel d\'évolution, détecte les hausses/baisses significatives (>20%), et calcule la tendance globale (croissance/décroissance).',
+      parameters: {
+        type: 'object',
+        properties: {
+          supplier_name: {
+            type: 'string',
+            description: 'Nom du fournisseur (Foster, Colruyt, Sligro...)',
+          },
+          period_months: {
+            type: 'number',
+            description: 'Nombre de mois à analyser (3, 6 ou 12). Par défaut: 6 mois',
+          },
+          year: {
+            type: 'string',
+            description: 'Année de fin de période (optionnel). Par défaut: année en cours',
+          },
+        },
+        required: ['supplier_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_supplier_ranking',
+      description: '⚠️ APPEL OBLIGATOIRE pour obtenir le classement des fournisseurs par dépenses avec évolution. Répond aux questions: "Top 10 fournisseurs?", "Classement des fournisseurs ce mois?", "Quels sont mes plus gros fournisseurs?", "Top 5 avec évolution?". Affiche le top X fournisseurs avec montant, nombre de transactions, et évolution par rapport au mois/année précédent(e).',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            description: 'Nombre de fournisseurs à afficher (3, 5, 10, 20). Par défaut: 10',
+          },
+          month: {
+            type: 'string',
+            description: 'Mois à analyser (optionnel). Si omis, analyse l\'année entière',
+          },
+          year: {
+            type: 'string',
+            description: 'Année à analyser. Par défaut: année en cours',
+          },
+          show_evolution: {
+            type: 'boolean',
+            description: 'Afficher l\'évolution par rapport à la période précédente. Par défaut: true',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'detect_supplier_patterns',
+      description: '⚠️ APPEL OBLIGATOIRE pour détecter les dépenses récurrentes d\'un fournisseur. Répond aux questions: "Dépenses récurrentes Foster?", "Est-ce que je paie Sligro régulièrement?", "Fréquence de paiement à Colruyt?", "Patterns de dépenses chez Metro?". Détecte les paiements hebdomadaires/mensuels, calcule les montants moyens et écarts-types, et alerte si variation >30% du montant habituel.',
+      parameters: {
+        type: 'object',
+        properties: {
+          supplier_name: {
+            type: 'string',
+            description: 'Nom du fournisseur (Foster, Colruyt, Sligro...)',
+          },
+          period_months: {
+            type: 'number',
+            description: 'Nombre de mois à analyser pour détecter les patterns (3, 6 ou 12). Par défaut: 6 mois',
+          },
+        },
+        required: ['supplier_name'],
+      },
     },
   },
 ];

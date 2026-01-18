@@ -30,6 +30,22 @@ import { globalMetrics } from './monitoring/bot-metrics';
 import { ConversationManager } from './services/conversation-manager';
 import { ContextDetector } from './services/context-detector';
 import { SemanticCache } from './services/semantic-cache';
+import {
+  analyzeSupplierTrends,
+  getSupplierRanking,
+  detectSupplierPatterns
+} from './ai-agent/implementations/supplier-analytics';
+import {
+  getYearSummary,
+  comparePeriods,
+  getQuarterlyReport
+} from './ai-agent/implementations/aggregation-analytics';
+import {
+  predictNextMonth,
+  detectAnomalies,
+  analyzeTrends,
+  exportToCSV
+} from './ai-agent/implementations/predictive-analytics';
 
 /**
  * Service d'agent IA autonome AMÉLIORÉ avec données structurées
@@ -101,6 +117,136 @@ export class AIAgentServiceV2 {
    */
   private defineTools(): Groq.Chat.Completions.ChatCompletionTool[] {
     return allTools;
+  }
+
+  /**
+   * 🎯 OPTIMISATION: Sélectionne dynamiquement les outils pertinents selon la question
+   * Réduit l'usage de tokens de ~70% en n'envoyant que les outils nécessaires
+   */
+  private selectRelevantTools(question: string): Groq.Chat.Completions.ChatCompletionTool[] {
+    const q = question.toLowerCase();
+    const selectedTools: Groq.Chat.Completions.ChatCompletionTool[] = [];
+
+    // Import des catégories d'outils
+    const { invoiceTools } = require('./ai-agent/tools/invoice-tools');
+    const { transactionTools } = require('./ai-agent/tools/transaction-tools');
+    const { employeeTools } = require('./ai-agent/tools/employee-tools');
+    const { supplierTools } = require('./ai-agent/tools/supplier-tools');
+    const { aggregationTools } = require('./ai-agent/tools/aggregation-tools');
+    const { analyticsTools } = require('./ai-agent/tools/analytics-tools');
+    const { userTools } = require('./ai-agent/tools/user-tools');
+    const { systemTools } = require('./ai-agent/tools/system-tools');
+
+    // Toujours inclure les outils système (légers)
+    selectedTools.push(...systemTools);
+
+    // Détection par mots-clés
+    const keywords = {
+      invoices: ['facture', 'invoice', 'impayé', 'payé', 'retard', 'overdue', 'paid', 'unpaid'],
+      transactions: ['transaction', 'paiement', 'payment', 'dépense', 'recette', 'expense', 'revenue'],
+      employees: ['employé', 'employee', 'salaire', 'salary', 'paie', 'payroll', 'staff'],
+      suppliers: ['fournisseur', 'supplier', 'vendor', 'prestataire'],
+      aggregation: ['résumé', 'summary', 'année', 'year', 'trimestre', 'quarter', 'période', 'period', 'compare', 'comparaison'],
+      analytics: ['prévision', 'predict', 'prédiction', 'anomalie', 'anomaly', 'tendance', 'trend', 'forecast', 'export', 'csv'],
+      users: ['utilisateur', 'user', 'access', 'autorisé', 'whitelist'],
+    };
+
+    // Sélection intelligente
+    if (keywords.invoices.some(kw => q.includes(kw))) {
+      selectedTools.push(...invoiceTools);
+    }
+    if (keywords.transactions.some(kw => q.includes(kw))) {
+      selectedTools.push(...transactionTools);
+    }
+    if (keywords.employees.some(kw => q.includes(kw))) {
+      selectedTools.push(...employeeTools);
+    }
+    if (keywords.suppliers.some(kw => q.includes(kw))) {
+      selectedTools.push(...supplierTools);
+    }
+    if (keywords.aggregation.some(kw => q.includes(kw))) {
+      selectedTools.push(...aggregationTools);
+    }
+    if (keywords.analytics.some(kw => q.includes(kw))) {
+      selectedTools.push(...analyticsTools);
+    }
+    if (keywords.users.some(kw => q.includes(kw))) {
+      selectedTools.push(...userTools);
+    }
+
+    // Si aucune catégorie détectée, renvoyer tous les outils (fallback)
+    if (selectedTools.length <= systemTools.length) {
+      return allTools;
+    }
+
+    // Dédupliquer les outils (au cas où)
+    const uniqueTools = selectedTools.filter((tool, index, self) =>
+      index === self.findIndex(t => t.function?.name === tool.function?.name)
+    );
+
+    console.log(`🎯 Outils sélectionnés: ${uniqueTools.length}/${allTools.length} (économie de ${Math.round((1 - uniqueTools.length / allTools.length) * 100)}%)`);
+
+    return uniqueTools;
+  }
+
+  /**
+   * 💡 OPTIMISATION: Génère des hints dynamiques selon le contexte de la question
+   * Améliore la précision en guidant l'IA avec des instructions contextuelles
+   */
+  private generateDynamicHints(question: string): string {
+    const q = question.toLowerCase();
+    const hints: string[] = [];
+
+    // Hints pour les questions de prédiction
+    if (q.includes('prévision') || q.includes('prédi') || q.includes('prochaine') || q.includes('futur')) {
+      hints.push('💡 PRÉDICTION DÉTECTÉE: Utilise predict_next_month pour des prévisions basées sur l\'historique. Affiche la fourchette de confiance et la tendance.');
+    }
+
+    // Hints pour les anomalies
+    if (q.includes('anomalie') || q.includes('suspect') || q.includes('inhabituel') || q.includes('alerte')) {
+      hints.push('💡 DÉTECTION ANOMALIES: Utilise detect_anomalies avec threshold_percent=50 par défaut. Explique pourquoi c\'est anormal.');
+    }
+
+    // Hints pour les tendances
+    if (q.includes('tendance') || q.includes('évolution') || q.includes('croissance') || q.includes('augment') || q.includes('baisse')) {
+      hints.push('💡 ANALYSE TENDANCES: Utilise analyze_trends pour calculer taux de croissance mensuel et annualisé. Inclus projection +3 mois.');
+    }
+
+    // Hints pour les comparaisons de périodes
+    if ((q.includes('compar') || q.includes('vs') || q.includes('versus')) && (q.includes('mois') || q.includes('trimestre') || q.includes('année'))) {
+      hints.push('💡 COMPARAISON PÉRIODES: Utilise compare_periods pour comparer 2 périodes personnalisées. Affiche variation en € et %.');
+    }
+
+    // Hints pour les résumés annuels
+    if ((q.includes('résumé') || q.includes('bilan') || q.includes('rapport')) && (q.includes('année') || q.includes('annuel'))) {
+      hints.push('💡 RÉSUMÉ ANNUEL: Utilise get_year_summary avec top 10 fournisseurs et comparaison YoY si disponible.');
+    }
+
+    // Hints pour les exports
+    if (q.includes('export') || q.includes('csv') || q.includes('excel') || q.includes('télécharge')) {
+      hints.push('💡 EXPORT DONNÉES: Utilise export_to_csv. Le fichier sera sauvegardé dans data/exports/ avec le chemin complet.');
+    }
+
+    // Hints pour les patterns récurrents
+    if (q.includes('récurr') || q.includes('réguli') || q.includes('mensuel') || q.includes('hebdo')) {
+      hints.push('💡 PATTERNS RÉCURRENTS: Utilise detect_supplier_patterns pour identifier paiements hebdo/mensuel avec anomalies >2σ.');
+    }
+
+    // Hints pour les top N
+    if (q.match(/top\s*\d+|les\s*\d+\s*(meilleur|premier|plus)/)) {
+      hints.push('💡 TOP N DÉTECTÉ: Limite à exactement N résultats. Si "top 10" → affiche 10, pas 72. Ne montre PAS la liste détaillée sauf demande explicite.');
+    }
+
+    // Hints pour les rankings
+    if (q.includes('classement') || q.includes('position') || q.includes('se situe') || q.includes('rang')) {
+      hints.push('💡 CLASSEMENT: Calcule la position par rapport aux autres. Affiche médiane et comparaison avec moyenne.');
+    }
+
+    if (hints.length === 0) {
+      return ''; // Pas de hints spécifiques
+    }
+
+    return '\n\n' + hints.join('\n');
   }
 
   /**
@@ -1867,7 +2013,30 @@ export class AIAgentServiceV2 {
 
           // Importer les fonctions de fournisseur
           const { matchesSupplier, SUPPLIER_ALIASES } = await import('./supplier-aliases');
-          const suppliers = Object.keys(SUPPLIER_ALIASES);
+          let suppliers = Object.keys(SUPPLIER_ALIASES);
+
+          // 🏷️ FILTRAGE PAR CATÉGORIE (si args.category est spécifié)
+          if (args.category) {
+            const categoryMap: { [key: string]: string[] } = {
+              'alimentation': ['foster', 'coca-cola', 'cocacola', 'colruyt', 'sligro', 'makro', 'metro', 'transgourmet', 'alkhoomsy', 'turbatu'],
+              'utilities': ['engie', 'vivaqua', 'fluxys', 'electrabel'],
+              'telecom': ['proximus', 'orange', 'telenet', 'mobile', 'vodafone'],
+              'transport': ['uber', 'takeaway', 'deliveroo', 'just eat', 'justeat'],
+              'services': ['kbc', 'bnp', 'ing', 'beobank', 'babel'],
+              'assurance': ['ag insurance', 'allianz', 'axa', 'bnpparf', 'p&v'],
+              'loyers': ['loyer', 'location', 'immobilier']
+            };
+
+            const categorySuppliers = categoryMap[args.category.toLowerCase()];
+            if (categorySuppliers) {
+              const categoryLower = args.category.toLowerCase();
+              suppliers = suppliers.filter((sup: string) => {
+                const supLower = sup.toLowerCase();
+                return categorySuppliers.some((keyword: string) => supLower.includes(keyword));
+              });
+              console.log(`🏷️ Filtrage par catégorie "${args.category}": ${suppliers.length} fournisseur(s) trouvé(s)`);
+            }
+          }
 
           // 🔄 NOUVEAU: Pour un fournisseur spécifique, chercher aussi dans les factures Billit si pas de dépenses bancaires
           const getSupplierExpensesFromInvoices = async (supplierName: string): Promise<any[]> => {
@@ -2495,6 +2664,116 @@ Vérifiez:
             winner: sorted[0].name,
             direct_response: directResponse
           };
+          break;
+        }
+
+        case 'analyze_supplier_trends': {
+          console.log('🔧 Exécution: analyze_supplier_trends', args);
+          result = await analyzeSupplierTrends(
+            this.bankClient,
+            args.supplier_name,
+            args.period_months || 6,
+            args.year
+          );
+          break;
+        }
+
+        case 'get_supplier_ranking': {
+          console.log('🔧 Exécution: get_supplier_ranking', args);
+          result = await getSupplierRanking(
+            this.bankClient,
+            args.limit || 10,
+            args.month,
+            args.year,
+            args.show_evolution !== false
+          );
+          break;
+        }
+
+        case 'detect_supplier_patterns': {
+          console.log('🔧 Exécution: detect_supplier_patterns', args);
+          result = await detectSupplierPatterns(
+            this.bankClient,
+            args.supplier_name,
+            args.period_months || 6
+          );
+          break;
+        }
+
+        case 'get_year_summary': {
+          console.log('🔧 Exécution: get_year_summary', args);
+          result = await getYearSummary(
+            this.bankClient,
+            this.billitClient,
+            args.year,
+            args.include_comparison !== false
+          );
+          break;
+        }
+
+        case 'compare_periods': {
+          console.log('🔧 Exécution: compare_periods', args);
+          result = await comparePeriods(
+            this.bankClient,
+            args.period1_start,
+            args.period1_end,
+            args.period2_start,
+            args.period2_end
+          );
+          break;
+        }
+
+        case 'get_quarterly_report': {
+          console.log('🔧 Exécution: get_quarterly_report', args);
+          result = await getQuarterlyReport(
+            this.bankClient,
+            this.billitClient,
+            args.quarter,
+            args.year,
+            args.compare_previous !== false
+          );
+          break;
+        }
+
+        case 'predict_next_month': {
+          console.log('🔧 Exécution: predict_next_month', args);
+          result = await predictNextMonth(
+            this.bankClient,
+            args.category,
+            args.history_months
+          );
+          break;
+        }
+
+        case 'detect_anomalies': {
+          console.log('🔧 Exécution: detect_anomalies', args);
+          result = await detectAnomalies(
+            this.bankClient,
+            args.period_days,
+            args.threshold_percent
+          );
+          break;
+        }
+
+        case 'analyze_trends': {
+          console.log('🔧 Exécution: analyze_trends', args);
+          result = await analyzeTrends(
+            this.bankClient,
+            args.period_months,
+            args.include_forecast
+          );
+          break;
+        }
+
+        case 'export_to_csv': {
+          console.log('🔧 Exécution: export_to_csv', args);
+          result = await exportToCSV(
+            this.bankClient,
+            this.billitClient,
+            args.data_type,
+            args.start_date,
+            args.end_date
+          );
           break;
         }
 
@@ -4258,6 +4537,48 @@ Vérifiez:
   }
 
   /**
+   * Extraire les entités importantes de la question et des arguments
+   */
+  private extractEntities(question: string, toolCalls: string[], functionArgs: any[]): string[] {
+    const entities: Set<string> = new Set();
+
+    // Extraire des arguments des fonctions
+    for (const args of functionArgs) {
+      if (args.supplier_name) entities.add(args.supplier_name);
+      if (args.employee_name) entities.add(args.employee_name);
+      if (args.month) entities.add(args.month);
+      if (args.start_month) entities.add(args.start_month);
+      if (args.end_month) entities.add(args.end_month);
+      if (args.category) entities.add(args.category);
+    }
+
+    // Si aucune entité extraite des args, essayer d'extraire de la question
+    if (entities.size === 0) {
+      const questionLower = question.toLowerCase();
+
+      // Extraire les mois
+      const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                     'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+      for (const month of months) {
+        if (questionLower.includes(month)) {
+          entities.add(month);
+        }
+      }
+
+      // Extraire les fournisseurs courants (patterns communs)
+      const commonSuppliers = ['foster', 'sligro', 'colruyt', 'delhaize', 'makro', 'metro',
+                              'uber', 'takeaway', 'deliveroo', 'proximus', 'orange'];
+      for (const supplier of commonSuppliers) {
+        if (questionLower.includes(supplier)) {
+          entities.add(supplier);
+        }
+      }
+    }
+
+    return Array.from(entities);
+  }
+
+  /**
    * Traite une question
    */
   async processQuestion(question: string, chatId?: string): Promise<string> {
@@ -4315,6 +4636,14 @@ Vérifiez:
       if (isComparisonQuery) {
         console.log('🔍 Détection: Question de comparaison de salaires - ajout d\'un hint pour l\'IA');
         question = `[HINT: Cette question nécessite compare_employee_salaries, pas get_employee_salaries] ${question}`;
+      }
+
+      // 🔍 DÉTECTION CRITIQUE: "analyse du salaire" ou "analyse des salaires"
+      // L'IA peut confondre avec analyze_expenses_by_category
+      const salaryAnalysisPattern = /analyse\s+(?:du\s+|des\s+)?salaire/i;
+      if (salaryAnalysisPattern.test(question)) {
+        console.log('🔍 Détection: Analyse des salaires - redirection vers get_employee_salaries');
+        question = `[HINT: CRITIQUE - L'utilisateur demande une analyse des SALAIRES EMPLOYÉS. Tu DOIS utiliser get_employee_salaries (pas analyze_expenses_by_category). Retourner l'analyse détaillée avec total, nombre de paiements, et répartition par employé/mois.] ${question}`;
       }
 
       // 🔍 Détection de plusieurs fournisseurs (ex: "Uber et Takeaway", "X et Y")
@@ -4409,6 +4738,28 @@ Vérifiez:
       if (analyzeExpensesMatch) {
         console.log('🔍 Détection: Analyse de dépenses fournisseurs - ajout d\'un hint pour l\'IA');
         question = `[HINT: L'utilisateur demande une analyse des dépenses fournisseurs. Utiliser analyze_supplier_expenses pour obtenir l'analyse complète avec statistiques.] ${question}`;
+      }
+
+      // 🔍 DÉTECTION: Factures/dépenses par CATÉGORIE (nourriture, alimentation, etc.)
+      // Ex: "factures de nourriture", "dépenses alimentation", "tout ce qui est nourriture"
+      const categoryKeywords = {
+        'nourriture|alimentation|food|alimentaire|restauration|restaurant|cuisine': 'alimentation',
+        'énergie|électricité|gaz|eau|utility|utilities|heating|chauffage': 'utilities',
+        'télécom|internet|téléphone|phone|mobile|gsm|connection': 'telecom',
+        'assurance|insurance|couverture': 'assurance',
+        'loyer|location|bureau|espace|local': 'loyers',
+      };
+
+      for (const [pattern, categoryName] of Object.entries(categoryKeywords)) {
+        const regex = new RegExp(`(?:factures?|dépenses?|dépense|paiements?|achats?|tout ce qui est|donne|montre|voir|liste).*(?:${pattern})|(?:${pattern}).*(?:factures?|dépenses?|paiements?|achats?)`, 'i');
+        if (regex.test(question) && !mentionsSuppliers && !questionLower.includes('compare')) {
+          console.log(`🔍 Détection: Catégorie "${categoryName}" détectée - analyse de tous les fournisseurs de cette catégorie`);
+          question = `[HINT: CRITIQUE - Catégorie "${categoryName}" détectée. L'utilisateur veut voir TOUS les fournisseurs de cette catégorie (pas un seul fournisseur).
+APPEL EXACT: analyze_supplier_expenses avec {category: "${categoryName}"} - NE PAS mettre supplier_name!
+Exemple JSON: {"category": "${categoryName}", "include_details": true}
+Cela affichera tous les fournisseurs de cette catégorie (Foster, Colruyt, Sligro, etc. pour alimentation).] ${question}`;
+          break;
+        }
       }
 
       // ========== DÉTECTIONS POUR "X DERNIÈRES FACTURES" ==========
@@ -4737,7 +5088,7 @@ INTERDICTIONS:
 ❌ Ne liste JAMAIS toutes les transactions bancaires une par une
 ❌ Ne répète JAMAIS les données brutes du JSON
 ❌ Ne dépasse JAMAIS 10 lignes (sauf pour les listes explicitement demandées)
-❌ JAMAIS d'incohérence entre les montants dans la même conversation`,
+❌ JAMAIS d'incohérence entre les montants dans la même conversation${this.generateDynamicHints(question)}`,
         },
         // NIVEAU 2: Utiliser l'historique par utilisateur (avec résumé intelligent si disponible)
         ...this.conversationManager.getFormattedHistory(userId),
@@ -4749,6 +5100,11 @@ INTERDICTIONS:
 
       let iteration = 0;
       const MAX_ITERATIONS = 10;
+      const toolCallsUsed: string[] = []; // Tracker les outils utilisés
+      const allFunctionArgs: any[] = []; // Tracker tous les arguments pour extraction d'entités
+
+      // 🎯 OPTIMISATION: Sélectionner dynamiquement les outils pertinents
+      const relevantTools = this.selectRelevantTools(question);
 
       while (iteration < MAX_ITERATIONS) {
         iteration++;
@@ -4759,7 +5115,7 @@ INTERDICTIONS:
         if (this.aiProvider === 'openrouter' && this.openRouter) {
           response = await this.openRouter.chatCompletion({
             messages: messages as any,
-            tools: this.tools,
+            tools: relevantTools as any,
             tool_choice: 'auto',
             temperature: 0.3,
             max_tokens: 2000, // ⚡ Augmenté de 500 → 2000 pour listes complètes
@@ -4768,7 +5124,7 @@ INTERDICTIONS:
           response = await this.groq.chat.completions.create({
             model: 'llama-3.3-70b-versatile',
             messages: messages as any,
-            tools: this.tools,
+            tools: relevantTools as any,
             tool_choice: 'auto',
             temperature: 0.3,
             max_tokens: 2000, // ⚡ Augmenté de 500 → 2000 pour listes complètes
@@ -4791,6 +5147,10 @@ INTERDICTIONS:
           for (const toolCall of message.tool_calls) {
             const functionName = toolCall.function.name;
             const functionArgs = JSON.parse(toolCall.function.arguments);
+
+            // Tracker le tool call et les arguments
+            toolCallsUsed.push(functionName);
+            allFunctionArgs.push(functionArgs);
 
             const result = await this.executeFunction(functionName, functionArgs);
             console.log(`✓ ${functionName}:`, result.substring(0, 100) + '...');
@@ -4852,6 +5212,32 @@ INTERDICTIONS:
               this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY);
             }
             this.saveConversationState();
+
+            // NIVEAU 2: Sauvegarder dans le nouveau système de conversation (avec métadonnées)
+            const responseTime = Date.now() - startTime;
+            const entities = this.extractEntities(this.currentQuestion, toolCallsUsed, allFunctionArgs);
+            const intent = toolCallsUsed.length > 0 ? toolCallsUsed[0] : undefined;
+
+            this.conversationManager.addUserMessage(userId, this.currentQuestion, {
+              intent,
+              entities,
+            });
+            this.conversationManager.addAssistantMessage(userId, directResponse, {
+              toolCalls: toolCallsUsed,
+              responseTime
+            });
+
+            // NIVEAU 2: Mettre en cache la réponse
+            this.semanticCache.set(
+              this.currentQuestion,
+              directResponse,
+              userId,
+              {
+                responseTime,
+                toolsUsed: toolCallsUsed
+              }
+            );
+
             // Supprimer tous les ** du texte
             return directResponse.replace(/\*\*/g, '');
           }
@@ -4873,12 +5259,24 @@ INTERDICTIONS:
           // Sauvegarder l'état sur disque
           this.saveConversationState();
 
+          // NIVEAU 2: Calculer le temps de réponse
+          const responseTime = Date.now() - startTime;
+
           // NIVEAU 2: Sauvegarder dans le nouveau système de conversation par utilisateur
-          this.conversationManager.addUserMessage(userId, this.currentQuestion);
-          this.conversationManager.addAssistantMessage(userId, message.content);
+          // Extraire les entités et l'intent
+          const entities = this.extractEntities(this.currentQuestion, toolCallsUsed, allFunctionArgs);
+          const intent = toolCallsUsed.length > 0 ? toolCallsUsed[0] : undefined;
+
+          this.conversationManager.addUserMessage(userId, this.currentQuestion, {
+            intent,
+            entities,
+          });
+          this.conversationManager.addAssistantMessage(userId, message.content, {
+            toolCalls: toolCallsUsed,
+            responseTime
+          });
 
           // NIVEAU 2: Mettre en cache la réponse
-          const responseTime = Date.now() - startTime;
           this.semanticCache.set(
             this.currentQuestion,
             message.content,

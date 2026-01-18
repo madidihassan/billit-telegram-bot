@@ -169,15 +169,19 @@ export class ContextDetector {
   /**
    * Détecter les références implicites
    * Ex: "et de novembre?" → "et les factures de novembre?"
+   * Ex: "et en décembre" → "et les dépenses chez Foster en décembre"
    */
   private detectImplicitReferences(
     question: string,
     context: UserConversationContext
   ): ContextDetectionResult {
     const patterns = [
-      /^et\s+(?:de|du|d')\s*(\w+)\s*\??$/i,  // "et de décembre?"
-      /^puis\s+(?:de|du|d')\s*(\w+)\s*\??$/i,  // "puis de novembre?"
-      /^(?:de|du|d')\s*(\w+)\s*aussi\s*\??$/i,  // "de octobre aussi?"
+      /^et\s+(?:de|du|d')\s*(\w+)\s*\??$/i,       // "et de décembre?"
+      /^et\s+(?:en|pour|pendant)\s+(\w+)\s*,?\s*\??$/i,  // "et en décembre", "et pour novembre"
+      /^puis\s+(?:de|du|d')\s*(\w+)\s*\??$/i,     // "puis de novembre?"
+      /^puis\s+(?:en|pour|pendant)\s+(\w+)\s*\??$/i,  // "puis en décembre"
+      /^(?:de|du|d')\s*(\w+)\s*aussi\s*\??$/i,    // "de octobre aussi?"
+      /^(?:en|pour|pendant)\s+(\w+)\s*aussi\s*\??$/i,  // "en octobre aussi?"
     ];
 
     for (const pattern of patterns) {
@@ -187,14 +191,28 @@ export class ContextDetector {
 
         if (subject) {
           const temporal = match[1];
-          const enriched = `${subject} de ${temporal}`;
+
+          // Récupérer les entités du contexte (ex: "Foster")
+          const entities = context.lastEntities?.filter(e => {
+            // Filtrer les mois pour ne garder que les autres entités (fournisseurs, etc.)
+            const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                          'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+            return !months.includes(e.toLowerCase());
+          }) || [];
+
+          // Construire la question enrichie avec les entités
+          let enriched = subject;
+          if (entities.length > 0) {
+            enriched = `${subject} chez ${entities.join(' ')}`;
+          }
+          enriched = `${enriched} en ${temporal}`;
 
           return {
             hasReference: true,
             referenceType: 'implicit',
             enrichedQuestion: enriched,
             replacements: { [question]: enriched },
-            confidence: 0.8
+            confidence: 0.85
           };
         }
       }

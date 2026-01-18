@@ -11,15 +11,19 @@ import { employeeTools } from './employee-tools';
 import { supplierTools } from './supplier-tools';
 import { userTools } from './user-tools';
 import { systemTools } from './system-tools';
+import { aggregationTools } from './aggregation-tools';
+import { analyticsTools } from './analytics-tools';
 
 /**
- * Tous les outils IA disponibles (39 outils au total)
+ * Tous les outils IA disponibles (49 outils au total)
  *
  * Catégories:
  * - Factures: 11 outils
  * - Transactions: 9 outils
  * - Employés: 5 outils
- * - Fournisseurs: 12 outils
+ * - Fournisseurs: 15 outils (12+3 nouveaux)
+ * - Agrégation: 3 outils
+ * - Analytique: 4 outils (prédictions, anomalies, tendances, export)
  * - Utilisateurs: 3 outils
  * - Système: 1 outil
  */
@@ -28,6 +32,8 @@ export const allTools = [
   ...transactionTools,
   ...employeeTools,
   ...supplierTools,
+  ...aggregationTools,
+  ...analyticsTools,
   ...userTools,
   ...systemTools,
 ];
@@ -37,5 +43,7 @@ export { invoiceTools } from './invoice-tools';
 export { transactionTools } from './transaction-tools';
 export { employeeTools } from './employee-tools';
 export { supplierTools } from './supplier-tools';
+export { aggregationTools } from './aggregation-tools';
+export { analyticsTools } from './analytics-tools';
 export { userTools } from './user-tools';
 export { systemTools } from './system-tools';

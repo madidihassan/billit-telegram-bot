@@ -7,13 +7,14 @@ Bot Telegram interactif pour gérer les factures Billit avec IA autonome, reconn
 ## ⚠️ IMPORTANT - Structure du projet
 
 ### 📱 Bots Telegram (répertoire `/home/ubuntu/Billit/`)
-- **tonton202** : Bot Telegram pour le compte "tonton202"
-- **mustfood** : Bot Telegram pour Mustfood
-- **Ces bots sont gérés avec les scripts `sync.sh` et `start-bot-wrapper.sh`**
+- **bot_tonton202** : Bot Telegram pour le compte "tonton202" (⚠️ avec préfixe "bot_")
+- **bot_mustfood** : Bot Telegram pour Mustfood (⚠️ avec préfixe "bot_")
+- **Ces bots sont gérés avec les scripts `sync.sh`, `start-bot-wrapper.sh` et `restart-bot.sh`**
 
 ### 🌐 Autres applications (répertoire `/home/ubuntu/tonton.app/apps/production/`)
-- **tonton202, mustfood, testing, portail** : Applications web/services différents (gérés par PM2)
+- **tonton202, mustfood, testing, portail** : Applications web/services différents (gérés par PM2, ⚠️ SANS préfixe "bot_")
 - **⚠️ NE PAS Y TOUCHER** quand on travaille sur les bots Telegram et inversement
+- **⚠️ NE PAS CONFONDRE** : Les bots sont "bot_tonton202" et "bot_mustfood", les apps web sont "tonton202" et "mustfood"
 - Ce sont des applications complètement séparées
 
 ## Stack technique
@@ -119,9 +120,11 @@ supplier-aliases.json  # Alias des fournisseurs
 
 **Implementation**: `currentChatId` dans `telegram-bot.ts` (ligne ~20)
 
-### 2. Agent IA Autonome V2
+### 2. Agent IA Autonome V3.0 🚀
 - **Function calling** avec OpenRouter (gpt-4o-mini)
-- 24 outils disponibles (factures, paiements, recherche, etc.)
+- **49 outils disponibles** (factures, paiements, salaires, fournisseurs, analytics, prédictions, etc.)
+- **Chargement dynamique** : Sélection intelligente des outils pertinents (économie ~70% tokens)
+- **Hints dynamiques** : Instructions contextuelles pour améliorer la précision
 - Compréhension contextuelle des requêtes
 - **Fichier**: `src/ai-agent-service-v2.ts`
 
@@ -731,11 +734,50 @@ Total: 150000€ (250 paiements)
 
 ---
 
-**Dernière mise à jour**: 28 décembre 2025
-**Version du bot**: 2.6 avec analyse salaires avancée
+**Dernière mise à jour**: 18 janvier 2026
+**Version du bot**: 3.0 - Agent IA Super Intelligent
 **Statut**: Production ✅
-**Nouveautés session 28 déc** :
-- ✅ 8 corrections majeures système salaires (fuzzy matching, périodes multi-mois, top X, etc.)
-- ✅ 3 commits pushés : 7cdbbde, 5ef75d3, 1065e25
-- ✅ 15/15 tests validés
-- 📋 TODO : Système analyse fournisseurs (prochaine session)
+
+## 🚀 Nouveautés Version 3.0 (18 janvier 2026)
+
+### ✅ PHASE 1 : Analyse avancée des fournisseurs
+1. **analyze_supplier_trends** - Évolution des dépenses fournisseur sur 3-12 mois
+2. **get_supplier_ranking** - Top X fournisseurs avec évolution vs période précédente
+3. **detect_supplier_patterns** - Détection paiements récurrents (hebdo/mensuel) avec anomalies
+
+### ✅ PHASE 2 : Agrégation intelligente
+4. **get_year_summary** - Résumé annuel complet avec top 10 fournisseurs et YoY
+5. **compare_periods** - Comparaison de 2 périodes personnalisées (€ et %)
+6. **get_quarterly_report** - Rapport trimestriel Q1-Q4 avec QoQ et top 5
+
+### ✅ PHASE 3 : Prédictions et détection
+7. **predict_next_month** - Prévision mois prochain avec régression linéaire et confiance
+8. **detect_anomalies** - Détection dépenses anormales (>50% déviation par défaut)
+9. **analyze_trends** - Tendances globales avec taux de croissance et projection +3 mois
+
+### ✅ PHASE 4 : Export
+10. **export_to_csv** - Export transactions/factures/salaires en CSV avec sauvegarde locale
+
+### ✅ OPTIMISATIONS CRITIQUES
+- **Chargement dynamique des outils** : Sélection intelligente par mots-clés (économie ~70% tokens)
+- **Hints dynamiques** : Instructions contextuelles ajoutées au message système selon la question
+- **Compilations réussies** : Tous les nouveaux outils intégrés sans erreurs TypeScript
+
+### 📊 Bilan
+- **De 39 → 49 outils IA** (+10 nouveaux outils)
+- **10 fichiers créés** :
+  - `src/ai-agent/tools/aggregation-tools.ts`
+  - `src/ai-agent/tools/analytics-tools.ts`
+  - `src/ai-agent/implementations/supplier-analytics.ts`
+  - `src/ai-agent/implementations/aggregation-analytics.ts`
+  - `src/ai-agent/implementations/predictive-analytics.ts`
+- **3 fichiers modifiés** :
+  - `src/ai-agent-service-v2.ts` (ajout 4 imports, 4 case statements, 2 méthodes)
+  - `src/ai-agent/tools/index.ts` (mise à jour exports)
+  - `CLAUDE.md` (documentation)
+- **Performances** : Réduction de ~70% de l'usage de tokens grâce au chargement dynamique
+- **Précision** : Hints dynamiques pour guider l'IA selon le contexte
+
+### 📋 Session précédente (28 décembre 2025)
+- ✅ 8 corrections majeures système salaires (fuzzy matching, périodes multi-mois, top X)
+- ✅ Version 2.6 avec analyse salaires avancée

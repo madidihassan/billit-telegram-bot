@@ -186,13 +186,13 @@ export const transactionTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'analyze_expenses_by_category',
-      description: '⚠️ APPEL OBLIGATOIRE: Analyser les dépenses par catégorie (loyers, utilities, alimentation, salaires, etc.). Tu DOIS appeler cet outil pour: "analyse mes dépenses par catégorie", "dépenses par catégorie", "montre-moi mes loyers et charges fixes", "combien je dépense en électricité", "analyse mes utilities", "dépenses alimentaires". Permet de voir la répartition des dépenses et leur évolution.',
+      description: '⚠️ APPEL OBLIGATOIRE: Analyser les dépenses par catégorie (loyers, utilities, alimentation, etc.). Tu DOIS appeler cet outil pour: "analyse mes dépenses par catégorie", "dépenses par catégorie", "montre-moi mes loyers et charges fixes", "combien je dépense en électricité", "analyse mes utilities", "dépenses alimentaires". Permet de voir la répartition des dépenses et leur évolution.\n\n⚠️ IMPORTANT: Pour "analyse du salaire" ou "salaires des employés", utiliser get_employee_salaries à la place.',
       parameters: {
         type: 'object',
         properties: {
           category: {
             type: 'string',
-            description: 'Catégorie spécifique à analyser (optionnel). Peut être: "loyers", "utilities", "alimentation", "salaires", "telecom", "assurance", "services", "taxes", ou "tout" pour toutes les catégories.',
+            description: 'Catégorie spécifique à analyser (optionnel). Peut être: "loyers", "utilities", "alimentation", "telecom", "assurance", "services", "taxes", ou "tout" pour toutes les catégories. NOTE: "salaires" analyse les paiements de salariat externes facturés, PAS les salaires des employés (utiliser get_employee_salaries pour ça).',
             enum: ['loyers', 'utilities', 'telecom', 'assurance', 'alimentation', 'salaires', 'services', 'taxes', 'tout']
           },
           months: {
