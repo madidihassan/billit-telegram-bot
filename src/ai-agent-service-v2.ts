@@ -269,6 +269,37 @@ Réponse JSON:`;
     }
   }
 
+  /**
+   * 🤖 Parsing intelligent de période avec IA
+   * Convertit du langage naturel en dates précises
+   * Exemples: "année 2025" → {start: 2025-01-01, end: 2025-12-31}
+   *           "janvier" → {start: 2026-01-01, end: 2026-01-31}
+   */
+  private async parsePeriodWithAI(text: string): Promise<{ start: Date; end: Date; description: string } | null> {
+    try {
+      // Créer le provider IA
+      const provider = {
+        type: this.aiProvider,
+        client: this.aiProvider === 'openrouter' ? this.openRouter as any : this.groq as any
+      };
+
+      // Appeler aiParsePeriod
+      const period = await aiParsePeriod(text, provider);
+
+      if (period) {
+        console.log(`🎯 Parsing période IA: "${text}" → ${period.start.toISOString().split('T')[0]} à ${period.end.toISOString().split('T')[0]}`);
+        return period;
+      } else {
+        console.log(`⚠️ Impossible de parser la période "${text}"`);
+        return null;
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur parsing période IA:', error);
+      return null;
+    }
+  }
+
   private async selectRelevantTools(question: string): Promise<Groq.Chat.Completions.ChatCompletionTool[]> {
     const selectedTools: Groq.Chat.Completions.ChatCompletionTool[] = [];
 
