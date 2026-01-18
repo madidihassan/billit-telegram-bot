@@ -138,6 +138,12 @@ export class TelegramBotInteractive {
           this.waitingForInput = null;
           await this.showUserGuide();
           return;
+        } else if (command.startsWith('guide_')) {
+          // Handler pour les catégories du guide (guide_invoices, guide_suppliers, etc.)
+          this.waitingForInput = null;
+          const category = command.replace('guide_', '');
+          await this.showCategoryGuide(category);
+          return;
         } else if (command === 'ai_tools') {
           this.waitingForInput = null;
           response = await this.getAIToolsList();
@@ -433,57 +439,44 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
   }
 
   /**
-   * Affiche le guide utilisateur complet
+   * Affiche le guide utilisateur complet (menu principal interactif)
    */
   private async showUserGuide(): Promise<void> {
     try {
-      // Version condensée du guide pour tenir dans la limite Telegram
-      const guideText = `📖 <b>GUIDE UTILISATEUR - QUESTIONS FRÉQUENTES</b>
+      const guideText = `📖 <b>GUIDE INTERACTIF - 50 OUTILS IA</b>
+
+Choisissez une catégorie pour voir des exemples concrets :
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-<b>📋 FACTURES</b>
-• "Quelles factures sont impayées ?"
-• "Factures de plus de 3000€"
-• "Cherche les factures de Foster"
-• "Factures de Sligro en novembre"
-• "Factures de Colruyt et Makro"
+👇 <b>Cliquez sur une catégorie ci-dessous</b>
 
-<b>🏢 FOURNISSEURS</b>
-• "Top 10 fournisseurs"
-• "Analyse les dépenses chez Sligro"
-• "Compare Colruyt et Sligro"
-• "Combien j'ai dépensé chez Uber Eats ?"
-• "Liste tous les fournisseurs"
-
-<b>💵 SALAIRES</b>
-• "Salaire de Mokhlis Jamhoun"
-• "Top 10 des employés les mieux payés"
-• "Analyse les salaires de décembre"
-• "Compare Mokhlis et Soufiane"
-• "Salaires entre octobre et décembre"
-
-<b>🏦 BANQUE</b>
-• "Balance du mois de décembre"
-• "Montre les dernières transactions"
-• "Solde du compte Europabank"
-• "Total des dépenses du mois"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<b>💡 CONSEILS</b>
-• Utilisez "et" pour plusieurs fournisseurs
-• Précisez l'année si nécessaire
-• Vous pouvez envoyer des messages vocaux !
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+💡 <i>Chaque catégorie contient des exemples de questions que vous pouvez poser au bot.</i>`;
 
       await this.bot.sendMessage(this.currentChatId, guideText, {
         parse_mode: 'HTML',
         disable_web_page_preview: true,
         reply_markup: {
           inline_keyboard: [
-            [{ text: '🔙 Retour', callback_data: 'menu' }]
+            [
+              { text: '📋 Factures', callback_data: 'guide_invoices' },
+              { text: '🏢 Fournisseurs', callback_data: 'guide_suppliers' }
+            ],
+            [
+              { text: '💵 Salaires', callback_data: 'guide_salaries' },
+              { text: '🏦 Banque', callback_data: 'guide_bank' }
+            ],
+            [
+              { text: '📊 Agrégation', callback_data: 'guide_aggregation' },
+              { text: '🔮 Analytics', callback_data: 'guide_analytics' }
+            ],
+            [
+              { text: '👥 Utilisateurs', callback_data: 'guide_users' },
+              { text: '💡 Conseils', callback_data: 'guide_tips' }
+            ],
+            [
+              { text: '🔙 Retour', callback_data: 'menu' }
+            ]
           ]
         }
       });
@@ -491,6 +484,230 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
       console.error('Erreur lors de l\'affichage du guide:', error);
       await this.sendMessage('❌ Erreur lors de l\'affichage du guide.');
     }
+  }
+
+  /**
+   * Affiche le guide pour une catégorie spécifique
+   */
+  private async showCategoryGuide(category: string): Promise<void> {
+    let guideText = '';
+
+    switch (category) {
+      case 'invoices':
+        guideText = `📋 <b>GUIDE - FACTURES (11 outils)</b>
+
+<b>🔍 Consulter les factures</b>
+• "Quelles factures sont impayées ?"
+• "Montre les factures en retard"
+• "Factures payées de ce mois"
+• "Dernière facture de Foster"
+• "Les 20 dernières factures"
+
+<b>💰 Filtrer par montant</b>
+• "Factures de plus de 3000€"
+• "Factures entre 500€ et 2000€"
+
+<b>📅 Filtrer par période</b>
+• "Factures du mois de novembre"
+• "Factures de Sligro en décembre 2025"
+• "Factures entre le 1er et le 15 décembre"
+
+<b>🔎 Recherche</b>
+• "Cherche les factures de Foster"
+• "Recherche facture numéro 2025-1234"
+• "Factures de Colruyt et Makro"`;
+        break;
+
+      case 'suppliers':
+        guideText = `🏢 <b>GUIDE - FOURNISSEURS (15 outils)</b>
+
+<b>💳 Paiements fournisseurs</b>
+• "Combien j'ai payé à Foster ?"
+• "Paiements à Sligro en décembre"
+• "Total payé à Colruyt cette année"
+
+<b>📊 Analyse des dépenses</b>
+• "Analyse les dépenses chez Uber Eats"
+• "Évolution dépenses Foster sur 6 mois"
+• "Top 10 des fournisseurs"
+
+<b>🔄 Comparaisons</b>
+• "Compare Colruyt et Sligro"
+• "Compare Foster et Makro ce mois"
+
+<b>📈 Tendances & Patterns (NOUVEAU)</b>
+• "Analyse l'évolution chez Sligro"
+• "Top 5 fournisseurs avec évolution"
+• "Détecte les paiements récurrents"
+
+<b>📋 Gestion</b>
+• "Liste tous les fournisseurs"
+• "Ajoute le fournisseur X"`;
+        break;
+
+      case 'salaries':
+        guideText = `💵 <b>GUIDE - SALAIRES (5 outils)</b>
+
+<b>👤 Salaire individuel</b>
+• "Salaire de Mokhlis Jamhoun"
+• "Salaire de Hassan en décembre"
+• "Combien gagne Soufiane ?"
+
+<b>📊 Classements</b>
+• "Top 10 des employés les mieux payés"
+• "Les 5 employés les mieux payés"
+• "Où se situe Mokhlis parmi les autres ?"
+
+<b>📅 Périodes</b>
+• "Analyse les salaires de décembre"
+• "Salaires entre octobre et décembre"
+• "Tous les salaires de l'année"
+
+<b>🔄 Comparaisons</b>
+• "Compare les salaires de Mokhlis et Soufiane"
+• "Compare Hassan, Mokhlis et Soufiane"`;
+        break;
+
+      case 'bank':
+        guideText = `🏦 <b>GUIDE - BANQUE & TRANSACTIONS (9 outils)</b>
+
+<b>💰 Soldes</b>
+• "Balance du mois de décembre"
+• "Solde du compte Europabank"
+• "Quel est mon solde actuel ?"
+
+<b>📊 Transactions</b>
+• "Montre les dernières transactions"
+• "Transactions de ce mois"
+• "Total des dépenses du mois"
+• "Combien j'ai gagné ce mois ?"
+
+<b>📅 Bilans mensuels</b>
+• "Bilan du mois de novembre"
+• "Balance de décembre 2025"
+• "Recettes et dépenses de janvier"
+
+<b>📈 Tendances</b>
+• "Analyse les 3 derniers mois"
+• "Évolution des dépenses"`;
+        break;
+
+      case 'aggregation':
+        guideText = `📊 <b>GUIDE - AGRÉGATION (3 outils) 🆕</b>
+
+<b>📅 Résumé annuel</b>
+• "Résumé de l'année 2025"
+• "Bilan annuel avec top fournisseurs"
+• "Rapport annuel 2025"
+
+<b>🔄 Comparaison de périodes</b>
+• "Compare janvier et février"
+• "Compare Q1 2025 vs Q4 2024"
+• "Compare octobre 2024 et octobre 2025"
+
+<b>📆 Rapports trimestriels</b>
+• "Rapport du trimestre Q1"
+• "Analyse du Q3 2025"
+• "Résumé trimestriel avec top 5 fournisseurs"
+
+💡 <i>Ces outils agrègent automatiquement toutes vos données pour vous donner une vue d'ensemble claire !</i>`;
+        break;
+
+      case 'analytics':
+        guideText = `🔮 <b>GUIDE - ANALYTICS & PRÉDICTIONS (4 outils) 🆕</b>
+
+<b>📈 Prévisions</b>
+• "Prévision des dépenses pour le mois prochain"
+• "Prédis mes dépenses de février"
+• "Estimation du mois suivant"
+
+<b>🚨 Détection d'anomalies</b>
+• "Détecte les anomalies"
+• "Y a-t-il des dépenses inhabituelles ?"
+• "Alertes sur les transactions suspectes"
+
+<b>📊 Analyse de tendances</b>
+• "Analyse les tendances"
+• "Évolution de mes finances"
+• "Mes dépenses augmentent ou baissent ?"
+
+<b>💾 Export de données</b>
+• "Exporte en CSV"
+• "Export des transactions de décembre"
+• "Télécharge les données en CSV"
+
+💡 <i>Le bot utilise des algorithmes avancés (régression linéaire, détection statistique) pour vous aider à anticiper et optimiser vos finances !</i>`;
+        break;
+
+      case 'users':
+        guideText = `👥 <b>GUIDE - UTILISATEURS (3 outils)</b>
+
+<b>📋 Liste des utilisateurs</b>
+• "Liste les utilisateurs"
+• "Qui est autorisé ?"
+• "Montre tous les utilisateurs"
+
+<b>➕ Ajouter un utilisateur</b>
+• "Ajoute l'utilisateur 123456789"
+• "Autorise le chat ID 987654321"
+
+<b>➖ Retirer un utilisateur</b>
+• "Retire l'utilisateur 123456789"
+• "Supprime l'accès de 987654321"
+
+💡 <i>Seul le propriétaire peut gérer les utilisateurs autorisés.</i>`;
+        break;
+
+      case 'tips':
+        guideText = `💡 <b>CONSEILS D'UTILISATION</b>
+
+<b>✅ Bonnes pratiques</b>
+• Soyez précis dans vos questions
+• Utilisez "et" pour plusieurs fournisseurs/employés
+• Précisez l'année si nécessaire (ex: "décembre 2024")
+• Vous pouvez envoyer des messages vocaux !
+
+<b>📅 Formats de dates acceptés</b>
+• "décembre 2025"
+• "2025-12-01"
+• "entre octobre et décembre"
+• "ce mois", "le mois dernier"
+
+<b>🎯 Exemples de formulations</b>
+✅ "Analyse les dépenses chez Foster en décembre"
+✅ "Compare les salaires de Hassan et Mokhlis"
+✅ "Top 10 fournisseurs avec évolution"
+❌ "Foster" (trop vague)
+❌ "Salaires" (précisez le mois ou l'employé)
+
+<b>🎤 Messages vocaux</b>
+• Parlez naturellement
+• Le bot comprend le français
+• Même précision que les messages texte
+
+<b>⚡ Réponses rapides</b>
+• Cache intelligent pour questions fréquentes
+• Réponses en moins de 1 seconde
+
+<b>🔒 Sécurité</b>
+• Seuls les utilisateurs autorisés peuvent utiliser le bot
+• Toutes les données sont chiffrées`;
+        break;
+
+      default:
+        guideText = 'Guide non trouvé.';
+    }
+
+    await this.bot.sendMessage(this.currentChatId, guideText, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🔙 Retour au guide', callback_data: 'show_guide' }],
+          [{ text: '🏠 Menu principal', callback_data: 'menu' }]
+        ]
+      }
+    });
   }
 
   /**
