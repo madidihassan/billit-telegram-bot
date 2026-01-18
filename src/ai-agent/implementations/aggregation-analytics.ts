@@ -37,11 +37,11 @@ export async function getYearSummary(
     const transactions = await bankClient.getTransactionsByPeriod(startDate, endDate);
 
     // Calculer totaux
-    const revenues = transactions.filter(t => t.amount > 0);
-    const expenses = transactions.filter(t => t.amount < 0);
+    const revenues = transactions.filter(t => t.type === 'Credit');
+    const expenses = transactions.filter(t => t.type === 'Debit');
 
-    const totalRevenue = revenues.reduce((sum, t) => sum + t.amount, 0);
-    const totalExpenses = Math.abs(expenses.reduce((sum, t) => sum + t.amount, 0));
+    const totalRevenue = revenues.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const totalExpenses = expenses.reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const netBalance = totalRevenue - totalExpenses;
 
     // Top 10 fournisseurs
@@ -108,8 +108,8 @@ export async function getYearSummary(
 
       try {
         const prevTransactions = await bankClient.getTransactionsByPeriod(prevStart, prevEnd);
-        const prevRevenue = prevTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
-        const prevExpenses = Math.abs(prevTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
+        const prevRevenue = prevTransactions.filter(t => t.type === 'Credit').reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        const prevExpenses = prevTransactions.filter(t => t.type === 'Debit').reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
         const revenueChange = ((totalRevenue - prevRevenue) / prevRevenue * 100);
         const expensesChange = ((totalExpenses - prevExpenses) / prevExpenses * 100);
@@ -183,13 +183,16 @@ export async function comparePeriods(
 
     // Calculer les métriques pour chaque période
     const analyzePeriod = (transactions: any[]) => {
-      const revenues = transactions.filter(t => t.amount > 0);
-      const expenses = transactions.filter(t => t.amount < 0);
+      const revenues = transactions.filter(t => t.type === 'Credit');
+      const expenses = transactions.filter(t => t.type === 'Debit');
+
+      const revenueTotal = revenues.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      const expenseTotal = expenses.reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
       return {
-        revenue: revenues.reduce((sum, t) => sum + t.amount, 0),
-        expenses: Math.abs(expenses.reduce((sum, t) => sum + t.amount, 0)),
-        netBalance: revenues.reduce((sum, t) => sum + t.amount, 0) + expenses.reduce((sum, t) => sum + t.amount, 0),
+        revenue: revenueTotal,
+        expenses: expenseTotal,
+        netBalance: revenueTotal - expenseTotal,
         txCount: transactions.length,
       };
     };
@@ -283,11 +286,11 @@ export async function getQuarterlyReport(
     // Récupérer les transactions
     const transactions = await bankClient.getTransactionsByPeriod(startDate, endDate);
 
-    const revenues = transactions.filter(t => t.amount > 0);
-    const expenses = transactions.filter(t => t.amount < 0);
+    const revenues = transactions.filter(t => t.type === 'Credit');
+    const expenses = transactions.filter(t => t.type === 'Debit');
 
-    const totalRevenue = revenues.reduce((sum, t) => sum + t.amount, 0);
-    const totalExpenses = Math.abs(expenses.reduce((sum, t) => sum + t.amount, 0));
+    const totalRevenue = revenues.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const totalExpenses = expenses.reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const netBalance = totalRevenue - totalExpenses;
 
     // Top 5 fournisseurs du trimestre
@@ -334,8 +337,8 @@ export async function getQuarterlyReport(
 
       try {
         const prevTransactions = await bankClient.getTransactionsByPeriod(prevStart, prevEnd);
-        const prevRevenue = prevTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
-        const prevExpenses = Math.abs(prevTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
+        const prevRevenue = prevTransactions.filter(t => t.type === 'Credit').reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        const prevExpenses = prevTransactions.filter(t => t.type === 'Debit').reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
         const revenueChange = ((totalRevenue - prevRevenue) / prevRevenue * 100);
         const expensesChange = ((totalExpenses - prevExpenses) / prevExpenses * 100);

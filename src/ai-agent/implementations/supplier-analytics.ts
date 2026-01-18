@@ -182,7 +182,7 @@ export async function getSupplierRanking(
     const supplierMap = new Map<string, { total: number; count: number }>();
 
     transactions
-      .filter(t => t.amount < 0)
+      .filter(t => t.type === 'Debit')
       .forEach(t => {
         // Extraire le nom du fournisseur de la description
         const supplier = t.description.split(' ')[0].toUpperCase();
@@ -217,7 +217,7 @@ export async function getSupplierRanking(
       const prevSupplierMap = new Map<string, number>();
 
       prevTransactions
-        .filter(t => t.amount < 0)
+        .filter(t => t.type === 'Debit')
         .forEach(t => {
           const supplier = t.description.split(' ')[0].toUpperCase();
           prevSupplierMap.set(supplier, (prevSupplierMap.get(supplier) || 0) + Math.abs(t.amount));

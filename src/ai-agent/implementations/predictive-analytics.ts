@@ -40,8 +40,8 @@ export async function predictNextMonth(
       const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
       const transactions = await bankClient.getTransactionsByPeriod(startDate, endDate);
 
-      const expenses = transactions.filter(t => t.amount < 0);
-      const total = Math.abs(expenses.reduce((sum, t) => sum + t.amount, 0));
+      const expenses = transactions.filter(t => t.type === 'Debit');
+      const total = expenses.reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
       monthlyExpenses.push(total);
     }
@@ -125,7 +125,7 @@ export async function detectAnomalies(
     // Grouper par fournisseur/bénéficiaire
     const supplierMap = new Map<string, number[]>();
     transactions
-      .filter(t => t.amount < 0)
+      .filter(t => t.type === 'Debit')
       .forEach(t => {
         const supplier = t.description.split(' ')[0].toUpperCase();
         const amounts = supplierMap.get(supplier) || [];
@@ -210,8 +210,8 @@ export async function analyzeTrends(
       const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
       const transactions = await bankClient.getTransactionsByPeriod(startDate, endDate);
 
-      const revenues = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
-      const expenses = Math.abs(transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
+      const revenues = transactions.filter(t => t.type === 'Credit').reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      const expenses = transactions.filter(t => t.type === 'Debit').reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
       monthlyData.push({ month: `${monthName} ${targetYear}`, revenues, expenses });
     }
@@ -220,12 +220,30 @@ export async function analyzeTrends(
     const avgRevenues = monthlyData.reduce((sum, m) => sum + m.revenues, 0) / monthlyData.length;
     const avgExpenses = monthlyData.reduce((sum, m) => sum + m.expenses, 0) / monthlyData.length;
 
-    const revenueGrowth = ((monthlyData[monthlyData.length - 1].revenues - monthlyData[0].revenues) / monthlyData[0].revenues * 100);
-    const expenseGrowth = ((monthlyData[monthlyData.length - 1].expenses - monthlyData[0].expenses) / monthlyData[0].expenses * 100);
+    // Trouver le premier mois avec des données (non-nul) pour le calcul de croissance
+    const firstNonZeroIndex = monthlyData.findIndex(m => m.revenues > 0 || m.expenses > 0);
+    const lastIndex = monthlyData.length - 1;
 
-    // Taux de croissance mensuel moyen
-    const monthlyRevenueGrowth = revenueGrowth / period_months;
-    const monthlyExpenseGrowth = expenseGrowth / period_months;
+    // Si aucun mois avec données ou un seul mois, croissance = 0
+    let revenueGrowth = 0;
+    let expenseGrowth = 0;
+    let monthlyRevenueGrowth = 0;
+    let monthlyExpenseGrowth = 0;
+
+    if (firstNonZeroIndex !== -1 && firstNonZeroIndex !== lastIndex) {
+      const firstRevenue = monthlyData[firstNonZeroIndex].revenues || 1; // Éviter division par 0
+      const firstExpense = monthlyData[firstNonZeroIndex].expenses || 1;
+      const lastRevenue = monthlyData[lastIndex].revenues;
+      const lastExpense = monthlyData[lastIndex].expenses;
+
+      revenueGrowth = ((lastRevenue - firstRevenue) / firstRevenue * 100);
+      expenseGrowth = ((lastExpense - firstExpense) / firstExpense * 100);
+
+      // Taux de croissance mensuel moyen (sur la période avec données)
+      const periodWithData = lastIndex - firstNonZeroIndex;
+      monthlyRevenueGrowth = periodWithData > 0 ? revenueGrowth / periodWithData : 0;
+      monthlyExpenseGrowth = periodWithData > 0 ? expenseGrowth / periodWithData : 0;
+    }
 
     // Construire la réponse
     let response = `📊 Analyse de tendances\n`;
@@ -247,13 +265,22 @@ export async function analyzeTrends(
     });
 
     if (include_forecast) {
-      const forecastRevenues = monthlyData[monthlyData.length - 1].revenues * (1 + monthlyRevenueGrowth / 100) ** 3;
-      const forecastExpenses = monthlyData[monthlyData.length - 1].expenses * (1 + monthlyExpenseGrowth / 100) ** 3;
+      const currentRevenues = monthlyData[monthlyData.length - 1].revenues;
+      const currentExpenses = monthlyData[monthlyData.length - 1].expenses;
 
-      response += `\n🔮 Projection +3 mois:\n`;
-      response += `  Recettes: ${forecastRevenues.toFixed(2)}€\n`;
-      response += `  Dépenses: ${forecastExpenses.toFixed(2)}€\n`;
-      response += `  Solde net: ${(forecastRevenues - forecastExpenses).toFixed(2)}€`;
+      // Vérifier qu'il y a assez de données pour une projection
+      if (firstNonZeroIndex !== -1 && (currentRevenues > 0 || currentExpenses > 0)) {
+        const forecastRevenues = currentRevenues * (1 + monthlyRevenueGrowth / 100) ** 3;
+        const forecastExpenses = currentExpenses * (1 + monthlyExpenseGrowth / 100) ** 3;
+
+        response += `\n🔮 Projection +3 mois:\n`;
+        response += `  Recettes: ${forecastRevenues.toFixed(2)}€\n`;
+        response += `  Dépenses: ${forecastExpenses.toFixed(2)}€\n`;
+        response += `  Solde net: ${(forecastRevenues - forecastExpenses).toFixed(2)}€`;
+      } else {
+        response += `\n🔮 Projection +3 mois:\n`;
+        response += `  ⚠️ Pas assez de données pour une projection fiable`;
+      }
     }
 
     return JSON.stringify({ direct_response: response });
