@@ -147,6 +147,11 @@ const ADDITIONAL_KNOWN_SUPPLIERS: Array<{name: string; aliases: string[]; replac
   {
     name: 'Perso Project',
     aliases: ['perso project', 'persoproject', 'perso projet']
+  },
+  {
+    name: 'KBC Bank SA',
+    aliases: ['kbc', 'kbc bank', 'kbc bank sa', 'kbcbank', 'kbc bank nv', 'recouvrement européen kbc', 'recouvrement europeen kbc'],
+    replaceAutoAliases: true
   }
 ];
 

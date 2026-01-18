@@ -144,6 +144,29 @@ export class TelegramBotInteractive {
           const category = command.replace('guide_', '');
           await this.showCategoryGuide(category);
           return;
+        } else if (command === 'submenu_invoices') {
+          this.waitingForInput = null;
+          await this.bot.sendMessage(this.currentChatId, '📋 <b>Factures</b>\n\nChoisissez une action :', {
+            parse_mode: 'HTML',
+            reply_markup: this.getInvoicesSubmenuKeyboard()
+          });
+          return;
+        } else if (command === 'submenu_finances') {
+          this.waitingForInput = null;
+          await this.bot.sendMessage(this.currentChatId, '💰 <b>Finances</b>\n\nChoisissez une catégorie :', {
+            parse_mode: 'HTML',
+            reply_markup: this.getFinancesSubmenuKeyboard()
+          });
+          return;
+        } else if (command === 'salaries_menu') {
+          this.waitingForInput = null;
+          response = '💵 <b>Salaires</b>\n\nExemples de questions :\n• "salaires de décembre"\n• "top 10 des employés"\n• "compare kalide et mokhlis"\n• "où se situe hassan par rapport aux autres"';
+        } else if (command === 'suppliers_menu') {
+          this.waitingForInput = null;
+          response = '🏢 <b>Fournisseurs</b>\n\nExemples de questions :\n• "top 10 fournisseurs"\n• "dépenses chez Sligro"\n• "compare Colruyt et Sligro"\n• "tendances Sligro sur 6 mois"';
+        } else if (command === 'balance') {
+          this.waitingForInput = null;
+          response = await this.commandHandler.handleCommand('balance', []);
         } else if (command === 'ai_tools') {
           this.waitingForInput = null;
           response = await this.getAIToolsList();
@@ -342,38 +365,18 @@ export class TelegramBotInteractive {
   private async sendWelcomeMessage(): Promise<void> {
     const text = `👋 <b>Bienvenue sur Billit Bot !</b>
 
-Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
+Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA</b>.
 
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '📋 Factures impayées', callback_data: 'unpaid' },
-          { text: '⚠️ Factures en retard', callback_data: 'overdue' }
-        ],
-        [
-          { text: '📊 Statistiques du mois', callback_data: 'stats' }
-        ],
-        [
-          { text: '🔍 Rechercher', callback_data: 'search_prompt' },
-          { text: '🧾 Dernière facture', callback_data: 'lastinvoice_prompt' }
-        ],
-        [
-          { text: '📁 Factures par fournisseur', callback_data: 'supplier_prompt' }
-        ],
-        [
-          { text: 'ℹ️ Aide', callback_data: 'menu' }
-        ]
-      ]
-    };
+💡 <i>Commencez par le Guide complet pour découvrir tout ce que je peux faire !</i>`;
 
-    console.log('🎹 Envoi du menu avec', keyboard.inline_keyboard.length, 'rangées de boutons');
+    console.log('🎹 Envoi du menu principal');
 
     try {
       const result = await this.bot.sendMessage(this.currentChatId, text, {
         parse_mode: 'HTML',
-        reply_markup: keyboard
+        reply_markup: this.getMainMenuKeyboard()
       });
-      console.log('✅ Menu envoyé avec succès, message_id:', result.message_id);
+      console.log('✅ Menu principal envoyé avec succès, message_id:', result.message_id);
     } catch (error: any) {
       console.error('❌ Erreur lors de l\'envoi du menu:', error.message);
       throw error;
@@ -381,9 +384,52 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
   }
 
   /**
-   * Crée le clavier de navigation
+   * Crée le clavier de navigation principal (après chaque réponse)
    */
   private getNavigationKeyboard(): any {
+    return {
+      inline_keyboard: [
+        [
+          { text: '📖 Guide', callback_data: 'show_guide' },
+          { text: '🔍 Rechercher', callback_data: 'search_prompt' },
+          { text: '📊 Stats', callback_data: 'stats' }
+        ],
+        [
+          { text: '📋 Factures', callback_data: 'submenu_invoices' },
+          { text: '💰 Finances', callback_data: 'submenu_finances' }
+        ],
+        [
+          { text: '🏠 Menu', callback_data: 'menu' }
+        ]
+      ]
+    };
+  }
+
+  /**
+   * Menu principal unifié (pour /start et /help)
+   */
+  private getMainMenuKeyboard(): any {
+    return {
+      inline_keyboard: [
+        [
+          { text: '📖 Guide complet', callback_data: 'show_guide' },
+          { text: '🤖 Outils IA', callback_data: 'ai_tools' }
+        ],
+        [
+          { text: '📋 Factures', callback_data: 'submenu_invoices' },
+          { text: '💰 Finances', callback_data: 'submenu_finances' }
+        ],
+        [
+          { text: '🔍 Rechercher', callback_data: 'search_prompt' }
+        ]
+      ]
+    };
+  }
+
+  /**
+   * Sous-menu Factures
+   */
+  private getInvoicesSubmenuKeyboard(): any {
     return {
       inline_keyboard: [
         [
@@ -392,49 +438,52 @@ Choisissez une action ci-dessous ou tapez /help pour plus d'infos.`;
         ],
         [
           { text: '📅 Échéances', callback_data: 'due' },
-          { text: '📊 Stats', callback_data: 'stats' }
+          { text: '🧾 Dernière', callback_data: 'lastinvoice_prompt' }
         ],
         [
-          { text: '🔍 Rechercher', callback_data: 'search_prompt' },
-          { text: '🤖 Outils IA', callback_data: 'ai_tools' }
+          { text: '📁 Par fournisseur', callback_data: 'supplier_prompt' }
         ],
         [
-          { text: '❓ Aide', callback_data: 'menu' }
+          { text: '🔙 Retour', callback_data: 'menu' }
         ]
       ]
     };
   }
 
   /**
-   * Envoie le message d'aide avec le bouton Guide complet
+   * Sous-menu Finances
+   */
+  private getFinancesSubmenuKeyboard(): any {
+    return {
+      inline_keyboard: [
+        [
+          { text: '📊 Statistiques', callback_data: 'stats' },
+          { text: '🏦 Soldes', callback_data: 'balance' }
+        ],
+        [
+          { text: '💵 Salaires', callback_data: 'salaries_menu' },
+          { text: '🏢 Fournisseurs', callback_data: 'suppliers_menu' }
+        ],
+        [
+          { text: '🔮 Analytics', callback_data: 'guide_analytics' }
+        ],
+        [
+          { text: '🔙 Retour', callback_data: 'menu' }
+        ]
+      ]
+    };
+  }
+
+  /**
+   * Envoie le message d'aide avec le menu principal
    */
   private async sendHelpMessage(): Promise<void> {
     const response = await this.commandHandler.handleCommand('help', []);
 
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '📋 Factures impayées', callback_data: 'unpaid' },
-          { text: '⚠️ Factures en retard', callback_data: 'overdue' }
-        ],
-        [
-          { text: '📊 Statistiques', callback_data: 'stats' },
-          { text: '🔍 Rechercher', callback_data: 'search_prompt' }
-        ],
-        [
-          { text: '📖 Guide complet', callback_data: 'show_guide' },
-          { text: '🤖 Outils IA', callback_data: 'ai_tools' }
-        ],
-        [
-          { text: '❓ Aide', callback_data: 'menu' }
-        ]
-      ]
-    };
-
     await this.bot.sendMessage(this.currentChatId, response, {
       parse_mode: 'HTML',
       disable_web_page_preview: true,
-      reply_markup: keyboard
+      reply_markup: this.getMainMenuKeyboard()
     });
   }
 
@@ -780,29 +829,11 @@ Choisissez une catégorie pour voir des exemples concrets :
       // Déterminer le clavier à utiliser
       let keyboard = this.getNavigationKeyboard();
 
-      // Si c'est la commande /help, ajouter le bouton Guide complet
+      // Si c'est la commande /help, utiliser le menu principal
       const isHelpMessage = text.includes("Billit Bot - Guide d'utilisation") || text.includes('MODE CONVERSATIONNEL');
       if (isHelpMessage) {
         console.log('🎨 Détection message /help - utilisation du clavier personnalisé avec bouton Guide');
-        keyboard = {
-          inline_keyboard: [
-            [
-              { text: '📋 Factures impayées', callback_data: 'unpaid' },
-              { text: '⚠️ Factures en retard', callback_data: 'overdue' }
-            ],
-            [
-              { text: '📊 Statistiques', callback_data: 'stats' },
-              { text: '🔍 Rechercher', callback_data: 'search_prompt' }
-            ],
-            [
-              { text: '📖 Guide complet', callback_data: 'show_guide' },
-              { text: '🤖 Outils IA', callback_data: 'ai_tools' }
-            ],
-            [
-              { text: '❓ Aide', callback_data: 'menu' }
-            ]
-          ]
-        };
+        keyboard = this.getMainMenuKeyboard();
       }
 
       // Si le message est court, l'envoyer tel quel

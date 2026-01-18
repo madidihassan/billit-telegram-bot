@@ -12,7 +12,7 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_supplier_payments',
-      description: 'UTILISE CETTE FONCTION pour les paiements que VOUS avez faits VERS un fournisseur (dépenses/débits). Répond aux questions: "Combien payé à Foster?", "Paiements à Coca-Cola?", "Combien jai payé à Edenred?", "Combien jai versé à Foster?". ⚠️ IMPORTANT: NE PAS UTILISER pour les SALAIRES. Si la question contient le mot "salaire" ou "salaire" + nom de personne, utiliser get_employee_salaries à la place. ⚠️ Si lutilisateur demande des versements REÇUS dun fournisseur (ex: "Versements de Takeaway", "Combien Takeaway ma versé?", "Versements faits PAR Pluxee"), utilise get_supplier_received_payments à la place.',
+      description: '⚠️⚠️⚠️ APPEL OBLIGATOIRE: UTILISE CETTE FONCTION pour TOUTE question sur les paiements/montants/dépenses vers un fournisseur spécifique. Mots-clés DÉCLENCHEURS: "Combien (j\'ai) payé à X", "Montant total payé à X", "Paiements à X", "Dépenses chez X", "Combien (j\'ai) versé à X", "Factures X", "Combien dois-je à X". Exemples: "Combien payé à Foster?", "Montant total à KBC?", "Paiements à Coca-Cola?", "Combien jai payé à Edenred?", "Factures Sligro?". ⚠️ IMPORTANT: NE PAS UTILISER pour les SALAIRES. Si la question contient le mot "salaire" ou "salaire" + nom de personne, utiliser get_employee_salaries à la place. ⚠️ Si lutilisateur demande des versements REÇUS dun fournisseur (ex: "Versements de Takeaway", "Combien Takeaway ma versé?", "Versements faits PAR Pluxee"), utilise get_supplier_received_payments à la place.',
       parameters: {
         type: 'object',
         properties: {

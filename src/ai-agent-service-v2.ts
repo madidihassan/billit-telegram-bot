@@ -123,8 +123,70 @@ export class AIAgentServiceV2 {
    * 🎯 OPTIMISATION: Sélectionne dynamiquement les outils pertinents selon la question
    * Réduit l'usage de tokens de ~70% en n'envoyant que les outils nécessaires
    */
-  private selectRelevantTools(question: string): Groq.Chat.Completions.ChatCompletionTool[] {
-    const q = question.toLowerCase();
+  /**
+   * 🤖 Classification IA de la question pour sélectionner les catégories d'outils pertinentes
+   * Remplace les mots-clés en dur par une analyse intelligente
+   */
+  private async classifyQuestionWithAI(question: string): Promise<string[]> {
+    try {
+      const classificationPrompt = `Tu es un classificateur de questions pour un assistant IA de gestion financière.
+
+Catégories disponibles:
+- invoices: Questions sur les factures (liste, statut, impayées, en retard, dernière facture)
+- transactions: Questions sur les transactions bancaires, paiements généraux, flux financiers
+- employees: Questions sur les employés, salaires, paie, staff
+- suppliers: Questions sur les fournisseurs, dépenses chez un fournisseur, paiements à un fournisseur spécifique
+- aggregation: Résumés, bilans, rapports annuels/trimestriels, comparaisons de périodes
+- analytics: Prévisions, analyses de tendances, détection d'anomalies, exports de données
+- users: Gestion des utilisateurs et accès
+
+Question: "${question}"
+
+Retourne UNIQUEMENT un tableau JSON des catégories pertinentes, sans explication.
+Exemple: ["suppliers", "transactions"]
+
+Si la question mentionne un fournisseur spécifique (nom propre d'entreprise), inclus TOUJOURS "suppliers".
+Réponse JSON:`;
+
+      let response;
+      if (this.aiProvider === 'openrouter' && this.openRouter) {
+        response = await this.openRouter.chatCompletion({
+          messages: [{ role: 'user', content: classificationPrompt }],
+          temperature: 0.1,
+          max_tokens: 100,
+        });
+      } else if (this.groq) {
+        response = await this.groq.chat.completions.create({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: classificationPrompt }],
+          temperature: 0.1,
+          max_tokens: 100,
+        });
+      } else {
+        throw new Error('Aucun provider IA disponible');
+      }
+
+      const content = response.choices[0]?.message?.content?.trim() || '[]';
+
+      // Parser le JSON
+      const categories = JSON.parse(content);
+
+      if (!Array.isArray(categories)) {
+        console.warn('⚠️ Classification IA invalide, fallback vers tous les outils');
+        return ['invoices', 'transactions', 'employees', 'suppliers', 'aggregation', 'analytics', 'users'];
+      }
+
+      console.log(`🤖 Classification IA: ${categories.join(', ')}`);
+      return categories;
+
+    } catch (error) {
+      console.error('❌ Erreur classification IA:', error);
+      // Fallback: retourner toutes les catégories
+      return ['invoices', 'transactions', 'employees', 'suppliers', 'aggregation', 'analytics', 'users'];
+    }
+  }
+
+  private async selectRelevantTools(question: string): Promise<Groq.Chat.Completions.ChatCompletionTool[]> {
     const selectedTools: Groq.Chat.Completions.ChatCompletionTool[] = [];
 
     // Import des catégories d'outils
@@ -140,46 +202,39 @@ export class AIAgentServiceV2 {
     // Toujours inclure les outils système (légers)
     selectedTools.push(...systemTools);
 
-    // Détection par mots-clés
-    const keywords = {
-      invoices: ['facture', 'invoice', 'impayé', 'payé', 'retard', 'overdue', 'paid', 'unpaid'],
-      transactions: ['transaction', 'paiement', 'payment', 'dépense', 'recette', 'expense', 'revenue'],
-      employees: ['employé', 'employee', 'salaire', 'salary', 'paie', 'payroll', 'staff'],
-      suppliers: ['fournisseur', 'supplier', 'vendor', 'prestataire'],
-      aggregation: ['résumé', 'summary', 'année', 'year', 'trimestre', 'quarter', 'période', 'period', 'compare', 'comparaison'],
-      analytics: ['prévision', 'predict', 'prédiction', 'anomalie', 'anomaly', 'tendance', 'trend', 'forecast', 'export', 'csv'],
-      users: ['utilisateur', 'user', 'access', 'autorisé', 'whitelist'],
-    };
+    // 🤖 Classification IA de la question
+    const categories = await this.classifyQuestionWithAI(question);
 
-    // Sélection intelligente
-    if (keywords.invoices.some(kw => q.includes(kw))) {
+    // Sélection des outils selon les catégories
+    if (categories.includes('invoices')) {
       selectedTools.push(...invoiceTools);
     }
-    if (keywords.transactions.some(kw => q.includes(kw))) {
+    if (categories.includes('transactions')) {
       selectedTools.push(...transactionTools);
     }
-    if (keywords.employees.some(kw => q.includes(kw))) {
+    if (categories.includes('employees')) {
       selectedTools.push(...employeeTools);
     }
-    if (keywords.suppliers.some(kw => q.includes(kw))) {
+    if (categories.includes('suppliers')) {
       selectedTools.push(...supplierTools);
     }
-    if (keywords.aggregation.some(kw => q.includes(kw))) {
+    if (categories.includes('aggregation')) {
       selectedTools.push(...aggregationTools);
     }
-    if (keywords.analytics.some(kw => q.includes(kw))) {
+    if (categories.includes('analytics')) {
       selectedTools.push(...analyticsTools);
     }
-    if (keywords.users.some(kw => q.includes(kw))) {
+    if (categories.includes('users')) {
       selectedTools.push(...userTools);
     }
 
-    // Si aucune catégorie détectée, renvoyer tous les outils (fallback)
+    // Si aucune catégorie sélectionnée, fallback vers tous les outils
     if (selectedTools.length <= systemTools.length) {
+      console.warn('⚠️ Aucune catégorie sélectionnée, utilisation de tous les outils');
       return allTools;
     }
 
-    // Dédupliquer les outils (au cas où)
+    // Dédupliquer les outils
     const uniqueTools = selectedTools.filter((tool, index, self) =>
       index === self.findIndex(t => t.function?.name === tool.function?.name)
     );
@@ -5103,8 +5158,8 @@ INTERDICTIONS:
       const toolCallsUsed: string[] = []; // Tracker les outils utilisés
       const allFunctionArgs: any[] = []; // Tracker tous les arguments pour extraction d'entités
 
-      // 🎯 OPTIMISATION: Sélectionner dynamiquement les outils pertinents
-      const relevantTools = this.selectRelevantTools(question);
+      // 🎯 OPTIMISATION: Sélectionner dynamiquement les outils pertinents via classification IA
+      const relevantTools = await this.selectRelevantTools(question);
 
       while (iteration < MAX_ITERATIONS) {
         iteration++;
@@ -5245,6 +5300,15 @@ INTERDICTIONS:
           continue;
         }
 
+        if (!message.tool_calls || message.tool_calls.length === 0) {
+          // Aucun tool_call - devrait y avoir message.content
+          if (!message.content) {
+            console.error('⚠️ L\'IA n\'a ni appelé d\'outil ni généré de réponse textuelle');
+            console.error('Message reçu:', JSON.stringify(message, null, 2).substring(0, 500));
+            break;
+          }
+        }
+
         if (message.content) {
           console.log('✅ Réponse finale générée');
           // Sauvegarder l'échange dans l'historique (ancien système)
@@ -5294,7 +5358,10 @@ INTERDICTIONS:
         break;
       }
 
-      const errorMsg = '❌ Impossible de traiter votre demande.';
+      // Plus d'informations dans le message d'erreur
+      console.error('❌ Échec de la génération de réponse après', MAX_ITERATIONS, 'tentatives');
+      const errorMsg = '❌ Je n\'ai pas pu traiter votre demande.\n\n💡 Essayez de reformuler votre question ou d\'être plus précis.\n\nExemples :\n• "montant total payé à Foster"\n• "factures impayées"\n• "solde bancaire"';
+
       // Même en cas d'erreur, on sauvegarde la question
       this.conversationHistory.push({ role: 'user', content: question });
       if (this.conversationHistory.length > this.MAX_HISTORY) {
