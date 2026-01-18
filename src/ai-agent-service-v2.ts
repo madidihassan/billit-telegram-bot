@@ -46,7 +46,7 @@ import {
   analyzeTrends,
   exportToCSV
 } from './ai-agent/implementations/predictive-analytics';
-import { aiMatchSupplier } from './services/ai-helpers';
+import { aiMatchSupplier, aiMatchEmployee, aiParsePeriod } from './services/ai-helpers';
 
 /**
  * Service d'agent IA autonome AMÉLIORÉ avec données structurées
@@ -223,6 +223,47 @@ Réponse JSON:`;
 
     } catch (error) {
       console.error('❌ Erreur matching IA:', error);
+      // En cas d'erreur, fallback vers le terme original
+      return searchTerm;
+    }
+  }
+
+  /**
+   * 🤖 Matching intelligent d'employé avec IA
+   * Convertit les noms approximatifs/prénoms seuls en noms complets exacts
+   * Exemples: "sufjan" → "Soufiane Madidi", "jawad" → "Jawad Madidi"
+   */
+  private async matchEmployeeWithAI(searchTerm: string): Promise<string> {
+    try {
+      // Récupérer tous les employés de la BD
+      const employees = getAllEmployees();
+      const employeeNames = employees.map(e => e.name);
+
+      if (employeeNames.length === 0) {
+        console.warn('⚠️ Aucun employé dans la base de données');
+        return searchTerm; // Fallback vers le terme original
+      }
+
+      // Créer le provider IA
+      const provider = {
+        type: this.aiProvider,
+        client: this.aiProvider === 'openrouter' ? this.openRouter as any : this.groq as any
+      };
+
+      // Appeler aiMatchEmployee
+      const matchedName = await aiMatchEmployee(searchTerm, employeeNames, provider);
+
+      // Si match trouvé, utiliser le nom exact; sinon fallback vers le terme original
+      if (matchedName) {
+        console.log(`🎯 Matching employé IA: "${searchTerm}" → "${matchedName}"`);
+        return matchedName;
+      } else {
+        console.log(`⚠️ Aucun match employé IA trouvé pour "${searchTerm}", utilisation du terme original`);
+        return searchTerm;
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur matching employé IA:', error);
       // En cas d'erreur, fallback vers le terme original
       return searchTerm;
     }
@@ -1184,6 +1225,12 @@ Réponse JSON:`;
         }
 
         case 'get_employee_salaries': {
+          // 🤖 Matching IA de l'employé si spécifié
+          if (args.employee_name) {
+            const matchedEmployee = await this.matchEmployeeWithAI(args.employee_name);
+            args.employee_name = matchedEmployee; // Remplacer par le nom exact
+          }
+
           // Gérer month/year ou start_month/end_month ou start_date/end_date
           let startDate: Date;
           let endDate: Date;
@@ -1801,6 +1848,14 @@ Réponse JSON:`;
         }
 
         case 'compare_employee_salaries': {
+          // 🤖 Matching IA de tous les employés
+          if (args.employee_names && args.employee_names.length > 0) {
+            const matchedNames = await Promise.all(
+              args.employee_names.map((name: string) => this.matchEmployeeWithAI(name))
+            );
+            args.employee_names = matchedNames;
+          }
+
           // Validation: au moins 2 employés
           if (!args.employee_names || args.employee_names.length < 2) {
             result = {
