@@ -46,6 +46,7 @@ import {
   analyzeTrends,
   exportToCSV
 } from './ai-agent/implementations/predictive-analytics';
+import { aiMatchSupplier } from './services/ai-helpers';
 
 /**
  * Service d'agent IA autonome AMÉLIORÉ avec données structurées
@@ -183,6 +184,47 @@ Réponse JSON:`;
       console.error('❌ Erreur classification IA:', error);
       // Fallback: retourner toutes les catégories
       return ['invoices', 'transactions', 'employees', 'suppliers', 'aggregation', 'analytics', 'users'];
+    }
+  }
+
+  /**
+   * 🤖 Matching intelligent de fournisseur avec IA
+   * Convertit les noms approximatifs en noms exacts de la base de données
+   * Exemples: "verisur" → "VERISURE SA", "kbc" → "KBC Bank SA"
+   */
+  private async matchSupplierWithAI(searchTerm: string): Promise<string> {
+    try {
+      // Récupérer tous les fournisseurs actifs de la BD
+      const suppliers = getAllSuppliers();
+      const supplierNames = suppliers.map(s => s.name);
+
+      if (supplierNames.length === 0) {
+        console.warn('⚠️ Aucun fournisseur dans la base de données');
+        return searchTerm; // Fallback vers le terme original
+      }
+
+      // Créer le provider IA
+      const provider = {
+        type: this.aiProvider,
+        client: this.aiProvider === 'openrouter' ? this.openRouter as any : this.groq as any
+      };
+
+      // Appeler aiMatchSupplier
+      const matchedName = await aiMatchSupplier(searchTerm, supplierNames, provider);
+
+      // Si match trouvé, utiliser le nom exact; sinon fallback vers le terme original
+      if (matchedName) {
+        console.log(`🎯 Matching IA: "${searchTerm}" → "${matchedName}"`);
+        return matchedName;
+      } else {
+        console.log(`⚠️ Aucun match IA trouvé pour "${searchTerm}", utilisation du terme original`);
+        return searchTerm;
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur matching IA:', error);
+      // En cas d'erreur, fallback vers le terme original
+      return searchTerm;
     }
   }
 
@@ -1961,6 +2003,15 @@ Réponse JSON:`;
             suppliersToProcess = [args.supplier_name];
           }
 
+          // 🤖 Matching IA de tous les fournisseurs
+          if (suppliersToProcess.length > 0) {
+            const matchedNames = await Promise.all(
+              suppliersToProcess.map(name => this.matchSupplierWithAI(name))
+            );
+            suppliersToProcess = matchedNames;
+            console.log(`🤖 Matching IA: ${matchedNames.join(', ')}`);
+          }
+
           // Gérer month/year ou start_month/end_month
           let startDate: Date;
           let endDate: Date;
@@ -2553,6 +2604,14 @@ Vérifiez:
         }
 
         case 'compare_supplier_expenses': {
+          // 🤖 Matching IA de tous les fournisseurs
+          if (args.supplier_names && args.supplier_names.length > 0) {
+            const matchedNames = await Promise.all(
+              args.supplier_names.map((name: string) => this.matchSupplierWithAI(name))
+            );
+            args.supplier_names = matchedNames;
+          }
+
           // Validation: au moins 2 fournisseurs
           if (!args.supplier_names || args.supplier_names.length < 2) {
             result = {
@@ -2724,9 +2783,11 @@ Vérifiez:
 
         case 'analyze_supplier_trends': {
           console.log('🔧 Exécution: analyze_supplier_trends', args);
+          // 🤖 Matching IA du fournisseur
+          const matchedSupplier = await this.matchSupplierWithAI(args.supplier_name);
           result = await analyzeSupplierTrends(
             this.bankClient,
-            args.supplier_name,
+            matchedSupplier,
             args.period_months || 6,
             args.year
           );
@@ -2747,9 +2808,11 @@ Vérifiez:
 
         case 'detect_supplier_patterns': {
           console.log('🔧 Exécution: detect_supplier_patterns', args);
+          // 🤖 Matching IA du fournisseur
+          const matchedSupplier = await this.matchSupplierWithAI(args.supplier_name);
           result = await detectSupplierPatterns(
             this.bankClient,
-            args.supplier_name,
+            matchedSupplier,
             args.period_months || 6
           );
           break;
@@ -2833,6 +2896,10 @@ Vérifiez:
         }
 
         case 'get_supplier_payments': {
+          // 🤖 Matching IA du fournisseur
+          const matchedSupplier = await this.matchSupplierWithAI(args.supplier_name);
+          args.supplier_name = matchedSupplier; // Remplacer par le nom exact
+
           // Gérer month/year
           let startDate: Date;
           let endDate: Date;
@@ -2980,6 +3047,10 @@ Vérifiez:
         }
 
         case 'get_supplier_received_payments': {
+          // 🤖 Matching IA du fournisseur
+          const matchedSupplier = await this.matchSupplierWithAI(args.supplier_name);
+          args.supplier_name = matchedSupplier; // Remplacer par le nom exact
+
           // Gérer month/year
           let startDate: Date;
           let endDate: Date;
