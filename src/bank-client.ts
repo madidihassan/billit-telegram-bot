@@ -208,10 +208,24 @@ export class BankClient {
     const allTransactions = await this.getAllTransactions(undefined, startDate, endDate);
 
     // Filtrage supplémentaire côté client pour s'assurer de la précision
-    return allTransactions.filter(tx => {
+    // Utiliser setHours(0,0,0,0) pour comparer uniquement les dates (pas l'heure)
+    const startOnly = new Date(startDate);
+    startOnly.setHours(0, 0, 0, 0);
+    const endOnly = new Date(endDate);
+    endOnly.setHours(23, 59, 59, 999);
+
+    const filtered = allTransactions.filter(tx => {
       const txDate = new Date(tx.date);
-      return txDate >= startDate && txDate <= endDate;
+      const isInPeriod = txDate >= startOnly && txDate <= endOnly;
+      if (!isInPeriod && (txDate.getMonth() === 8 || txDate.getMonth() === 9)) {
+        // Log pour le debug: transactions de septembre/octobre hors période
+        console.log(`⚠️ Transaction filtrée: ${tx.date} (${txDate.toISOString().split('T')[0]}) hors période [${startOnly.toISOString().split('T')[0]} - ${endOnly.toISOString().split('T')[0]}]`);
+      }
+      return isInPeriod;
     });
+
+    console.log(`✓ Filtrage période: ${allTransactions.length} → ${filtered.length} transactions [${startOnly.toISOString().split('T')[0]} à ${endOnly.toISOString().split('T')[0]}]`);
+    return filtered;
   }
 
   /**

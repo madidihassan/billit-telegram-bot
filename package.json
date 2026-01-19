@@ -12,6 +12,8 @@
     "watch": "tsc -w",
     "test": "ts-node src/test-connection.ts",
     "test:ai": "ts-node test-ai-conversation.ts",
+    "test:complet": "ts-node test-bot-complet.ts",
+    "test:complet:build": "npm run build && node dist/test-bot-complet.js",
     "migrate": "ts-node src/migrate-to-database.ts",
     "backup": "ts-node src/backup-database.ts",
     "pm2:start": "npm run build && pm2 start ecosystem.config.js",

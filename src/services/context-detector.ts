@@ -36,6 +36,32 @@ export class ContextDetector {
   detect(question: string, context: UserConversationContext): ContextDetectionResult {
     const questionLower = question.toLowerCase().trim();
 
+    // 🔧 FIX: Si la question est déjà complète ("toutes les factures", "les factures du mois"), ne pas enrichir
+    const isCompleteQuestion = 
+      questionLower.includes('toutes les factures') ||
+      questionLower.includes('toute les factures') ||
+      questionLower.includes('liste les factures') ||
+      questionLower.includes('liste toutes') ||
+      questionLower.includes('tous les') ||
+      questionLower.includes('toute la liste') ||
+      questionLower.includes('les factures payées') ||
+      questionLower.includes('les factures impayées') ||
+      questionLower.includes('factures payées du') ||
+      questionLower.includes('factures impayées du') ||
+      questionLower.includes('factures payées de') ||
+      questionLower.includes('factures impayées de') ||
+      questionLower.includes('les factures du') ||
+      questionLower.includes('les factures de');
+
+    if (isCompleteQuestion) {
+      return {
+        hasReference: false,
+        enrichedQuestion: question,
+        replacements: {},
+        confidence: 0
+      };
+    }
+
     // Résultat par défaut (pas de référence)
     let result: ContextDetectionResult = {
       hasReference: false,

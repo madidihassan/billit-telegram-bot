@@ -49,15 +49,32 @@ Réponds UNIQUEMENT avec:
 
 Réponse:`;
 
+    // 🔧 FIX: Vérifier que le client est disponible
+    if (!provider.client) {
+      console.log(`⚠️ Client IA non disponible, retour null`);
+      return null;
+    }
+
     let response;
     if (provider.type === 'openrouter') {
-      const openrouter = provider.client as OpenAI;
-      response = await openrouter.chat.completions.create({
-        model: 'openai/gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 100,
-      });
+      // OpenRouterClient utilise une interface différente (wrapper axios)
+      const openrouter = provider.client as any;
+      if (openrouter.chatCompletion) {
+        // C'est notre OpenRouterClient personnalisé
+        response = await openrouter.chatCompletion({
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 100,
+        });
+      } else {
+        // C'est le SDK OpenAI standard
+        response = await openrouter.chat.completions.create({
+          model: 'openai/gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 100,
+        });
+      }
     } else {
       const groq = provider.client as Groq;
       response = await groq.chat.completions.create({
@@ -124,12 +141,24 @@ Employés disponibles:
 ${employees.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 
 Trouve l'employé le PLUS PROBABLE que l'utilisateur cherche.
-Considère: prénom seul, nom seul, surnoms, diminutifs, fautes de frappe.
+Considère: prénom seul, nom seul, surnoms, diminutifs, fautes de frappe, variations phonétiques.
 
-Exemples:
-- "sufjan" → "Soufiane Madidi" (variation du prénom)
+⚠️ RÈGLES IMPORTANTES:
+- "sufjan" ou "sofian" ou "soufian" → DOIT correspondre à "Soufiane Madidi" (variation phonétique du prénom)
+- "sophian" ou "sophiane" → DOIT correspondre à "Soufiane Madidi" (variation phonétique)
+- "khalid" ou "kalid" ou "chalid" → DOIT correspondre à "Abou Khalid" ou "Kalide Chami" (selon la liste)
+- "mokhlis" ou "mohklis" → DOIT correspondre à "Jamhoun Mokhlis" (ordre inversé accepté)
+- Pour les prénoms seuls: chercher d'abord le prénom exact, puis les variations phonétiques
+- Pour les noms de famille seuls avec plusieurs personnes: retourner null (trop ambigu)
+
+Exemples de matching:
+- "sufjan" → "Soufiane Madidi" (variation phonétique)
+- "sofian" → "Soufiane Madidi" (variation phonétique)
+- "soufian" → "Soufiane Madidi" (variation phonétique)
+- "sophian" → "Soufiane Madidi" (variation phonétique)
 - "jawad" → "Jawad Madidi" (prénom seul)
-- "madidi" → Si plusieurs Madidi, retourne null (ambigu)
+- "khalid" → "Abou Khalid" (prénom seul)
+- "madidi" → null (trop ambigu: Hassan, Soufiane, Jawad)
 
 Réponds UNIQUEMENT avec:
 - Le nom EXACT de l'employé (copié depuis la liste)
@@ -137,15 +166,32 @@ Réponds UNIQUEMENT avec:
 
 Réponse:`;
 
+    // 🔧 FIX: Vérifier que le client est disponible
+    if (!provider.client) {
+      console.log(`⚠️ Client IA non disponible, retour null`);
+      return null;
+    }
+
     let response;
     if (provider.type === 'openrouter') {
-      const openrouter = provider.client as OpenAI;
-      response = await openrouter.chat.completions.create({
-        model: 'openai/gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 100,
-      });
+      // OpenRouterClient utilise une interface différente (wrapper axios)
+      const openrouter = provider.client as any;
+      if (openrouter.chatCompletion) {
+        // C'est notre OpenRouterClient personnalisé
+        response = await openrouter.chatCompletion({
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 100,
+        });
+      } else {
+        // C'est le SDK OpenAI standard
+        response = await openrouter.chat.completions.create({
+          model: 'openai/gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 100,
+        });
+      }
     } else {
       const groq = provider.client as Groq;
       response = await groq.chat.completions.create({

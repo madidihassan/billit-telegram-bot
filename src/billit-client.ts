@@ -32,6 +32,7 @@ export class BillitClient {
   async getInvoices(params?: {
     limit?: number;
     page?: number;
+    skip?: number;
     from_date?: string;
     to_date?: string;
     order_date_from?: string;
@@ -61,12 +62,19 @@ export class BillitClient {
 
       // IMPORTANT: Trier par OrderDate décroissant pour avoir les plus récentes en premier
       // et augmenter la limite à 120 (max autorisé par l'API Billit)
+      const requestParams: any = {
+        $filter: filter,
+        $top: params?.limit || 120,
+        $orderby: 'OrderDate desc',
+      };
+
+      // Ajouter $skip si fourni (pour pagination)
+      if (params?.skip !== undefined && params.skip > 0) {
+        requestParams.$skip = params.skip;
+      }
+
       const response = await this.axiosInstance.get<BillitOrdersResponse>('/v1/orders', {
-        params: {
-          $filter: filter,
-          $top: params?.limit || 120,
-          $orderby: 'OrderDate desc',
-        },
+        params: requestParams,
       });
 
       const invoices = response.data.Items || response.data.items || response.data || [];
@@ -157,11 +165,46 @@ export class BillitClient {
   }
 
   /**
-   * Récupère toutes les factures impayées
+   * Récupère toutes les factures impayées avec pagination
    */
   async getUnpaidInvoices(): Promise<BillitInvoice[]> {
-    const invoices = await this.getInvoices({ limit: 100 });
-    return invoices.filter(inv => inv.status.toLowerCase() !== 'paid' && inv.status.toLowerCase() !== 'payé');
+    const allInvoices: BillitInvoice[] = [];
+    let skip = 0;
+    const pageSize = 120; // Limite API Billit
+    let hasMore = true;
+
+    console.log('🔄 Récupération de TOUTES les factures impayées (pagination)...');
+
+    while (hasMore) {
+      // Récupérer une page de factures
+      const invoices = await this.getInvoices({ 
+        limit: pageSize,
+        skip: skip 
+      });
+
+      if (invoices.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      // Filtrer les factures impayées
+      const unpaid = invoices.filter(inv => 
+        inv.status.toLowerCase() !== 'paid' && 
+        inv.status.toLowerCase() !== 'payé'
+      );
+
+      allInvoices.push(...unpaid);
+
+      // Si moins de 120 factures retournées, on a atteint la fin
+      if (invoices.length < pageSize) {
+        hasMore = false;
+      } else {
+        skip += pageSize;
+      }
+    }
+
+    console.log(`✅ ${allInvoices.length} facture(s) impayée(s) trouvée(s) sur toutes les pages`);
+    return allInvoices;
   }
 
   /**

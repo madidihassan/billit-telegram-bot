@@ -734,9 +734,27 @@ Total: 150000€ (250 paiements)
 
 ---
 
-**Dernière mise à jour**: 18 janvier 2026
-**Version du bot**: 3.0 - Agent IA Super Intelligent
+**Dernière mise à jour**: 19 janvier 2026
+**Version du bot**: 3.1 - Agent IA avec 50 outils
 **Statut**: Production ✅
+
+## 🚀 Nouveautés Version 3.1 (19 janvier 2026)
+
+### ✅ CORRECTIF CRITIQUE : Outil get_all_invoices
+- **Nouveau** : `get_all_invoices` pour lister TOUTES les factures (toutes périodes confondues)
+- **Fix** : "Liste-moi toutes les factures" retournait uniquement le mois courant (janvier) au lieu de toutes les périodes
+- **Fix** : Modification de `get_monthly_invoices` pour qu'il ne soit utilisé QUE si le mois est explicitement mentionné
+- **Pagination** : Support pagination automatique pour récupérer toutes les factures (toutes pages)
+- **Total outils** : 49 → **50 outils IA**
+
+### 🧪 VALIDATION 100% : Tests automatiques
+- ✅ 36/36 tests automatiques réussis (100%)
+- ✅ Corrections JSON parsing, validation entrée vide, AI client checks
+- ✅ Pagination complète pour factures impayées (`getUnpaidInvoices`)
+- ✅ Script de démarrage amélioré (pas de doublons de processus)
+- ✅ Nettoyage cache sémantique pour forcer régénération
+
+---
 
 ## 🚀 Nouveautés Version 3.0 (18 janvier 2026)
 

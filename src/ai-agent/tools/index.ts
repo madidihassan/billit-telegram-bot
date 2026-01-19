@@ -15,10 +15,10 @@ import { aggregationTools } from './aggregation-tools';
 import { analyticsTools } from './analytics-tools';
 
 /**
- * Tous les outils IA disponibles (49 outils au total)
+ * Tous les outils IA disponibles (50 outils au total)
  *
  * Catégories:
- * - Factures: 11 outils
+ * - Factures: 12 outils
  * - Transactions: 9 outils
  * - Employés: 5 outils
  * - Fournisseurs: 15 outils (12+3 nouveaux)

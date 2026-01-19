@@ -1,7 +1,7 @@
 import type Groq from 'groq-sdk';
 
 /**
- * Outils IA pour la gestion des factures (11 outils)
+ * Outils IA pour la gestion des factures (12 outils)
  *
  * @module InvoiceTools
  * @category AI Tools
@@ -106,8 +106,16 @@ export const invoiceTools: Groq.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'get_all_invoices',
+      description: '⚠️ APPEL OBLIGATOIRE: Obtenir TOUTES les factures RÉELLES (toutes périodes confondues). Tu DOIS appeler cet outil quand l\'utilisateur demande "toutes les factures", "liste complète des factures", "liste toutes les factures" SANS mentionner de mois ou période spécifique. Retourne factures payées ET impayées de tous les mois. Exemples: "Liste-moi toutes les factures", "Toutes les factures", "Liste complète"',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_monthly_invoices',
-      description: '⚠️ APPEL OBLIGATOIRE: Obtenir TOUTES les factures RÉELLES du mois en cours. Tu DOIS appeler cet outil pour TOUTE question sur les factures du mois actuel. Ne JAMAIS inventer de liste ou de nombres. Exemples: "Combien de factures ce mois?", "Factures du mois", "Liste les factures"',
+      description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures RÉELLES du mois en cours UNIQUEMENT. Tu DOIS appeler cet outil SEULEMENT si l\'utilisateur mentionne explicitement "ce mois", "mois actuel", "janvier" (mois courant). Ne JAMAIS utiliser pour "toutes les factures". Exemples: "Combien de factures ce mois?", "Factures du mois", "Factures de janvier"',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },

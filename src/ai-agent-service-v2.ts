@@ -167,7 +167,11 @@ Réponse JSON:`;
         throw new Error('Aucun provider IA disponible');
       }
 
-      const content = response.choices[0]?.message?.content?.trim() || '[]';
+      let content = response.choices[0]?.message?.content?.trim() || '[]';
+
+      // 🔧 FIX: Nettoyer les backticks markdown si présents
+      // Exemples: "```json\n[...]\n```" ou "```\n[...]\n```"
+      content = content.replace(/^```(?:json)?\n?/g, '').replace(/\n?```$/g, '');
 
       // Parser le JSON
       const categories = JSON.parse(content);
@@ -203,10 +207,17 @@ Réponse JSON:`;
         return searchTerm; // Fallback vers le terme original
       }
 
+      // 🔧 FIX: Vérifier que le client IA est disponible
+      const aiClient = this.aiProvider === 'openrouter' ? this.openRouter : this.groq;
+      if (!aiClient) {
+        console.log(`⚠️ Client IA non disponible (${this.aiProvider}), fallback vers terme original`);
+        return searchTerm;
+      }
+
       // Créer le provider IA
       const provider = {
         type: this.aiProvider,
-        client: this.aiProvider === 'openrouter' ? this.openRouter as any : this.groq as any
+        client: aiClient as any
       };
 
       // Appeler aiMatchSupplier
@@ -244,10 +255,17 @@ Réponse JSON:`;
         return searchTerm; // Fallback vers le terme original
       }
 
+      // 🔧 Vérifier que le client IA est disponible
+      const aiClient = this.aiProvider === 'openrouter' ? this.openRouter : this.groq;
+      if (!aiClient) {
+        console.log(`⚠️ Client IA non disponible (${this.aiProvider}), fallback vers terme original`);
+        return searchTerm;
+      }
+
       // Créer le provider IA
       const provider = {
         type: this.aiProvider,
-        client: this.aiProvider === 'openrouter' ? this.openRouter as any : this.groq as any
+        client: aiClient as any
       };
 
       // Appeler aiMatchEmployee
@@ -277,10 +295,17 @@ Réponse JSON:`;
    */
   private async parsePeriodWithAI(text: string): Promise<{ start: Date; end: Date; description: string } | null> {
     try {
+      // 🔧 FIX: Vérifier que le client IA est disponible
+      const aiClient = this.aiProvider === 'openrouter' ? this.openRouter : this.groq;
+      if (!aiClient) {
+        console.log(`⚠️ Client IA non disponible (${this.aiProvider}), impossible de parser la période`);
+        return null;
+      }
+
       // Créer le provider IA
       const provider = {
         type: this.aiProvider,
-        client: this.aiProvider === 'openrouter' ? this.openRouter as any : this.groq as any
+        client: aiClient as any
       };
 
       // Appeler aiParsePeriod
@@ -359,12 +384,95 @@ Réponse JSON:`;
   }
 
   /**
+   * 🔧 CORRECTION AUTO: Normalise les arguments des outils pour forcer period_text
+   * Corrige les bugs où l'IA utilise year au lieu de period_text pour les années complètes
+   */
+  private normalizeToolArguments(functionName: string, args: any, question: string): any {
+    const questionLower = question.toLowerCase();
+
+    // 🎯 CORRECTION CRITIQUE #1: Détection "entre X et Y" pour multi-mois (PRIORITAIRE)
+    if ((functionName === 'get_employee_salaries' || functionName === 'compare_employee_salaries' ||
+         functionName === 'get_supplier_payments' || functionName === 'compare_supplier_expenses' ||
+         functionName === 'analyze_supplier_expenses')) {
+
+      // 🔵 PRIORITÉ #0: CORRECTION IMPORTANT - Si month est présent, supprimer period_text/year s'ils ne sont PAS "année XXXX" explicite
+      // L'IA ajoute parfois period_text="année 2025" même quand month="novembre" est spécifié
+      if (args.month && (args.period_text || args.year)) {
+        const periodText = args.period_text || args.year || '';
+        // Vérifier si period_text contient "année XXXX" (format valide) ou non
+        const isValidYearPeriod = periodText.match(/année\s+(\d{4})/i);
+        if (!isValidYearPeriod) {
+          // period_text ne contient pas "année XXXX", c'est une mauvaise détection de l'IA
+          delete args.period_text;
+          delete args.year;
+          console.log(`🔧 CORRECTION AUTO: Suppression period_text/year car month="${args.month}" est prioritaire`);
+        } else {
+          // period_text contient "année XXXX" - vérifier si la question demande explicitement "année XXXX"
+          const questionHasYearPhrase = questionLower.includes('année') && questionLower.includes(isValidYearPeriod[1]);
+          if (!questionHasYearPhrase) {
+            // La question ne mentionne PAS "année XXXX", utiliser month à la place
+            delete args.period_text;
+            delete args.year;
+            console.log(`🔧 CORRECTION AUTO: Suppression period_text/year (${periodText}) car month="${args.month}" et question ne mentionne pas "année ${isValidYearPeriod[1]}"`);
+          } else {
+            // La question mentionne explicitement "année XXXX", utiliser period_text et supprimer month
+            delete args.month;
+            console.log(`🔧 CORRECTION AUTO: Suppression month="${args.month}" car question mentionne "année ${isValidYearPeriod[1]}"`);
+          }
+        }
+      }
+
+      // 🔵 PRIORITÉ #1: Détection "entre X et Y" pour périodes multi-mois
+      if (questionLower.includes('entre') && questionLower.includes(' et ')) {
+        const match = questionLower.match(/entre\s+(\w+)\s+et\s+(\w+)/i);
+        const hasPeriodParam = args.period_text || args.year || args.month || args.start_month || args.end_month || args.start_date || args.end_date;
+        if (match && !hasPeriodParam) {
+          args.start_month = match[1];
+          args.end_month = match[2];
+          console.log(`🔧 CORRECTION AUTO: "entre ${match[1]} et ${match[2]}" → start_month/end_month`);
+          return args; // Ne pas continuer les autres corrections
+        }
+      }
+
+      // 🔵 PRIORITÉ #2: Détecter "année XXXX" si AUCUN paramètre de période n'est passé
+      const yearMatch = questionLower.match(/année\s+(\d{4})/);
+      const hasPeriodParam = args.period_text || args.year || args.month || args.start_month || args.end_month || args.start_date || args.end_date;
+
+      if (yearMatch && !hasPeriodParam) {
+        const year = yearMatch[1];
+        args.period_text = `année ${year}`;
+        console.log(`🔧 CORRECTION AUTO: Ajout period_text="année ${year}" (aucun paramètre de période détecté)`);
+      }
+
+      // 🔵 PRIORITÉ #3: year → period_text pour les années complètes
+      if (args.year && !args.period_text) {
+        const year = args.year;
+        delete args.year; // Supprimer year
+        args.period_text = `année ${year}`; // Forcer period_text
+        console.log(`🔧 CORRECTION AUTO: year="${year}" → period_text="année ${year}"`);
+      }
+    }
+
+    return args;
+  }
+
+  /**
    * 💡 OPTIMISATION: Génère des hints dynamiques selon le contexte de la question
    * Améliore la précision en guidant l'IA avec des instructions contextuelles
    */
   private generateDynamicHints(question: string): string {
     const q = question.toLowerCase();
     const hints: string[] = [];
+
+    // ⚠️ CRITIQUE: Hints pour les périodes annuelles - FORCER period_text
+    if (q.includes('année 202') || q.includes('de l\'année') || q.includes('sur l\'année')) {
+      hints.push('⚠️⚠️⚠️ PÉRIODE ANNÉE DÉTECTÉE: TOUJOURS utiliser period_text="année 202X" (NE PAS utiliser year!). Exemple: {period_text: "année 2025"}');
+    }
+
+    // Hints pour les périodes multi-mois (entre X et Y)
+    if (q.includes('entre') && q.includes(' et ')) {
+      hints.push('⚠️ PÉRIODE MULTI-MOIS DÉTECTÉE: TOUJOURS utiliser start_month et end_month. Exemple: {start_month: "octobre", end_month: "décembre"}');
+    }
 
     // Hints pour les questions de prédiction
     if (q.includes('prévision') || q.includes('prédi') || q.includes('prochaine') || q.includes('futur')) {
@@ -435,7 +543,8 @@ Réponse JSON:`;
             count: invoices.length,
             total_amount: total,
             currency: 'EUR',
-            invoices: invoices.slice(0, 5).map(inv => ({
+            // 🔧 FIX: Retourner TOUTES les factures impayées (pas seulement 5)
+            invoices: invoices.map(inv => ({
               supplier: inv.supplier_name,
               amount: inv.total_amount,
               invoice_number: inv.invoice_number,
@@ -1262,11 +1371,48 @@ Réponse JSON:`;
             args.employee_name = matchedEmployee; // Remplacer par le nom exact
           }
 
-          // Gérer month/year ou start_month/end_month ou start_date/end_date
-          let startDate: Date;
-          let endDate: Date;
+          // 🆕 Gérer period_text (parsing IA) - PRIORITÉ sur month/start_month/end_month
+          let startDate: Date | undefined;
+          let endDate: Date | undefined;
+          let periodDescription: string | undefined;
+          let periodParsed = false; // Flag pour savoir si period_text a été parsé avec succès
 
-          const monthMap: { [key: string]: number } = {
+          if (args.period_text) {
+            // 🔧 Fallback direct pour "année XXXX" au lieu de parsing IA
+            const yearMatch = args.period_text.match(/année\s+(\d{4})/i);
+            if (yearMatch) {
+              const year = parseInt(yearMatch[1]);
+              startDate = new Date(year, 0, 1); // 1er janvier
+              endDate = new Date(year, 11, 31, 23, 59, 59); // 31 décembre
+              periodDescription = `année ${year}`;
+              periodParsed = true;
+              console.log(`✅ Période directe (année ${year}): ${startDate.toISOString().split('T')[0]} à ${endDate.toISOString().split('T')[0]}`);
+            } else {
+              // Pour les autres cas, utiliser le parsing IA
+              try {
+                const period = await this.parsePeriodWithAI(args.period_text);
+                if (period) {
+                  startDate = period.start;
+                  endDate = period.end;
+                  periodDescription = period.description;
+                  periodParsed = true;
+                  console.log(`✅ Période IA utilisée: ${period.description}`);
+                } else {
+                  // ⚠️ Parsing IA échoué, continuer avec start_month/end_month si disponibles
+                  console.log(`⚠️ Parsing IA échoué pour "${args.period_text}", tentative avec start_month/end_month`);
+                  // Ne PAS retourner d'erreur ici - continuer avec les autres paramètres
+                }
+              } catch (error) {
+                console.log(`⚠️ Erreur parsing IA pour "${args.period_text}": ${error}, tentative avec start_month/end_month`);
+                // Ne PAS retourner d'erreur ici - continuer avec les autres paramètres
+              }
+            }
+          }
+
+          // 🔵 Si period_text n'a pas été parsé, essayer month/start_month/end_month
+          if (!periodParsed) {
+            // Logique existante pour month/start_month/end_month/start_date/end_date
+            const monthMap: { [key: string]: number } = {
             'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
             'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
             'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
@@ -1346,6 +1492,7 @@ Réponse JSON:`;
             startDate = new Date(2020, 0, 1);  // Date arbitraire dans le passé
             endDate = new Date();
           }
+          }  // Fin du else pour logique existante (month/start_month/end_date)
 
           if (!startDate || !endDate) {
             return JSON.stringify({ error: 'Format de date invalide' });
@@ -1673,7 +1820,10 @@ Réponse JSON:`;
 
           // Générer le titre de période approprié
           let periodTitle: string;
-          if (args.month) {
+          // 🔧 CORRECTION: Utiliser periodDescription si disponible (résultat du parsing IA)
+          if (periodDescription) {
+            periodTitle = periodDescription;
+          } else if (args.month) {
             // Si un mois spécifique est demandé
             periodTitle = startDate.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
           } else if (args.start_month && args.end_month) {
@@ -1699,22 +1849,40 @@ Réponse JSON:`;
           // Décider si on inclut la liste détaillée
           // 1. Si l'utilisateur demande explicitement la liste (include_details: true OU mots-clés dans la question)
           // 2. Si recherche spécifique d'UN employé avec peu de transactions (≤ 10)
-          // 3. SAUF si la question demande un "top X" sans le mot "liste" (dans ce cas, juste l'analyse suffit)
+          // 3. SAUF si la question demande une analyse/statistique/résumé (dans ce cas, juste l'analyse suffit)
           // 4. SAUF si mois unique avec beaucoup de transactions (> 10) sans demande explicite
+
+          // 🔍 DÉTECTION: Question demande une liste explicite
           const userAsksForList = questionLower.includes('liste') ||
                                  questionLower.includes('détail') ||
                                  questionLower.includes('à qui') ||
                                  questionLower.includes('qui a') ||
-                                 questionLower.includes('employés') ||
                                  questionLower.includes('noms') ||
-                                 questionLower.includes('qui j\'ai') ||
-                                 questionLower.includes('salaire');
+                                 questionLower.includes('qui j\'ai payé') ||
+                                 questionLower.includes('montre-moi les');
+
+          // 🔍 DÉTECTION: Question demande une analyse/statistique/résumé (PAS de liste détaillée)
+          const userAsksForSummaryOnly =
+            questionLower.includes('top') ||  // "Top 10 employés"
+            questionLower.includes('analyse') ||  // "Analyse des salaires"
+            questionLower.includes('stat') ||  // "Statistiques"
+            /mois.*plus.*payé|plus.*mois/.test(questionLower) ||  // "Mois où j'ai le plus payé"
+            /combien.*payé|total.*salaire/.test(questionLower) ||  // "Combien j'ai payé", "Total des salaires"
+            questionLower.includes('résumé') ||
+            questionLower.includes('répartition') ||
+            questionLower.includes('évolution') ||
+            questionLower.includes('classement') ||
+            questionLower.includes('meilleur') ||
+            questionLower.includes('le plus') && !questionLower.includes('liste');  // "Le plus payé" mais PAS "montre la liste"
+
           const userWantsDetails = args.include_details === true || userAsksForList;
-          const userAsksForTopOnly = /top\s*\d+/.test(questionLower) && !userAsksForList;
           const isSpecificEmployeeSearch = args.employee_name && salaryTransactions.length <= 10;
           const isSingleMonthManyTransactions = args.month && salaryTransactions.length > 10;
-          // Si l'utilisateur demande explicitement les détails, on les affiche même pour mois unique >10
-          const includeDetailedList = !userAsksForTopOnly && (
+          const isMultiMonthManyTransactions = (args.start_month && args.end_month) && salaryTransactions.length > 10;
+          // 🔵 MASQUER la liste pour les requêtes annuelles avec beaucoup de transactions
+          const isAnnualManyTransactions = args.period_text && /année\s+\d{4}/i.test(args.period_text) && salaryTransactions.length > 10;
+          // Si l'utilisateur demande une analyse statistique, PAS de liste détaillée
+          const includeDetailedList = !userAsksForSummaryOnly && !isMultiMonthManyTransactions && !isAnnualManyTransactions && (
             userWantsDetails ||  // Demande explicite prioritaire
             isSpecificEmployeeSearch ||  // Recherche spécifique
             !isSingleMonthManyTransactions  // Ou pas mois unique avec beaucoup
@@ -1900,45 +2068,68 @@ Réponse JSON:`;
           let startDate: Date;
           let endDate: Date;
 
-          if (args.month) {
-            const monthMap: { [key: string]: number } = {
-              'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
-              'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
-              'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11
-            };
-
-            let targetMonth = -1;
-            const monthInput = args.month.toLowerCase();
-
-            if (monthMap[monthInput] !== undefined) {
-              targetMonth = monthMap[monthInput];
-            } else if (!isNaN(parseInt(monthInput))) {
-              targetMonth = parseInt(monthInput) - 1;
-            }
-
-            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
-            startDate = new Date(targetYear, targetMonth, 1);
-            endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
-          } else {
-            // Par défaut: année intelligente
-            let targetYear: number;
-            if (args.year) {
-              targetYear = parseInt(args.year);
+          // 🆕 Gérer period_text (parsing IA) - PRIORITÉ sur month/year
+          if (args.period_text) {
+            // 🔧 Fallback direct pour "année XXXX" au lieu de parsing IA
+            const yearMatch = args.period_text.match(/année\s+(\d{4})/i);
+            if (yearMatch) {
+              const year = parseInt(yearMatch[1]);
+              startDate = new Date(year, 0, 1); // 1er janvier
+              endDate = new Date(year, 11, 31, 23, 59, 59); // 31 décembre
+              console.log(`✅ Période directe pour comparaison (année ${year}): ${startDate.toISOString().split('T')[0]} à ${endDate.toISOString().split('T')[0]}`);
             } else {
-              const now = new Date();
-              const currentYear = now.getFullYear();
-              const currentMonth = now.getMonth();
-
-              // Si on est en janvier (mois 0), utiliser l'année précédente par défaut
-              if (currentMonth === 0) {
-                targetYear = currentYear - 1;
+              // Pour les autres cas, utiliser le parsing IA
+              const period = await this.parsePeriodWithAI(args.period_text);
+              if (period) {
+                startDate = period.start;
+                endDate = period.end;
+                console.log(`✅ Période IA utilisée pour comparaison employés: ${period.description}`);
               } else {
-                targetYear = currentYear;
+                return JSON.stringify({ error: `Impossible de parser la période: ${args.period_text}` });
               }
             }
-            startDate = new Date(targetYear, 0, 1);
-            endDate = new Date(targetYear, 11, 31, 23, 59, 59);
-          }
+          } else {
+            // Logique existante pour month/year
+            if (args.month) {
+              const monthMap: { [key: string]: number } = {
+                'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
+                'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
+                'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11
+              };
+
+              let targetMonth = -1;
+              const monthInput = args.month.toLowerCase();
+
+              if (monthMap[monthInput] !== undefined) {
+                targetMonth = monthMap[monthInput];
+              } else if (!isNaN(parseInt(monthInput))) {
+                targetMonth = parseInt(monthInput) - 1;
+              }
+
+              const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+              startDate = new Date(targetYear, targetMonth, 1);
+              endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+            } else {
+              // Par défaut: année intelligente
+              let targetYear: number;
+              if (args.year) {
+                targetYear = parseInt(args.year);
+              } else {
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const currentMonth = now.getMonth();
+
+                // Si on est en janvier (mois 0), utiliser l'année précédente par défaut
+                if (currentMonth === 0) {
+                  targetYear = currentYear - 1;
+                } else {
+                  targetYear = currentYear;
+                }
+              }
+              startDate = new Date(targetYear, 0, 1);
+              endDate = new Date(targetYear, 11, 31, 23, 59, 59);
+            }
+            }  // Fin du else pour logique existante (month/year)
 
           // Récupérer toutes les transactions
           const transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
@@ -2102,7 +2293,19 @@ Réponse JSON:`;
           let startDate: Date;
           let endDate: Date;
 
-          const monthMap: { [key: string]: number } = {
+          // 🆕 Gérer period_text (parsing IA) - PRIORITÉ sur month/start_month/end_month
+          if (args.period_text) {
+            const period = await this.parsePeriodWithAI(args.period_text);
+            if (period) {
+              startDate = period.start;
+              endDate = period.end;
+              console.log(`✅ Période IA utilisée pour analyse fournisseurs: ${period.description}`);
+            } else {
+              return JSON.stringify({ error: `Impossible de parser la période: ${args.period_text}` });
+            }
+          } else {
+            // Logique existante pour month/start_month/end_month
+            const monthMap: { [key: string]: number } = {
             'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
             'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
             'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
@@ -2195,6 +2398,7 @@ Réponse JSON:`;
             startDate = new Date(targetYear, 0, 1);
             endDate = new Date(targetYear, 11, 31, 23, 59, 59);
           }
+          }  // Fin du else pour logique existante (month/start_month/end_month)
 
           if (!startDate || !endDate) {
             return JSON.stringify({ error: 'Format de date invalide' });
@@ -2711,61 +2915,74 @@ Vérifiez:
           let startDate: Date;
           let endDate: Date;
 
-          if (args.month) {
-            const monthMap: { [key: string]: number } = {
-              'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
-              'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
-              'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11
-            };
-
-            let targetMonth = -1;
-            const monthInput = args.month.toLowerCase();
-
-            if (monthMap[monthInput] !== undefined) {
-              targetMonth = monthMap[monthInput];
-            } else if (!isNaN(parseInt(monthInput))) {
-              targetMonth = parseInt(monthInput) - 1;
-            }
-
-            // Si aucune année spécifiée, déduire intelligemment l'année
-            let targetYear: number;
-            if (args.year) {
-              targetYear = parseInt(args.year);
+          // 🆕 Gérer period_text (parsing IA) - PRIORITÉ sur month/year
+          if (args.period_text) {
+            const period = await this.parsePeriodWithAI(args.period_text);
+            if (period) {
+              startDate = period.start;
+              endDate = period.end;
+              console.log(`✅ Période IA utilisée pour comparaison fournisseurs: ${period.description}`);
             } else {
-              const now = new Date();
-              const currentYear = now.getFullYear();
-              const currentMonth = now.getMonth();
-
-              // Si le mois demandé est dans le futur, utiliser l'année précédente
-              if (targetMonth > currentMonth) {
-                targetYear = currentYear - 1;
-              } else {
-                targetYear = currentYear;
-              }
+              return JSON.stringify({ error: `Impossible de parser la période: ${args.period_text}` });
             }
-
-            startDate = new Date(targetYear, targetMonth, 1);
-            endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
           } else {
-            // Par défaut: année intelligente
-            let targetYear: number;
-            if (args.year) {
-              targetYear = parseInt(args.year);
-            } else {
-              const now = new Date();
-              const currentYear = now.getFullYear();
-              const currentMonth = now.getMonth();
+            // Logique existante pour month/year
+            if (args.month) {
+              const monthMap: { [key: string]: number } = {
+                'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
+                'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
+                'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11
+              };
 
-              // Si on est en janvier (mois 0), utiliser l'année précédente par défaut
-              if (currentMonth === 0) {
-                targetYear = currentYear - 1;
-              } else {
-                targetYear = currentYear;
+              let targetMonth = -1;
+              const monthInput = args.month.toLowerCase();
+
+              if (monthMap[monthInput] !== undefined) {
+                targetMonth = monthMap[monthInput];
+              } else if (!isNaN(parseInt(monthInput))) {
+                targetMonth = parseInt(monthInput) - 1;
               }
+
+              // Si aucune année spécifiée, déduire intelligemment l'année
+              let targetYear: number;
+              if (args.year) {
+                targetYear = parseInt(args.year);
+              } else {
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const currentMonth = now.getMonth();
+
+                // Si le mois demandé est dans le futur, utiliser l'année précédente
+                if (targetMonth > currentMonth) {
+                  targetYear = currentYear - 1;
+                } else {
+                  targetYear = currentYear;
+                }
+              }
+
+              startDate = new Date(targetYear, targetMonth, 1);
+              endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+            } else {
+              // Par défaut: année intelligente
+              let targetYear: number;
+              if (args.year) {
+                targetYear = parseInt(args.year);
+              } else {
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const currentMonth = now.getMonth();
+
+                // Si on est en janvier (mois 0), utiliser l'année précédente par défaut
+                if (currentMonth === 0) {
+                  targetYear = currentYear - 1;
+                } else {
+                  targetYear = currentYear;
+                }
+              }
+              startDate = new Date(targetYear, 0, 1);
+              endDate = new Date(targetYear, 11, 31, 23, 59, 59);
             }
-            startDate = new Date(targetYear, 0, 1);
-            endDate = new Date(targetYear, 11, 31, 23, 59, 59);
-          }
+            }  // Fin du else pour logique existante (month/year)
 
           // Récupérer toutes les transactions
           const transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
@@ -2986,11 +3203,22 @@ Vérifiez:
           const matchedSupplier = await this.matchSupplierWithAI(args.supplier_name);
           args.supplier_name = matchedSupplier; // Remplacer par le nom exact
 
-          // Gérer month/year
+          // 🆕 Gérer period_text (parsing IA) - PRIORITÉ sur month/year
           let startDate: Date;
           let endDate: Date;
 
-          if (args.month) {
+          if (args.period_text) {
+            const period = await this.parsePeriodWithAI(args.period_text);
+            if (period) {
+              startDate = period.start;
+              endDate = period.end;
+              console.log(`✅ Période IA utilisée pour ${args.supplier_name}: ${period.description}`);
+            } else {
+              return JSON.stringify({ error: `Impossible de parser la période: ${args.period_text}` });
+            }
+          } else {
+            // Logique existante pour month/year
+            if (args.month) {
             // Convertir le mois en dates
             const monthMap: { [key: string]: number } = {
               'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
@@ -3038,6 +3266,7 @@ Vérifiez:
             startDate = new Date(2020, 0, 1);  // Date arbitraire dans le passé
             endDate = new Date();
           }
+          }  // Fin du else pour logique existante (month/year)
 
           let transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
 
@@ -3137,11 +3366,22 @@ Vérifiez:
           const matchedSupplier = await this.matchSupplierWithAI(args.supplier_name);
           args.supplier_name = matchedSupplier; // Remplacer par le nom exact
 
-          // Gérer month/year
+          // 🆕 Gérer period_text (parsing IA) - PRIORITÉ sur month/year
           let startDate: Date;
           let endDate: Date;
 
-          if (args.month) {
+          if (args.period_text) {
+            const period = await this.parsePeriodWithAI(args.period_text);
+            if (period) {
+              startDate = period.start;
+              endDate = period.end;
+              console.log(`✅ Période IA utilisée pour ${args.supplier_name} (reçus): ${period.description}`);
+            } else {
+              return JSON.stringify({ error: `Impossible de parser la période: ${args.period_text}` });
+            }
+          } else {
+            // Logique existante pour month/year
+            if (args.month) {
             // Convertir le mois en dates
             const monthMap: { [key: string]: number } = {
               'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
@@ -3173,6 +3413,7 @@ Vérifiez:
             startDate = new Date(2020, 0, 1);  // Date arbitraire dans le passé
             endDate = new Date();
           }
+          }  // Fin du else pour logique existante (month/year)
 
           let transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
 
@@ -3726,6 +3967,63 @@ Vérifiez:
           break;
         }
 
+        case 'get_all_invoices': {
+          // Récupérer TOUTES les factures (toutes périodes confondues)
+          console.log('🔄 Récupération de TOUTES les factures (pagination complète)...');
+          
+          const allInvoices: any[] = [];
+          let skip = 0;
+          const pageSize = 120;
+          let hasMore = true;
+
+          while (hasMore) {
+            const page = await this.billitClient.getInvoices({ limit: pageSize, skip });
+            if (page.length === 0) {
+              hasMore = false;
+              break;
+            }
+            allInvoices.push(...page);
+            if (page.length < pageSize) {
+              hasMore = false;
+            } else {
+              skip += pageSize;
+            }
+          }
+
+          console.log(`✅ ${allInvoices.length} facture(s) récupérée(s) (toutes périodes)`);
+
+          const paid = allInvoices.filter(inv =>
+            inv.status.toLowerCase().includes('paid') || inv.status.toLowerCase().includes('payé')
+          );
+          const unpaid = allInvoices.filter(inv =>
+            !inv.status.toLowerCase().includes('paid') && !inv.status.toLowerCase().includes('payé')
+          );
+
+          result = {
+            period: 'Toutes périodes',
+            total_invoices: allInvoices.length,
+            paid_count: paid.length,
+            paid_amount: paid.reduce((sum, inv) => sum + inv.total_amount, 0),
+            unpaid_count: unpaid.length,
+            unpaid_amount: unpaid.reduce((sum, inv) => sum + inv.total_amount, 0),
+            total_amount: allInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
+            paid_invoices: paid.map(inv => ({
+              supplier: inv.supplier_name,
+              amount: inv.total_amount,
+              invoice_number: inv.invoice_number,
+              date: inv.invoice_date,
+            })),
+            unpaid_invoices: unpaid.map(inv => ({
+              supplier: inv.supplier_name,
+              amount: inv.total_amount,
+              invoice_number: inv.invoice_number,
+              date: inv.invoice_date,
+            })),
+            currency: 'EUR',
+          };
+          break;
+        }
+
         case 'get_monthly_invoices': {
           const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
           const now = new Date();
@@ -3786,18 +4084,18 @@ Vérifiez:
 
           const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
 
-          // Construire les dates de début et fin du mois pour le filtre API
+          // Construire les dates de début et fin du mois
           const startDate = new Date(targetYear, targetMonth, 1);
           const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59); // Dernier jour du mois
 
-          const startDateStr = startDate.toISOString().split('T')[0];
-          const endDateStr = endDate.toISOString().split('T')[0];
-
-          // Utiliser le filtre par OrderDate pour récupérer TOUTES les factures du mois
-          const monthInvoices = await this.billitClient.getInvoices({
-            limit: 120,
-            order_date_from: startDateStr,
-            order_date_to: endDateStr
+          // Récupérer toutes les factures et filtrer par invoice_date (pas order_date)
+          // Car order_date peut être différent de invoice_date
+          const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+          
+          const monthInvoices = allInvoices.filter(inv => {
+            const invDate = new Date(inv.invoice_date);
+            return invDate.getFullYear() === targetYear && 
+                   invDate.getMonth() === targetMonth;
           });
 
           const paid = monthInvoices.filter(inv =>
@@ -3817,12 +4115,17 @@ Vérifiez:
             unpaid_count: unpaid.length,
             unpaid_amount: unpaid.reduce((sum, inv) => sum + inv.total_amount, 0),
             total_amount: monthInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
-            all_invoices: monthInvoices.slice(0, 20).map(inv => ({
+            paid_invoices: paid.map(inv => ({
               supplier: inv.supplier_name,
               amount: inv.total_amount,
               invoice_number: inv.invoice_number,
               date: inv.invoice_date,
-              status: inv.status,
+            })),
+            unpaid_invoices: unpaid.map(inv => ({
+              supplier: inv.supplier_name,
+              amount: inv.total_amount,
+              invoice_number: inv.invoice_number,
+              date: inv.invoice_date,
             })),
             currency: 'EUR',
           };
@@ -4795,6 +5098,11 @@ Vérifiez:
    */
   async processQuestion(question: string, chatId?: string): Promise<string> {
     try {
+      // 🔧 FIX: Valider que la question n'est pas vide
+      if (!question || question.trim() === '') {
+        throw new Error('La question ne peut pas être vide');
+      }
+
       // Stocker le chatId pour envoyer les PDFs
       if (chatId) {
         this.chatId = chatId;
@@ -4816,14 +5124,14 @@ Vérifiez:
       }
 
       // NIVEAU 2: Vérifier le cache sémantique
-      const cachedResponse = await this.semanticCache.get(question, userId);
-      if (cachedResponse) {
-        // Sauvegarder dans l'historique même si c'est du cache
-        this.conversationManager.addUserMessage(userId, question);
-        this.conversationManager.addAssistantMessage(userId, cachedResponse);
-
-        return cachedResponse.replace(/\*\*/g, '');
-      }
+      // ⚠️ DÉSACTIVÉ : Le cache sémantique cause trop de faux positifs
+      // (questions similaires retournent des réponses inadaptées, contexte ignoré)
+      // const cachedResponse = await this.semanticCache.get(question, userId);
+      // if (cachedResponse) {
+      //   this.conversationManager.addUserMessage(userId, question);
+      //   this.conversationManager.addAssistantMessage(userId, cachedResponse);
+      //   return cachedResponse.replace(/\*\*/g, '');
+      // }
 
       // Stocker la question actuelle pour la détection automatique de "liste"
       this.currentQuestion = question;
@@ -4835,6 +5143,22 @@ Vérifiez:
 
       // 🔍 DÉTECTION SIMPLIFIÉE: Ajouter des hints pour guider l'IA
       const questionLower = question.toLowerCase();
+
+      // 🔍 DÉTECTION CRITIQUE: "toutes les factures" SANS mention de période
+      const allInvoicesPattern = /(?:toutes?\s+les?\s+factures?|liste\s+(?:complète|toutes?\s+les?\s+)?factures?)/i;
+      const hasPeriodMention = /(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|mois|année|trimestre|semaine)/i;
+      
+      if (allInvoicesPattern.test(question) && !hasPeriodMention.test(question)) {
+        console.log('🔍 Détection: Toutes les factures sans période - ajout hint pour get_all_invoices');
+        question = `[HINT: CRITIQUE - L'utilisateur demande TOUTES les factures SANS spécifier de période. Tu DOIS utiliser get_all_invoices (PAS get_monthly_invoices qui limite au mois courant). Retourne TOUTES les factures de toutes les périodes.] ${question}`;
+      }
+
+      // 🔍 DÉTECTION CRITIQUE: "factures du mois de X" (avec ou sans payées/impayées)
+      const invoicesByPeriodPattern = /factures?\s+(?:(?:payées?|impayées?)\s+)?(?:du|de|d')\s*(?:mois\s+de\s+)?(\w+)/i;
+      if (invoicesByPeriodPattern.test(question) && hasPeriodMention.test(question)) {
+        console.log('🔍 Détection: Factures d\'un mois spécifique - ajout hint pour get_invoices_by_month');
+        question = `[HINT: CRITIQUE - L'utilisateur demande les factures d'un MOIS SPÉCIFIQUE (payées, impayées, ou les deux). Tu DOIS utiliser get_invoices_by_month avec le mois demandé (PAS get_recent_invoices, PAS get_unpaid_invoices). L'outil get_invoices_by_month retourne les factures payées ET impayées du mois demandé.] ${question}`;
+      }
 
       // Détection de comparaison entre employés
       const isComparisonQuery =
@@ -5006,17 +5330,11 @@ Cela affichera tous les fournisseurs de cette catégorie (Foster, Colruyt, Sligr
       }
 
       // ========== DÉTECTION POUR "FACTURES [FOURNISSEUR]" ==========
-      // Détection de "factures Uber", "donne-moi les factures de Coca-Cola", etc.
-      // MAIS PAS "analyse" ou "dépenses" (pour éviter conflit avec analyze_supplier_expenses)
-      const simpleInvoicesPattern = /factures?\s+(?:de\s+)?(?:[a-zàâäéèêëïîôùûüç\s-]+)|(?:donne|montre|liste|voir)?\s*(?:moi|les?\s*)?factures?\s+(?:de\s+)?[a-zàâäéèêëïîôùûüç\s-]+/i;
-      const simpleInvoicesMatch = question.match(simpleInvoicesPattern);
-      const hasExplicitAnalysisWord = questionLower.includes('analyse') || questionLower.includes('dépense') ||
-                                      questionLower.includes('statistiques') || questionLower.includes('top') ||
-                                      questionLower.includes('évolution') || questionLower.includes('mensuel');
-      if (simpleInvoicesMatch && !hasExplicitAnalysisWord && !questionLower.includes('dernières') && !questionLower.includes('récentes') && !questionLower.includes('toutes') && !questionLower.includes('tous')) {
-        console.log(`🔍 Détection: Factures d'un fournisseur demandées - ajout d'un hint pour l'IA`);
-        question = `[HINT: CRITIQUE - L'utilisateur demande les FACTURES d'un fournisseur spécifique (pas une analyse avec statistiques). Tu DOIS utiliser get_recent_invoices avec supplier_name. NE PAS utiliser analyze_supplier_expenses (qui donne des statistiques). Retourner la liste des factures avec dates, montants et numéros.] ${question}`;
-      }
+      // ⚠️ SUPPRIMÉ: Les hints manuels sont remplacés par des règles claires dans le system prompt
+      // L'IA comprend maintenant automatiquement:
+      // - "factures Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola" }
+      // - "Est-ce que toutes les factures Uber ont été payées ?" → get_recent_invoices { supplier_name: "Uber" }
+      // Voir section "RÈGLES DE SÉLECTION D'OUTILS - FACTURES" dans le system prompt
 
       // ========== DÉTECTIONS POUR LES BALANCES MENSUELLES ==========
 
@@ -5127,15 +5445,81 @@ TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
 
 1. **UTILISE TES OUTILS SYSTÉMATIQUEMENT** - Pour CHAQUE question sur les factures, transactions, utilisateurs, fournisseurs, tu DOIS appeler l'outil correspondant. Aucune exception.
 2. **NE DIS JAMAIS "je n'ai pas accès"** - Tu as TOUTES les données via tes outils. Appelle-les.
+
+📋 **RÈGLES DE SÉLECTION D'OUTILS - FACTURES** :
+
+🎯 **1. FOURNISSEUR MENTIONNÉ dans la question** :
+   ⚠️ PRIORITÉ ABSOLUE: Dès qu'un nom de fournisseur est mentionné, utiliser get_recent_invoices avec supplier_name
+   → TOUJOURS utiliser get_recent_invoices avec supplier_name (même si "toutes", "impayées", etc.)
+   Exemples:
+   • "factures Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola" }
+   • "factures de Foster" → get_recent_invoices { supplier_name: "Foster" }
+   • "Est-ce que toutes les factures Uber ont été payées ?" → get_recent_invoices { supplier_name: "Uber" }
+   • "toutes les factures de Sligro" → get_recent_invoices { supplier_name: "Sligro" }
+   • "factures impayées de Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola" } puis filtrer impayées
+   • "factures du mois de janvier pour Sligro" → get_invoices_by_month + supplier_name: "Sligro"
+   
+🎯 **2. PÉRIODE SPÉCIFIQUE** (mois/année mentionné) :
+   → utiliser get_invoices_by_month
+   Exemples:
+   • "factures de janvier" → get_invoices_by_month { month: "janvier" }
+   • "factures payées de décembre" → get_invoices_by_month { month: "décembre" } puis filtrer payées dans ta réponse
+   
+🎯 **3. "TOUTES LES FACTURES" SANS période ni fournisseur** :
+   → utiliser get_all_invoices
+   ⚠️ ATTENTION: Si un fournisseur est mentionné, utiliser get_recent_invoices (voir règle 1)
+   Exemples:
+   • "liste-moi toutes les factures" → get_all_invoices {}
+   • "liste complète des factures" → get_all_invoices {}
+   • ❌ "toutes les factures de Sligro" → NE PAS utiliser get_all_invoices, utiliser get_recent_invoices { supplier_name: "Sligro" }
+   • ❌ "toutes les factures Uber" → NE PAS utiliser get_all_invoices, utiliser get_recent_invoices { supplier_name: "Uber" }
+   
+🎯 **4. IMPAYÉES spécifiquement demandées** :
+   → utiliser get_unpaid_invoices (sauf si fournisseur mentionné, voir règle 1)
+   Exemples:
+   • "factures impayées" (sans fournisseur) → get_unpaid_invoices {}
+   • "factures en retard" → get_overdue_invoices {}
+   • ❌ "factures impayées de Coca-Cola" → NE PAS utiliser get_unpaid_invoices, utiliser get_recent_invoices { supplier_name: "Coca-Cola" } puis filtrer les impayées
+   
+🎯 **5. ANALYSE/STATISTIQUES fournisseur** :
+   → utiliser analyze_supplier_expenses ou get_supplier_ranking
+   Exemples:
+   • "analyse dépenses Colruyt" → analyze_supplier_expenses
+   • "top 10 fournisseurs" → get_supplier_ranking
+
+⚠️ **ERREURS CRITIQUES À ÉVITER** :
+❌ NE JAMAIS utiliser get_all_invoices quand un fournisseur est mentionné dans la question
+   Exemple INCORRECT: "toutes les factures de Sligro" → get_all_invoices {} ❌ MAUVAIS
+   Exemple CORRECT: "toutes les factures de Sligro" → get_recent_invoices { supplier_name: "Sligro" } ✅ BON
+
+❌ NE JAMAIS utiliser get_unpaid_invoices quand un fournisseur est mentionné
+   Exemple INCORRECT: "factures impayées de Coca-Cola" → get_unpaid_invoices {} ❌ MAUVAIS
+   Exemple CORRECT: "factures impayées de Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola" } ✅ BON
+
+❌ NE JAMAIS utiliser analyze_supplier_expenses quand l'utilisateur veut une LISTE de factures
+❌ NE JAMAIS ignorer le nom du fournisseur présent dans la question
+❌ NE JAMAIS confondre "liste des factures" (get_recent_invoices) et "analyse" (analyze_supplier_expenses)
+
+🎯 RÈGLE D'OR: Si tu vois un nom de fournisseur dans la question, utilise TOUJOURS get_recent_invoices avec supplier_name
 2b. **LISTE DES OUTILS** - Si on te demande "liste les outils", "quels outils as-tu", "liste les fonctions IA", réponds directement avec la liste de tes 25 outils disponibles (factures, paiements, recherche, gestion utilisateurs, etc.) SANS appeler de fonction
 3. **SYNTHÈSE** - Réponds en 2-4 phrases (sauf pour les listes explicites)
 3b. ⚠️ **LISTES COMPLÈTES - RÈGLE ABSOLUE** - Quand l'utilisateur demande "liste toutes", "liste toutes les factures", "toutes les factures", "liste complète":
    - Tu DOIS afficher CHAQUE élément de la liste, sans exception
    - Ne JAMAIS tronquer, résumer ou dire "il y a X factures" sans les lister
    - Si l'outil retourne 28 factures, affiche LES 28 factures avec tous les détails
-   - Format: Numéro, Fournisseur, Montant, Date pour CHAQUE facture
+   - FORMAT OBLIGATOIRE pour les factures: Chaque facture DOIT occuper 4 LIGNES avec retours à la ligne (pas de slash "/"):
+     * Ligne 1: "1. Fournisseur: NOM_COMPLET"
+     * Ligne 2: "   - Montant: XXX €"  
+     * Ligne 3: "   - Numéro de facture: XXX"
+     * Ligne 4: "   - Date: JJ mois AAAA"
+     * PUIS ligne vide avant la facture suivante
+   - Sépare les factures payées et impayées en deux sections (### Factures payées (X) puis ### Factures impayées (X))
    - Même si la réponse est très longue (>4000 caractères), continue jusqu'à la fin
    - La pagination Telegram se chargera de découper automatiquement
+3c. ⚠️ **FACTURES IMPAYÉES - TOUTES LES PÉRIODES** - Quand l'utilisateur demande les factures impayées (ou "toutes les factures" qui inclut impayées):
+   - Utilise get_unpaid_invoices qui retourne TOUTES les factures impayées (toutes périodes confondues)
+   - NE PAS utiliser get_monthly_invoices qui limite au mois courant
+   - Les factures impayées peuvent être de n'importe quel mois (janvier, décembre, etc.)
 4. **FORMAT NATUREL** - Parle comme un humain
 5. **ÉMOJIS** - 2-3 max pour la clarté
 6. **COHÉRENCE** - Même montant = même réponse
@@ -5358,7 +5742,10 @@ INTERDICTIONS:
 
           for (const toolCall of message.tool_calls) {
             const functionName = toolCall.function.name;
-            const functionArgs = JSON.parse(toolCall.function.arguments);
+            let functionArgs = JSON.parse(toolCall.function.arguments);
+
+            // 🔧 CORRECTION AUTO: Normaliser les arguments pour forcer period_text
+            functionArgs = this.normalizeToolArguments(functionName, functionArgs, question);
 
             // Tracker le tool call et les arguments
             toolCallsUsed.push(functionName);
@@ -5440,15 +5827,16 @@ INTERDICTIONS:
             });
 
             // NIVEAU 2: Mettre en cache la réponse
-            this.semanticCache.set(
-              this.currentQuestion,
-              directResponse,
-              userId,
-              {
-                responseTime,
-                toolsUsed: toolCallsUsed
-              }
-            );
+            // ⚠️ DÉSACTIVÉ : Cache sémantique désactivé (faux positifs)
+            // this.semanticCache.set(
+            //   this.currentQuestion,
+            //   directResponse,
+            //   userId,
+            //   {
+            //     responseTime,
+            //     toolsUsed: toolCallsUsed
+            //   }
+            // );
 
             // Supprimer tous les ** du texte
             return directResponse.replace(/\*\*/g, '');
@@ -5498,15 +5886,16 @@ INTERDICTIONS:
           });
 
           // NIVEAU 2: Mettre en cache la réponse
-          this.semanticCache.set(
-            this.currentQuestion,
-            message.content,
-            userId,
-            {
-              responseTime,
-              toolsUsed: [] // TODO: tracker les outils utilisés
-            }
-          );
+          // ⚠️ DÉSACTIVÉ : Cache sémantique désactivé (faux positifs)
+          // this.semanticCache.set(
+          //   this.currentQuestion,
+          //   message.content,
+          //   userId,
+          //   {
+          //     responseTime,
+          //     toolsUsed: []
+          //   }
+          // );
 
           // Supprimer tous les ** du texte
           return message.content.replace(/\*\*/g, '');

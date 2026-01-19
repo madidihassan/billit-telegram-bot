@@ -12,7 +12,7 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_supplier_payments',
-      description: '⚠️⚠️⚠️ APPEL OBLIGATOIRE: UTILISE CETTE FONCTION pour TOUTE question sur les paiements/montants/dépenses vers un fournisseur spécifique. Mots-clés DÉCLENCHEURS: "Combien (j\'ai) payé à X", "Montant total payé à X", "Paiements à X", "Dépenses chez X", "Combien (j\'ai) versé à X", "Factures X", "Combien dois-je à X". Exemples: "Combien payé à Foster?", "Montant total à KBC?", "Paiements à Coca-Cola?", "Combien jai payé à Edenred?", "Factures Sligro?". ⚠️ IMPORTANT: NE PAS UTILISER pour les SALAIRES. Si la question contient le mot "salaire" ou "salaire" + nom de personne, utiliser get_employee_salaries à la place. ⚠️ Si lutilisateur demande des versements REÇUS dun fournisseur (ex: "Versements de Takeaway", "Combien Takeaway ma versé?", "Versements faits PAR Pluxee"), utilise get_supplier_received_payments à la place.',
+      description: '⚠️⚠️⚠️ APPEL OBLIGATOIRE: UTILISE CETTE FONCTION pour les paiements/montants/dépenses vers un FOURNISSEUR SPÉCIFIQUE uniquement. ⚠️ NE PAS utiliser pour les dépenses globales ou les périodes (utiliser analyze_supplier_expenses à la place).\n\n🎯 QUAND UTILISER: Un fournisseur SPÉCIFIQUE est mentionné dans la question.\nMots-clés DÉCLENCHEURS: "Combien (j\'ai) payé à X", "Montant total payé à X", "Paiements à X", "Dépenses chez X", "Combien (j\'ai) versé à X", "Factures X", "Combien dois-je à X".\n\nExemples: "Combien payé à Foster?", "Montant total à KBC?", "Paiements à Coca-Cola?", "Combien jai payé à Edenred?", "Factures Sligro?", "Dépenses chez Verisur?"\n\n⚠️ IMPORTANT: NE PAS UTILISER pour les SALAIRES. Si la question contient le mot "salaire" ou "salaire" + nom de personne, utiliser get_employee_salaries à la place.\n⚠️ Si lutilisateur demande des versements REÇUS dun fournisseur (ex: "Versements de Takeaway", "Combien Takeaway ma versé?", "Versements faits PAR Pluxee"), utilise get_supplier_received_payments à la place.\n⚠️ Si PAS de fournisseur spécifique mentionné (ex: "Dépenses de novembre", "Top 10 fournisseurs"), utilise analyze_supplier_expenses à la place.',
       parameters: {
         type: 'object',
         properties: {
@@ -20,13 +20,17 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
             type: 'string',
             description: 'Nom du fournisseur (Foster, Coca-Cola, Edenred...)',
           },
+          period_text: {
+            type: 'string',
+            description: '⚠️⚠️⚠️ PRIORITAIRE pour toutes les périodes: "année 2025", "année 2024", etc. TOUJOURS utiliser period_text pour les années complètes. NE PAS utiliser year ⚠️⚠️⚠️',
+          },
           month: {
             type: 'string',
             description: 'Mois en français (novembre, décembre) ou numéro (11, 12).',
           },
           year: {
             type: 'string',
-            description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
+            description: '⚠️ DÉPRÉCIÉ - Utiliser period_text à la place. Ex: "année 2025" → period_text: "année 2025". Ne plus utiliser year seul.',
           },
         },
         required: ['supplier_name'],
@@ -45,13 +49,17 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
             type: 'string',
             description: 'Nom du fournisseur ou partenaire (Takeaway, Uber, Deliveroo...)',
           },
+          period_text: {
+            type: 'string',
+            description: '⚠️⚠️⚠️ PRIORITAIRE pour toutes les périodes: "année 2025", "année 2024", etc. TOUJOURS utiliser period_text pour les années complètes. NE PAS utiliser year ⚠️⚠️⚠️',
+          },
           month: {
             type: 'string',
             description: 'Mois en français (novembre, décembre) ou numéro (11, 12).',
           },
           year: {
             type: 'string',
-            description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
+            description: '⚠️ DÉPRÉCIÉ - Utiliser period_text à la place. Ex: "année 2025" → period_text: "année 2025". Ne plus utiliser year seul.',
           },
         },
         required: ['supplier_name'],
@@ -109,13 +117,17 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'analyze_supplier_expenses',
-      description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur ET lister les factures.\n\n🎯 UTILISE CET OUTIL POUR:\n- "Liste des factures de X" → {supplier_name: "X", include_details: true}\n- "Toutes les factures de X sur l\'année" → {supplier_name: "X", include_details: true}\n- "Factures de X en novembre" → {supplier_name: "X", month: "novembre", include_details: true}\n- "Dépenses chez X" → {supplier_name: "X"}\n- "Factures de X et Y" → {supplier_name: "X et Y"} (PLUSIEURS FOURNISSEURS en un seul appel !)\n- "Factures de nourriture/alimentation" → {category: "alimentation", include_details: true}\n- "Dépenses alimentaires" → {category: "alimentation"}\n- "Factures utilities/énergie" → {category: "utilities"}\n\n⚠️ IMPORTANT: Si la question mentionne PLUSIEURS fournisseurs (ex: "Uber et Takeaway", "Colruyt et Sligro"), utiliser UN SEUL APPEL avec supplier_name contenant tous les fournisseurs séparés par " et ". Ex: {supplier_name: "Uber et Takeaway"} ou {supplier_name: "Colruyt et Sligro"}. NE PAS utiliser compare_supplier_expenses.\n\n⚠️⚠️ CATÉGORIES: Si la question demande "nourriture", "alimentation", "énergie", "utilities", "télécom", etc. → utiliser category au lieu de supplier_name!\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro", "Foster") → SPECIFIER supplier_name\n2. Si CATÉGORIE mentionnée (ex: "nourriture", "alimentation", "énergie", "utilities", "télécom") → SPECIFIER category\n3. Si PLUSIEURS fournisseurs → utiliser supplier_name: "X et Y" (un seul appel)\n4. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n5. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n6. Si PÉRIODE ANNUELLE (ex: "année 2025", "sur l\'année", "de l\'année") → NE PAS spécifier month\n7. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n8. ⚠️ Si utilisateur demande "LA LISTE", "FACTURES", "TOUTES" explicitement → METTRE include_details: true\n9. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Liste des factures de Foster" → {supplier_name: "Foster", include_details: true}\n- "Toutes les factures de l\'année de Foster" → {supplier_name: "Foster", include_details: true}\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Factures Uber et Takeaway" → {supplier_name: "Uber et Takeaway"}\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {}\n- "Dépenses de novembre" → {month: "novembre"}\n- "Factures de nourriture" → {category: "alimentation", include_details: true}\n- "Dépenses alimentaires" → {category: "alimentation"}\n- "Factures utilities/énergie" → {category: "utilities"}',
+      description: '⚠️ APPEL OBLIGATOIRE pour analyser les dépenses par fournisseur ET lister les factures.\n\n🎯 UTILISE CET OUTIL POUR:\n- "Dépenses globales/périodes" (SANS fournisseur spécifique): "Dépenses de novembre", "Top 10 fournisseurs", "Dépenses entre octobre et décembre"\n- "Liste des factures de X" → {supplier_name: "X", include_details: true}\n- "Toutes les factures de X sur l\'année" → {supplier_name: "X", period_text: "année 2025", include_details: true}\n- "Factures de X en novembre" → {supplier_name: "X", month: "novembre", include_details: true}\n- "Dépenses chez X" → {supplier_name: "X"}\n- "Factures de X et Y" → {supplier_name: "X et Y"} (PLUSIEURS FOURNISSEURS en un seul appel !)\n- "Factures de nourriture/alimentation" → {category: "alimentation", include_details: true}\n- "Dépenses alimentaires" → {category: "alimentation"}\n- "Factures utilities/énergie" → {category: "utilities"}\n\n⚠️ IMPORTANT: Si la question mentionne PLUSIEURS fournisseurs (ex: "Uber et Takeaway", "Colruyt et Sligro"), utiliser UN SEUL APPEL avec supplier_name contenant tous les fournisseurs séparés par " et ". Ex: {supplier_name: "Uber et Takeaway"} ou {supplier_name: "Colruyt et Sligro"}. NE PAS utiliser compare_supplier_expenses.\n\n⚠️⚠️ CATÉGORIES: Si la question demande "nourriture", "alimentation", "énergie", "utilities", "télécom", etc. → utiliser category au lieu de supplier_name!\n\n⚠️⚠️⚠️ QUAND FOURNISSEUR SPÉCIFIQUE + MONTANT: Si la question est "Combien payé à X?", utilise get_supplier_payments à la place ⚠️⚠️⚠️\n\nRÈGLES:\n1. Si FOURNISSEUR SPÉCIFIQUE mentionné (ex: "Colruyt", "Sligro", "Foster") → SPECIFIER supplier_name\n2. Si CATÉGORIE mentionnée (ex: "nourriture", "alimentation", "énergie", "utilities", "télécom") → SPECIFIER category\n3. Si PLUSIEURS fournisseurs → utiliser supplier_name: "X et Y" (un seul appel)\n4. Si "top X fournisseurs" (ex: "top 10 fournisseurs") → NE PAS spécifier supplier_name (l\'outil affichera automatiquement le top X)\n5. Si "tous les fournisseurs" (sans précision) → NE PAS spécifier supplier_name\n6. Si "Dépenses de [période]" SANS fournisseur → NE PAS spécifier supplier_name\n7. ⚠️⚠️⚠️ POUR LES PÉRIODES: TOUJOURS utiliser period_text pour "année 2025", "année 2024", etc. NE PAS utiliser year ⚠️⚠️⚠️\n8. ⚠️⚠️⚠️ Si MOIS MENTIONNÉ (ex: "novembre", "décembre", "du mois de novembre") → OBLIGATOIRE de spécifier month ⚠️⚠️⚠️\n9. ⚠️ Si utilisateur demande "LA LISTE", "FACTURES", "TOUTES" explicitement → METTRE include_details: true\n10. ⚠️ Si "entre X et Y" (période multi-mois) → UTILISER start_month et end_month ⚠️\n\n⚠️⚠️⚠️ CRITIQUE: La réponse contient un champ "direct_response" avec le formatage PARFAIT pour Telegram. TU DOIS renvoyer EXACTEMENT "direct_response" tel quel, sans ajouter UN SEUL MOT, sans "Voici", sans introduction, sans compléter avec d\'autres fournisseurs. C\'est un COPY-PASTE pur et dur. NE JAMAIS inventer de fournisseurs supplémentaires.\n\nEXEMPLES:\n- "Dépenses entre octobre et décembre" → {start_month: "octobre", end_month: "décembre"} (PAS de supplier_name!)\n- "Dépenses de novembre" → {month: "novembre"}\n- "Liste des factures de Foster" → {supplier_name: "Foster", include_details: true}\n- "Toutes les factures de l\'année de Foster" → {supplier_name: "Foster", period_text: "année 2025", include_details: true}\n- "Dépenses chez Colruyt en novembre" → {supplier_name: "Colruyt", month: "novembre"}\n- "Top 10 fournisseurs par dépenses" → {} (le top X est détecté automatiquement depuis la question)\n- "Factures Uber et Takeaway" → {supplier_name: "Uber et Takeaway"}\n- "Analyse dépenses chez Sligro entre octobre et décembre" → {supplier_name: "Sligro", start_month: "octobre", end_month: "décembre"}\n- "Tous les fournisseurs de l\'année" → {period_text: "année 2025"}\n- "Factures de nourriture" → {category: "alimentation", include_details: true}\n- "Dépenses alimentaires" → {category: "alimentation"}\n- "Factures utilities/énergie" → {category: "utilities"}',
       parameters: {
         type: 'object',
         properties: {
           supplier_name: {
             type: 'string',
             description: '⚠️ Nom du fournisseur (ex: "Colruyt", "Sligro"). Si omis, affiche le classement de tous les fournisseurs.',
+          },
+          period_text: {
+            type: 'string',
+            description: '⚠️⚠️⚠️ PRIORITAIRE pour toutes les périodes: "année 2025", "année 2024", "octobre à décembre 2025", etc. TOUJOURS utiliser period_text pour les années complètes. NE PAS utiliser year ⚠️⚠️⚠️',
           },
           month: {
             type: 'string',
@@ -131,7 +143,7 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
           },
           year: {
             type: 'string',
-            description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
+            description: '⚠️ DÉPRÉCIÉ - Utiliser period_text à la place. Ex: "année 2025" → period_text: "année 2025". Ne plus utiliser year seul.',
           },
           include_details: {
             type: 'boolean',
@@ -160,13 +172,17 @@ export const supplierTools: Groq.Chat.Completions.ChatCompletionTool[] = [
             items: { type: 'string' },
             description: 'Liste des noms de fournisseurs à comparer (minimum 2, maximum 10). Exemples: ["Colruyt", "Sligro"], ["Makro", "Metro", "Transgourmet"]',
           },
+          period_text: {
+            type: 'string',
+            description: '⚠️⚠️⚠️ PRIORITAIRE pour toutes les périodes: "année 2025", "année 2024", etc. TOUJOURS utiliser period_text pour les années complètes. NE PAS utiliser year ⚠️⚠️⚠️',
+          },
           month: {
             type: 'string',
             description: 'Mois à analyser (optionnel). Si omis, analyse l\'année entière.',
           },
           year: {
             type: 'string',
-            description: '⚠️ OBLIGATOIRE si l\'utilisateur spécifie une année dans sa question (ex: "décembre 2025" → year: "2025", "année 2024" → year: "2024"). Extrait TOUJOURS l\'année mentionnée par l\'utilisateur. Ne pas utiliser l\'année en cours par défaut si une année est spécifiée.',
+            description: '⚠️ DÉPRÉCIÉ - Utiliser period_text à la place. Ex: "année 2025" → period_text: "année 2025". Ne plus utiliser year seul.',
           },
         },
         required: ['supplier_names'],

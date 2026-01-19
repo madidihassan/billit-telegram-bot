@@ -170,6 +170,12 @@ export class TelegramBotInteractive {
         } else if (command === 'ai_tools') {
           this.waitingForInput = null;
           response = await this.getAIToolsList();
+        } else if (command === 'clear' || command === 'clear_history') {
+          this.waitingForInput = null;
+          // Vider l'historique de conversation pour l'utilisateur actuel
+          const userId = String(this.currentChatId);
+          this.aiAgentService['conversationManager'].clearHistory(userId);
+          response = '🗑️ <b>Historique vidé</b>\n\nVotre historique de conversation a été supprimé. Le bot n\'a plus de mémoire des questions précédentes.';
         } else if (command === 'search_prompt') {
           this.waitingForInput = 'search';
           response = '🔍 <b>Recherche</b>\n\nTapez votre terme de recherche (nom de fournisseur, numéro de facture, etc.)';
@@ -420,7 +426,8 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
           { text: '💰 Finances', callback_data: 'submenu_finances' }
         ],
         [
-          { text: '🔍 Rechercher', callback_data: 'search_prompt' }
+          { text: '🔍 Rechercher', callback_data: 'search_prompt' },
+          { text: '🗑️ Vider l\'historique', callback_data: 'clear_history' }
         ]
       ]
     };
