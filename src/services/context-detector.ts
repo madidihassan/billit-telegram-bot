@@ -260,6 +260,31 @@ export class ContextDetector {
     question: string,
     context: UserConversationContext
   ): ContextDetectionResult {
+    // 🔧 FIX BUG #22: Détecter "Et pour [X]?" ou "Et pour ?"
+    const etPourPattern = /^et\s+pour\s+([a-zàâäéèêëïîôùûüç\s-]*)\??$/i;
+    const etPourMatch = question.match(etPourPattern);
+    
+    if (etPourMatch) {
+      const newEntity = etPourMatch[1]?.trim();
+      const subject = this.getSubjectFromIntent(context.lastIntent);
+      
+      if (subject) {
+        // Si "Et pour Foster?" → "les factures pour Foster"
+        // Si "Et pour ?" → "les factures" (garder le sujet)
+        const enriched = newEntity 
+          ? `${subject} pour ${newEntity}`
+          : subject;
+
+        return {
+          hasReference: true,
+          referenceType: 'continuation',
+          enrichedQuestion: enriched,
+          replacements: { [question]: enriched },
+          confidence: 0.85
+        };
+      }
+    }
+
     const singleWordPatterns = [
       /^combien\s*\??$/i,      // "combien?"
       /^quand\s*\??$/i,        // "quand?"

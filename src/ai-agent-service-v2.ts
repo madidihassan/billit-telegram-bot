@@ -667,8 +667,47 @@ Réponse JSON:`;
             const limit = (args.limit as number) || 5;
             const supplierName = args.supplier_name as string | undefined;
 
-            // Récupérer toutes les factures (Max 120 pour l'API Billit)
-            const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+            // 🔧 FIX BUG #23: Pagination complète pour récupérer toutes les factures
+            let allInvoices: any[] = [];
+            let skip = 0;
+            const pageSize = 120; // Limite API Billit
+            
+            // Activer la pagination si :
+            // 1. limit > 120 (on demande beaucoup de factures)
+            // 2. limit >= 50 (seuil pour activer la pagination systématique)
+            const needPagination = limit >= 50;
+
+            if (needPagination) {
+              console.log(`🔄 Pagination complète activée (limit: ${limit})${supplierName ? ` avec filtrage par "${supplierName}"` : ''}`);
+              let hasMore = true;
+              // Si filtrage fournisseur : récupérer BEAUCOUP plus de factures pour avoir assez après filtrage
+              // Sinon : récupérer juste le nombre demandé
+              const maxPages = supplierName ? 20 : Math.ceil(limit / pageSize) + 1;
+              let pageCount = 0;
+              
+              while (hasMore && pageCount < maxPages) {
+                const page = await this.billitClient.getInvoices({ limit: pageSize, skip });
+                if (page.length === 0) break;
+                allInvoices.push(...page);
+                skip += pageSize;
+                hasMore = page.length === pageSize;
+                pageCount++;
+                
+                // Si filtrage fournisseur : continuer jusqu'à avoir assez de résultats
+                if (supplierName) {
+                  const { matchesSupplier: tempMatch } = await import('./supplier-aliases');
+                  const currentFiltered = allInvoices.filter(inv => tempMatch(inv.supplier_name, supplierName));
+                  if (currentFiltered.length >= limit) {
+                    console.log(`✅ Assez de factures pour "${supplierName}" après ${pageCount} pages`);
+                    break;
+                  }
+                }
+              }
+              console.log(`📊 ${allInvoices.length} factures récupérées via pagination (${pageCount} pages)`);
+            } else {
+              // Cas simple : limit < 50
+              allInvoices = await this.billitClient.getInvoices({ limit: pageSize });
+            }
 
             if (!allInvoices || allInvoices.length === 0) {
               result = {

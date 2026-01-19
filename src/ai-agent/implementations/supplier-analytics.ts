@@ -7,6 +7,7 @@
  */
 
 import { BankClient } from '../../bank-client';
+import { matchesSupplier } from '../../supplier-aliases';
 
 interface MonthlySupplierData {
   month: string;
@@ -67,9 +68,9 @@ export async function analyzeSupplierTrends(
       const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
       const transactions = await bankClient.getTransactionsByPeriod(startDate, endDate);
 
-      // Filtrer par fournisseur (fuzzy matching)
+      // Filtrer par fournisseur (fuzzy matching avec matchesSupplier)
       const supplierTransactions = transactions.filter(t =>
-        t.description.toLowerCase().includes(supplier_name.toLowerCase()) &&
+        matchesSupplier(t.description || '', supplier_name) &&
         t.amount < 0 // Débits uniquement
       );
 
@@ -178,20 +179,29 @@ export async function getSupplierRanking(
       });
     }
 
+    // 🔧 FIX BUG #24: Utiliser matchesSupplier pour identifier les fournisseurs
+    // Charger la liste des fournisseurs connus depuis la BDD
+    const { getAllSuppliers } = await import('../../database');
+    const knownSuppliers = getAllSuppliers().map(s => s.name);
+
     // Grouper par fournisseur (débits uniquement)
     const supplierMap = new Map<string, { total: number; count: number }>();
 
     transactions
       .filter(t => t.type === 'Debit')
       .forEach(t => {
-        // Extraire le nom du fournisseur de la description
-        const supplier = t.description.split(' ')[0].toUpperCase();
+        // Trouver le fournisseur correspondant dans la liste des fournisseurs connus
+        const matchedSupplier = knownSuppliers.find(supplier => 
+          matchesSupplier(t.description || '', supplier)
+        );
 
-        const existing = supplierMap.get(supplier) || { total: 0, count: 0 };
-        supplierMap.set(supplier, {
-          total: existing.total + Math.abs(t.amount),
-          count: existing.count + 1
-        });
+        if (matchedSupplier) {
+          const existing = supplierMap.get(matchedSupplier) || { total: 0, count: 0 };
+          supplierMap.set(matchedSupplier, {
+            total: existing.total + Math.abs(t.amount),
+            count: existing.count + 1
+          });
+        }
       });
 
     // Convertir en tableau et trier
@@ -219,8 +229,12 @@ export async function getSupplierRanking(
       prevTransactions
         .filter(t => t.type === 'Debit')
         .forEach(t => {
-          const supplier = t.description.split(' ')[0].toUpperCase();
-          prevSupplierMap.set(supplier, (prevSupplierMap.get(supplier) || 0) + Math.abs(t.amount));
+          const matchedSupplier = knownSuppliers.find(supplier => 
+            matchesSupplier(t.description || '', supplier)
+          );
+          if (matchedSupplier) {
+            prevSupplierMap.set(matchedSupplier, (prevSupplierMap.get(matchedSupplier) || 0) + Math.abs(t.amount));
+          }
         });
 
       ranking = ranking.map(item => {
@@ -300,7 +314,7 @@ export async function detectSupplierPatterns(
 
       transactions
         .filter(t =>
-          t.description.toLowerCase().includes(supplier_name.toLowerCase()) &&
+          matchesSupplier(t.description || '', supplier_name) &&
           t.amount < 0
         )
         .forEach(t => {
