@@ -2510,26 +2510,18 @@ Réponse JSON:`;
 
           // 🔍 Fonction pour analyser UN fournisseur spécifique
           const analyzeSingleSupplier = async (supplierName: string): Promise<any[]> => {
-            const searchTerm = supplierName.toLowerCase();
+            // 🔧 FIX BUG #18-19: Ne PAS utiliser matchesSupplier pour trouver les fournisseurs dans SUPPLIER_ALIASES
+            // car il est trop permissif (ex: "Colruyt" matche "Foster" via "food")
+            // À la place, filtrer directement les transactions par le nom exact du fournisseur (après AI matching)
+            
+            console.log(`🔍 Analyse fournisseur "${supplierName}"...`);
 
-            // Recherche floue de fournisseur
-            let matchingSuppliers = suppliers.filter((sup: any) =>
-              sup.toLowerCase().includes(searchTerm) ||
-              matchesSupplier(sup, searchTerm)
+            // Filtrer les transactions qui correspondent au fournisseur spécifique
+            let supplierTransactions = transactions.filter(tx =>
+              matchesSupplier(tx.description || '', supplierName)
             );
 
-            console.log(`🔍 Recherche fournisseur "${searchTerm}": ${matchingSuppliers.length} fournisseur(s) trouvé(s)`);
-
-            let supplierTransactions: any[];
-            if (matchingSuppliers.length > 0) {
-              supplierTransactions = transactions.filter(tx => {
-                return matchingSuppliers.some((sup: string) => matchesSupplier(tx.description || '', sup));
-              });
-            } else {
-              supplierTransactions = transactions.filter(tx =>
-                matchesSupplier(tx.description || '', supplierName)
-              );
-            }
+            console.log(`📊 ${supplierTransactions.length} transaction(s) trouvée(s) pour "${supplierName}"`);
 
             // 🔄 NOUVEAU: Si pas de débits bancaires, chercher dans les factures Billit
             const debits = supplierTransactions.filter((tx: any) => tx.type === 'Debit');
@@ -3491,11 +3483,14 @@ Vérifiez:
               if (page > 10) break; // Sécurité
             }
 
-            // Filtrer par montant
+            // Filtrer par montant ET par search_term (fournisseur) si fourni
+            const { matchesSupplier } = await import('./supplier-aliases');
             const filteredInvoices = invoices.filter(inv => {
               const amount = inv.total_amount;
               if (args.min_amount !== undefined && amount < args.min_amount) return false;
               if (args.max_amount !== undefined && amount > args.max_amount) return false;
+              // 🔧 FIX BUG #21: Filtrer aussi par fournisseur si search_term fourni
+              if (args.search_term && !matchesSupplier(inv.supplier_name, args.search_term)) return false;
               return true;
             });
 
@@ -5183,11 +5178,19 @@ Vérifiez:
         question = `[HINT: CRITIQUE - L'utilisateur demande TOUTES les factures SANS spécifier de période. Tu DOIS utiliser get_all_invoices (PAS get_monthly_invoices qui limite au mois courant). Retourne TOUTES les factures de toutes les périodes.] ${question}`;
       }
 
-      // 🔍 DÉTECTION CRITIQUE: "factures du mois de X" (avec ou sans payées/impayées)
-      const invoicesByPeriodPattern = /factures?\s+(?:(?:payées?|impayées?)\s+)?(?:du|de|d')\s*(?:mois\s+de\s+)?(\w+)/i;
-      if (invoicesByPeriodPattern.test(question) && hasPeriodMention.test(question)) {
-        console.log('🔍 Détection: Factures d\'un mois spécifique - ajout hint pour get_invoices_by_month');
-        question = `[HINT: CRITIQUE - L'utilisateur demande les factures d'un MOIS SPÉCIFIQUE (payées, impayées, ou les deux). Tu DOIS utiliser get_invoices_by_month avec le mois demandé (PAS get_recent_invoices, PAS get_unpaid_invoices). L'outil get_invoices_by_month retourne les factures payées ET impayées du mois demandé.] ${question}`;
+      // 🔍 DÉTECTION CRITIQUE: "factures [statut] [fournisseur] [période]"
+      // Ex: "factures impayées de Ciers de décembre"
+      const invoicesSupplierPeriodPattern = /factures?\s+(?:payées?|impayées?)\s+(?:de|d'|du|chez)\s+[a-zàâäéèêëïîôùûüç\s-]+\s+(?:de|du|d')\s*(?:mois\s+de\s+)?(\w+)/i;
+      if (invoicesSupplierPeriodPattern.test(question)) {
+        console.log('🔍 Détection: Factures [statut] [fournisseur] [période] - ajout hint pour get_invoices_by_month');
+        question = `[HINT: CRITIQUE - L'utilisateur demande une LISTE de factures (pas une analyse) d'un fournisseur spécifique pour un mois donné. Tu DOIS utiliser get_invoices_by_month avec le mois et filtrer par supplier_name. NE PAS utiliser analyze_supplier_expenses qui est pour les ANALYSES globales.] ${question}`;
+      } else {
+        // Fallback: "factures du mois de X" (sans fournisseur spécifique)
+        const invoicesByPeriodPattern = /factures?\s+(?:(?:payées?|impayées?)\s+)?(?:du|de|d')\s*(?:mois\s+de\s+)?(\w+)/i;
+        if (invoicesByPeriodPattern.test(question) && hasPeriodMention.test(question)) {
+          console.log('🔍 Détection: Factures d\'un mois spécifique - ajout hint pour get_invoices_by_month');
+          question = `[HINT: CRITIQUE - L'utilisateur demande les factures d'un MOIS SPÉCIFIQUE (payées, impayées, ou les deux). Tu DOIS utiliser get_invoices_by_month avec le mois demandé (PAS get_recent_invoices, PAS get_unpaid_invoices). L'outil get_invoices_by_month retourne les factures payées ET impayées du mois demandé.] ${question}`;
+        }
       }
 
       // Détection de comparaison entre employés
@@ -5481,12 +5484,14 @@ TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
 🎯 **1. FOURNISSEUR MENTIONNÉ dans la question** :
    ⚠️ PRIORITÉ ABSOLUE: Dès qu'un nom de fournisseur est mentionné, utiliser get_recent_invoices avec supplier_name
    → TOUJOURS utiliser get_recent_invoices avec supplier_name (même si "toutes", "impayées", etc.)
+   → Si "toutes" est mentionné, utiliser limit: 100 (sinon limit: 5 par défaut)
    Exemples:
-   • "factures Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola" }
-   • "factures de Foster" → get_recent_invoices { supplier_name: "Foster" }
-   • "Est-ce que toutes les factures Uber ont été payées ?" → get_recent_invoices { supplier_name: "Uber" }
-   • "toutes les factures de Sligro" → get_recent_invoices { supplier_name: "Sligro" }
-   • "factures impayées de Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola" } puis filtrer impayées
+   • "factures Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola", limit: 5 }
+   • "factures de Foster" → get_recent_invoices { supplier_name: "Foster", limit: 5 }
+   • "toutes les factures de Foster" → get_recent_invoices { supplier_name: "Foster", limit: 100 } ⚠️ IMPORTANT
+   • "Est-ce que toutes les factures Uber ont été payées ?" → get_recent_invoices { supplier_name: "Uber", limit: 100 }
+   • "toutes les factures de Sligro" → get_recent_invoices { supplier_name: "Sligro", limit: 100 }
+   • "factures impayées de Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola", limit: 100 } puis filtrer impayées
    • "factures du mois de janvier pour Sligro" → get_invoices_by_month + supplier_name: "Sligro"
    
 🎯 **2. PÉRIODE SPÉCIFIQUE** (mois/année mentionné) :
@@ -5513,9 +5518,11 @@ TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
    
 🎯 **5. ANALYSE/STATISTIQUES fournisseur** :
    → utiliser analyze_supplier_expenses ou get_supplier_ranking
+   ⚠️ NE PAS utiliser analyze_supplier_expenses pour lister des factures spécifiques
    Exemples:
    • "analyse dépenses Colruyt" → analyze_supplier_expenses
    • "top 10 fournisseurs" → get_supplier_ranking
+   • ❌ "factures impayées Ciers décembre" → NE PAS utiliser analyze_supplier_expenses, utiliser get_invoices_by_month
 
 ⚠️ **ERREURS CRITIQUES À ÉVITER** :
 ❌ NE JAMAIS utiliser get_all_invoices quand un fournisseur est mentionné dans la question

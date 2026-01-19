@@ -146,7 +146,9 @@ export function matchesSupplier(description: string, supplierName: string): bool
   const normalizedSupplier = normalizeSearchTerm(supplierName);
 
   // 1. Essayer les patterns prédéfinis d'abord (plus rapides)
-  const patterns = getSupplierPatterns(supplierName);
+  // 🔧 FIX BUG #18-19: Filtrer les patterns trop courts (< 6 caractères)
+  // pour éviter les faux positifs comme "food" qui matche "fosterfastfood"
+  const patterns = getSupplierPatterns(supplierName).filter(p => p.length >= 6);
   if (patterns.some(pattern => normalizedDesc.includes(pattern))) {
     return true;
   }
