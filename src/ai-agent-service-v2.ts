@@ -584,7 +584,22 @@ Réponse JSON:`;
         }
 
         case 'get_paid_invoices': {
-          const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+          // 🔧 FIX: Pagination complète
+          console.log('🔄 Récupération de TOUTES les factures (pagination)...');
+          let allInvoices: any[] = [];
+          let skip = 0;
+          const pageSize = 120;
+          
+          while (true) {
+            const batch = await this.billitClient.getInvoices({ 
+              limit: pageSize,
+              skip: skip
+            });
+            allInvoices = allInvoices.concat(batch);
+            if (batch.length < pageSize) break;
+            skip += pageSize;
+          }
+          console.log(`✓ ${allInvoices.length} facture(s) récupérées`);
           const invoices = allInvoices.filter(inv =>
             inv.status.toLowerCase().includes('paid') || inv.status.toLowerCase().includes('payé')
           );
@@ -604,8 +619,22 @@ Réponse JSON:`;
 
         case 'get_latest_invoice': {
           try {
-            // Récupérer toutes les factures et trier par date pour obtenir la plus récente
-            const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+            // 🔧 FIX: Pagination complète
+            console.log('🔄 Récupération de TOUTES les factures (pagination)...');
+            let allInvoices: any[] = [];
+            let skip = 0;
+            const pageSize = 120;
+            
+            while (true) {
+              const batch = await this.billitClient.getInvoices({ 
+                limit: pageSize,
+                skip: skip
+              });
+              allInvoices = allInvoices.concat(batch);
+              if (batch.length < pageSize) break;
+              skip += pageSize;
+            }
+            console.log(`✓ ${allInvoices.length} facture(s) récupérées`);
 
             if (!allInvoices || allInvoices.length === 0) {
               result = {
@@ -3149,24 +3178,28 @@ Vérifiez:
           console.log('🔧 Exécution: analyze_supplier_trends', args);
           // 🤖 Matching IA du fournisseur
           const matchedSupplier = await this.matchSupplierWithAI(args.supplier_name);
-          result = await analyzeSupplierTrends(
+          const trendsResult = await analyzeSupplierTrends(
             this.bankClient,
             matchedSupplier,
             args.period_months || 6,
             args.year
           );
+          // 🔧 FIX BUG #25: Parser le JSON si c'est une string
+          result = typeof trendsResult === 'string' ? JSON.parse(trendsResult) : trendsResult;
           break;
         }
 
         case 'get_supplier_ranking': {
           console.log('🔧 Exécution: get_supplier_ranking', args);
-          result = await getSupplierRanking(
+          const rankingResult = await getSupplierRanking(
             this.bankClient,
             args.limit || 10,
             args.month,
             args.year,
             args.show_evolution !== false
           );
+          // 🔧 FIX BUG #24: Parser le JSON si c'est une string
+          result = typeof rankingResult === 'string' ? JSON.parse(rankingResult) : rankingResult;
           break;
         }
 
@@ -3174,88 +3207,97 @@ Vérifiez:
           console.log('🔧 Exécution: detect_supplier_patterns', args);
           // 🤖 Matching IA du fournisseur
           const matchedSupplier = await this.matchSupplierWithAI(args.supplier_name);
-          result = await detectSupplierPatterns(
+          const patternsResult = await detectSupplierPatterns(
             this.bankClient,
             matchedSupplier,
             args.period_months || 6
           );
+          // Parser le JSON si c'est une string
+          result = typeof patternsResult === 'string' ? JSON.parse(patternsResult) : patternsResult;
           break;
         }
 
         case 'get_year_summary': {
           console.log('🔧 Exécution: get_year_summary', args);
-          result = await getYearSummary(
+          const yearSummary = await getYearSummary(
             this.bankClient,
             this.billitClient,
             args.year,
             args.include_comparison !== false
           );
+          result = typeof yearSummary === 'string' ? JSON.parse(yearSummary) : yearSummary;
           break;
         }
 
         case 'compare_periods': {
           console.log('🔧 Exécution: compare_periods', args);
-          result = await comparePeriods(
+          const periodsComp = await comparePeriods(
             this.bankClient,
             args.period1_start,
             args.period1_end,
             args.period2_start,
             args.period2_end
           );
+          result = typeof periodsComp === 'string' ? JSON.parse(periodsComp) : periodsComp;
           break;
         }
 
         case 'get_quarterly_report': {
           console.log('🔧 Exécution: get_quarterly_report', args);
-          result = await getQuarterlyReport(
+          const quarterly = await getQuarterlyReport(
             this.bankClient,
             this.billitClient,
             args.quarter,
             args.year,
             args.compare_previous !== false
           );
+          result = typeof quarterly === 'string' ? JSON.parse(quarterly) : quarterly;
           break;
         }
 
         case 'predict_next_month': {
           console.log('🔧 Exécution: predict_next_month', args);
-          result = await predictNextMonth(
+          const prediction = await predictNextMonth(
             this.bankClient,
             args.category,
             args.history_months
           );
+          result = typeof prediction === 'string' ? JSON.parse(prediction) : prediction;
           break;
         }
 
         case 'detect_anomalies': {
           console.log('🔧 Exécution: detect_anomalies', args);
-          result = await detectAnomalies(
+          const anomalies = await detectAnomalies(
             this.bankClient,
             args.period_days,
             args.threshold_percent
           );
+          result = typeof anomalies === 'string' ? JSON.parse(anomalies) : anomalies;
           break;
         }
 
         case 'analyze_trends': {
           console.log('🔧 Exécution: analyze_trends', args);
-          result = await analyzeTrends(
+          const trends = await analyzeTrends(
             this.bankClient,
             args.period_months,
             args.include_forecast
           );
+          result = typeof trends === 'string' ? JSON.parse(trends) : trends;
           break;
         }
 
         case 'export_to_csv': {
           console.log('🔧 Exécution: export_to_csv', args);
-          result = await exportToCSV(
+          const exportResult = await exportToCSV(
             this.bankClient,
             this.billitClient,
             args.data_type,
             args.start_date,
             args.end_date
           );
+          result = typeof exportResult === 'string' ? JSON.parse(exportResult) : exportResult;
           break;
         }
 
@@ -4088,8 +4130,113 @@ Vérifiez:
           break;
         }
 
+        case 'get_supplier_invoices': {
+          // 🔧 NOUVEAU: Récupérer les factures d'un fournisseur spécifique (avec filtrage mois/année optionnel)
+          console.log('🔧 Exécution: get_supplier_invoices', args);
+          
+          // 🤖 Matching IA du fournisseur
+          const matchedSupplier = await this.matchSupplierWithAI(args.supplier_name);
+          console.log(`🤖 Fournisseur matché: "${args.supplier_name}" → "${matchedSupplier}"`);
+          
+          // Pagination complète
+          console.log('🔄 Récupération de TOUTES les factures (pagination complète)...');
+          let allInvoices: any[] = [];
+          let skip = 0;
+          const pageSize = 120;
+          
+          while (true) {
+            const batch = await this.billitClient.getInvoices({ 
+              limit: pageSize,
+              skip: skip
+            });
+            allInvoices = allInvoices.concat(batch);
+            if (batch.length < pageSize) break;
+            skip += pageSize;
+          }
+          console.log(`✓ ${allInvoices.length} facture(s) récupérées`);
+          
+          // Filtrer par fournisseur (fuzzy matching avec matchesSupplier)
+          const { matchesSupplier } = await import('./supplier-aliases');
+          const supplierInvoices = allInvoices.filter(inv => 
+            matchesSupplier(inv.supplier_name || '', matchedSupplier)
+          );
+          
+          console.log(`✓ ${supplierInvoices.length} facture(s) pour "${matchedSupplier}"`);
+          
+          // Filtrer par mois/année si demandé
+          let filteredInvoices = supplierInvoices;
+          let periodLabel = 'Toutes périodes';
+          
+          if (args.month) {
+            const monthMap: { [key: string]: number } = {
+              'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
+              'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
+              'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
+            };
+            
+            const targetMonth = monthMap[args.month.toLowerCase()] ?? parseInt(args.month) - 1;
+            const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
+            
+            filteredInvoices = supplierInvoices.filter(inv => {
+              const invDate = new Date(inv.invoice_date);
+              return invDate.getFullYear() === targetYear && invDate.getMonth() === targetMonth;
+            });
+            
+            periodLabel = `${args.month} ${targetYear}`;
+            console.log(`✓ Filtrage période: ${supplierInvoices.length} → ${filteredInvoices.length} factures pour ${periodLabel}`);
+          }
+          
+          // Séparer payées / impayées
+          const paid = filteredInvoices.filter(inv =>
+            inv.status.toLowerCase().includes('paid') || inv.status.toLowerCase().includes('payé')
+          );
+          const unpaid = filteredInvoices.filter(inv =>
+            !inv.status.toLowerCase().includes('paid') && !inv.status.toLowerCase().includes('payé')
+          );
+          
+          result = {
+            supplier: matchedSupplier,
+            period: periodLabel,
+            total_invoices: filteredInvoices.length,
+            paid_count: paid.length,
+            paid_amount: paid.reduce((sum, inv) => sum + inv.total_amount, 0),
+            unpaid_count: unpaid.length,
+            unpaid_amount: unpaid.reduce((sum, inv) => sum + inv.total_amount, 0),
+            total_amount: filteredInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
+            paid_invoices: paid.map(inv => ({
+              supplier: inv.supplier_name,
+              amount: inv.total_amount,
+              invoice_number: inv.invoice_number,
+              date: inv.invoice_date,
+            })),
+            unpaid_invoices: unpaid.map(inv => ({
+              supplier: inv.supplier_name,
+              amount: inv.total_amount,
+              invoice_number: inv.invoice_number,
+              date: inv.invoice_date,
+            })),
+            currency: 'EUR',
+          };
+          break;
+        }
+
         case 'get_monthly_invoices': {
-          const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+          // 🔧 FIX: Pagination complète
+          console.log('🔄 Récupération de TOUTES les factures (pagination)...');
+          let allInvoices: any[] = [];
+          let skip = 0;
+          const pageSize = 120;
+          
+          while (true) {
+            const batch = await this.billitClient.getInvoices({ 
+              limit: pageSize,
+              skip: skip
+            });
+            allInvoices = allInvoices.concat(batch);
+            if (batch.length < pageSize) break;
+            skip += pageSize;
+          }
+          console.log(`✓ ${allInvoices.length} facture(s) récupérées`);
           const now = new Date();
           const monthInvoices = allInvoices.filter(inv => {
             const invDate = new Date(inv.invoice_date);
@@ -4152,15 +4299,35 @@ Vérifiez:
           const startDate = new Date(targetYear, targetMonth, 1);
           const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59); // Dernier jour du mois
 
-          // Récupérer toutes les factures et filtrer par invoice_date (pas order_date)
-          // Car order_date peut être différent de invoice_date
-          const allInvoices = await this.billitClient.getInvoices({ limit: 120 });
+          // 🔧 FIX BUG #26: Pagination complète pour récupérer toutes les factures
+          console.log('🔄 Récupération de TOUTES les factures (pagination complète)...');
+          
+          let allInvoices: any[] = [];
+          let skip = 0;
+          const pageSize = 120;
+          
+          while (true) {
+            const batch = await this.billitClient.getInvoices({ 
+              limit: pageSize,
+              skip: skip
+            });
+            
+            console.log(`  ↳ Page ${Math.floor(skip/pageSize) + 1}: ${batch.length} facture(s)`);
+            allInvoices = allInvoices.concat(batch);
+            
+            if (batch.length < pageSize) break;
+            skip += pageSize;
+          }
+          
+          console.log(`✓ ${allInvoices.length} facture(s) TOTALES récupérées via pagination`);
           
           const monthInvoices = allInvoices.filter(inv => {
             const invDate = new Date(inv.invoice_date);
             return invDate.getFullYear() === targetYear && 
                    invDate.getMonth() === targetMonth;
           });
+          
+          console.log(`✓ Filtrage mois: ${allInvoices.length} → ${monthInvoices.length} factures pour ${new Date(targetYear, targetMonth).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`);
 
           const paid = monthInvoices.filter(inv =>
             inv.status.toLowerCase().includes('paid') || inv.status.toLowerCase().includes('payé')
@@ -5217,18 +5384,42 @@ Vérifiez:
         question = `[HINT: CRITIQUE - L'utilisateur demande TOUTES les factures SANS spécifier de période. Tu DOIS utiliser get_all_invoices (PAS get_monthly_invoices qui limite au mois courant). Retourne TOUTES les factures de toutes les périodes.] ${question}`;
       }
 
+      // 🔍 DÉTECTION PRIORITAIRE: "factures de [fournisseur]" (avec ou sans période)
+      // Ex: "factures de Foster", "juste les factures de foster pour le mois de janvier"
+      const supplierInvoicesPattern = /(?:juste\s+)?(?:les\s+)?factures?\s+(?:de|d'|du|chez)\s+([a-zàâäéèêëïîôùûüç\s-]+?)(?:\s+(?:pour|en|du|de|d')\s+(?:le\s+)?(?:mois\s+(?:de|d')\s+)?(\w+))?(?:\s|$|\.|\?)/i;
+      const supplierMatch = supplierInvoicesPattern.exec(question);
+      
+      if (supplierMatch) {
+        const supplier = supplierMatch[1].trim();
+        const period = supplierMatch[2];
+        
+        // Vérifier que ce n'est pas un mot commun (pour éviter faux positifs)
+        const commonWords = ['toutes', 'tous', 'les', 'des', 'la', 'le', 'une', 'un'];
+        if (supplier.length >= 3 && !commonWords.includes(supplier.toLowerCase())) {
+          if (period) {
+            console.log(`🔍 Détection: Factures fournisseur + période ("${supplier}" + "${period}") - ajout hint pour get_supplier_invoices`);
+            question = `[HINT: CRITIQUE - L'utilisateur demande les factures d'un FOURNISSEUR SPÉCIFIQUE pour un MOIS. Tu DOIS utiliser get_supplier_invoices avec supplier_name="${supplier}" et month="${period}". Cet outil retourne TOUTES les factures du fournisseur (payées ET impayées) pour la période demandée.] ${question}`;
+          } else {
+            console.log(`🔍 Détection: Factures fournisseur ("${supplier}") - ajout hint pour get_supplier_invoices`);
+            question = `[HINT: CRITIQUE - L'utilisateur demande les factures d'un FOURNISSEUR SPÉCIFIQUE. Tu DOIS utiliser get_supplier_invoices avec supplier_name="${supplier}". Cet outil retourne TOUTES les factures du fournisseur (toutes périodes).] ${question}`;
+          }
+        }
+      }
+      
       // 🔍 DÉTECTION CRITIQUE: "factures [statut] [fournisseur] [période]"
       // Ex: "factures impayées de Ciers de décembre"
-      const invoicesSupplierPeriodPattern = /factures?\s+(?:payées?|impayées?)\s+(?:de|d'|du|chez)\s+[a-zàâäéèêëïîôùûüç\s-]+\s+(?:de|du|d')\s*(?:mois\s+de\s+)?(\w+)/i;
-      if (invoicesSupplierPeriodPattern.test(question)) {
-        console.log('🔍 Détection: Factures [statut] [fournisseur] [période] - ajout hint pour get_invoices_by_month');
-        question = `[HINT: CRITIQUE - L'utilisateur demande une LISTE de factures (pas une analyse) d'un fournisseur spécifique pour un mois donné. Tu DOIS utiliser get_invoices_by_month avec le mois et filtrer par supplier_name. NE PAS utiliser analyze_supplier_expenses qui est pour les ANALYSES globales.] ${question}`;
-      } else {
-        // Fallback: "factures du mois de X" (sans fournisseur spécifique)
-        const invoicesByPeriodPattern = /factures?\s+(?:(?:payées?|impayées?)\s+)?(?:du|de|d')\s*(?:mois\s+de\s+)?(\w+)/i;
-        if (invoicesByPeriodPattern.test(question) && hasPeriodMention.test(question)) {
-          console.log('🔍 Détection: Factures d\'un mois spécifique - ajout hint pour get_invoices_by_month');
-          question = `[HINT: CRITIQUE - L'utilisateur demande les factures d'un MOIS SPÉCIFIQUE (payées, impayées, ou les deux). Tu DOIS utiliser get_invoices_by_month avec le mois demandé (PAS get_recent_invoices, PAS get_unpaid_invoices). L'outil get_invoices_by_month retourne les factures payées ET impayées du mois demandé.] ${question}`;
+      else {
+        const invoicesSupplierPeriodPattern = /factures?\s+(?:payées?|impayées?)\s+(?:de|d'|du|chez)\s+[a-zàâäéèêëïîôùûüç\s-]+\s+(?:de|du|d')\s*(?:mois\s+de\s+)?(\w+)/i;
+        if (invoicesSupplierPeriodPattern.test(question)) {
+          console.log('🔍 Détection: Factures [statut] [fournisseur] [période] - ajout hint pour get_supplier_invoices');
+          question = `[HINT: CRITIQUE - L'utilisateur demande une LISTE de factures (pas une analyse) d'un fournisseur spécifique pour un mois donné. Tu DOIS utiliser get_supplier_invoices avec supplier_name et month. NE PAS utiliser analyze_supplier_expenses qui est pour les ANALYSES globales.] ${question}`;
+        } else {
+          // Fallback: "factures du mois de X" (sans fournisseur spécifique)
+          const invoicesByPeriodPattern = /factures?\s+(?:(?:payées?|impayées?)\s+)?(?:du|de|d')\s*(?:mois\s+de\s+)?(\w+)/i;
+          if (invoicesByPeriodPattern.test(question) && hasPeriodMention.test(question)) {
+            console.log('🔍 Détection: Factures d\'un mois spécifique - ajout hint pour get_invoices_by_month');
+            question = `[HINT: CRITIQUE - L'utilisateur demande les factures d'un MOIS SPÉCIFIQUE (payées, impayées, ou les deux). Tu DOIS utiliser get_invoices_by_month avec le mois demandé (PAS get_recent_invoices, PAS get_unpaid_invoices). L'outil get_invoices_by_month retourne les factures payées ET impayées du mois demandé.] ${question}`;
+          }
         }
       }
 
@@ -5259,10 +5450,20 @@ Vérifiez:
       const multipleSuppliersInQuestion = /(?:facture|dépense|analyse|donne|montre|voir|liste).*?(\w+(?:\s+\w+)?)\s+et\s+(\w+(?:\s+\w+)?)/i;
       const multipleSuppliersMatch = question.match(multipleSuppliersInQuestion);
       if (multipleSuppliersMatch && !questionLower.includes('comparaison') && !questionLower.includes('compare')) {
-        const supplier1 = multipleSuppliersMatch[1];
-        const supplier2 = multipleSuppliersMatch[2];
-        console.log(`🔍 Détection: Plusieurs fournisseurs demandés ("${supplier1}" et "${supplier2}") - hint pour l'IA`);
-        question = `[HINT: CRITIQUE - L'utilisateur demande des informations sur PLUSIEURS fournisseurs: "${supplier1}" et "${supplier2}". Tu DOIS utiliser analyze_supplier_expenses avec supplier_name contenant TOUS les fournisseurs en une seule fois, séparés par " et ". Exemple: {supplier_name: "${supplier1} et ${supplier2}"}. NE PAS faire d'appels séparés.] ${question}`;
+        const supplier1 = multipleSuppliersMatch[1].trim();
+        const supplier2 = multipleSuppliersMatch[2].trim();
+        
+        // 🔧 FIX: Exclure les mots courants (articles, prépositions)
+        const commonWords = ['les', 'des', 'de', 'la', 'le', 'du', 'pour', 'par', 'sur', 'dans', 'avec', 'sans', 'toutes', 'tous'];
+        const isValidSupplier = (word: string) => {
+          const lower = word.toLowerCase();
+          return word.length >= 3 && !commonWords.includes(lower);
+        };
+        
+        if (isValidSupplier(supplier1) && isValidSupplier(supplier2)) {
+          console.log(`🔍 Détection: Plusieurs fournisseurs demandés ("${supplier1}" et "${supplier2}") - hint pour l'IA`);
+          question = `[HINT: CRITIQUE - L'utilisateur demande des informations sur PLUSIEURS fournisseurs: "${supplier1}" et "${supplier2}". Tu DOIS utiliser analyze_supplier_expenses avec supplier_name contenant TOUS les fournisseurs en une seule fois, séparés par " et ". Exemple: {supplier_name: "${supplier1} et ${supplier2}"}. NE PAS faire d'appels séparés.] ${question}`;
+        }
       }
 
       // Détection de période multi-mois (ex: "entre octobre et décembre")

@@ -332,6 +332,8 @@ export class ContextDetector {
       'get_monthly_invoices': 'les factures',
       'get_recent_invoices': 'les factures',
       'get_supplier_invoices': 'les factures',
+      'get_invoices_by_month': 'les factures',
+      'get_all_invoices': 'les factures',
       'get_unpaid_invoices': 'les factures impayées',
       'get_overdue_invoices': 'les factures en retard',
       'get_employee_salaries': 'les salaires',

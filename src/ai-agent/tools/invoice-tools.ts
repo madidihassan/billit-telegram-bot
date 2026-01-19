@@ -114,6 +114,31 @@ export const invoiceTools: Groq.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'get_supplier_invoices',
+      description: '⚠️ APPEL OBLIGATOIRE: Obtenir TOUTES les factures RÉELLES d\'un fournisseur spécifique, avec filtrage optionnel par mois/année. Tu DOIS TOUJOURS appeler cet outil quand l\'utilisateur demande les factures d\'un fournisseur. Retourne factures payées ET impayées. Exemples: "factures de Foster", "factures Foster en janvier", "toutes les factures Coca-Cola", "factures Sligro de décembre 2025"',
+      parameters: {
+        type: 'object',
+        properties: {
+          supplier_name: {
+            type: 'string',
+            description: 'Nom du fournisseur (requis). Ex: "Foster", "Coca-Cola", "Sligro"',
+          },
+          month: {
+            type: 'string',
+            description: 'Mois optionnel pour filtrer (ex: "janvier", "décembre"). Si omis, retourne toutes les factures du fournisseur.',
+          },
+          year: {
+            type: 'string',
+            description: 'Année optionnelle (ex: "2025", "2026"). Par défaut: année en cours.',
+          },
+        },
+        required: ['supplier_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_monthly_invoices',
       description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures RÉELLES du mois en cours UNIQUEMENT. Tu DOIS appeler cet outil SEULEMENT si l\'utilisateur mentionne explicitement "ce mois", "mois actuel", "janvier" (mois courant). Ne JAMAIS utiliser pour "toutes les factures". Exemples: "Combien de factures ce mois?", "Factures du mois", "Factures de janvier"',
       parameters: { type: 'object', properties: {}, required: [] },

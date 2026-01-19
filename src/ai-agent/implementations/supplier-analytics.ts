@@ -71,7 +71,7 @@ export async function analyzeSupplierTrends(
       // Filtrer par fournisseur (fuzzy matching avec matchesSupplier)
       const supplierTransactions = transactions.filter(t =>
         matchesSupplier(t.description || '', supplier_name) &&
-        t.amount < 0 // Débits uniquement
+        t.type === 'Debit' // Débits uniquement
       );
 
       const total = Math.abs(supplierTransactions.reduce((sum, t) => sum + t.amount, 0));
@@ -217,7 +217,13 @@ export async function getSupplierRanking(
     // Calculer l'évolution si demandé
     if (show_evolution && month) {
       // Récupérer le mois précédent
-      const prevDate = new Date(targetYear, parseInt(month) - 2);
+      const monthMap: { [key: string]: number } = {
+        'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3,
+        'mai': 4, 'juin': 5, 'juillet': 6, 'août': 7,
+        'septembre': 8, 'octobre': 9, 'novembre': 10, 'décembre': 11,
+      };
+      const currentMonthIndex = monthMap[month.toLowerCase()] ?? parseInt(month) - 1;
+      const prevDate = new Date(targetYear, currentMonthIndex - 1, 1);
       const prevMonth = prevDate.toLocaleString('fr-FR', { month: 'long' });
       const prevYear = prevDate.getFullYear();
 
@@ -315,7 +321,7 @@ export async function detectSupplierPatterns(
       transactions
         .filter(t =>
           matchesSupplier(t.description || '', supplier_name) &&
-          t.amount < 0
+          t.type === 'Debit'
         )
         .forEach(t => {
           allTransactions.push({
