@@ -75,12 +75,17 @@ export function getSupplierPatterns(supplierName: string): string[] {
   
   // Chercher dans les aliases
   for (const [key, supplier] of Object.entries(SUPPLIER_ALIASES)) {
-    // Vérifier si le nom correspond à un alias
-    const matchesAlias = supplier.aliases.some(alias => 
-      normalizeSearchTerm(alias) === normalized || 
-      normalizeSearchTerm(alias).includes(normalized) ||
-      normalized.includes(normalizeSearchTerm(alias))
-    );
+    // Vérifier si le nom correspond à un alias (EXACT ou contient, mais pas l'inverse)
+    const matchesAlias = supplier.aliases.some(alias => {
+      const normAlias = normalizeSearchTerm(alias);
+      // Correspondance exacte
+      if (normAlias === normalized) return true;
+      // Alias contient le terme recherché (ex: "FOSTER FAST FOOD SA" contient "foster")
+      if (normAlias.includes(normalized) && normalized.length >= 5) return true;
+      // ❌ SUPPRIMÉ: normalized.includes(normAlias) car trop permissif
+      // (ex: "fosterfastfood" contient "food" → faux positif avec Colruyt)
+      return false;
+    });
     
     if (matchesAlias) {
       // Retourner les patterns de ce fournisseur

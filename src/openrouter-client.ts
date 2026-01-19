@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import OpenAI from 'openai';
 
 /**
  * Client OpenRouter pour utiliser GPT-4o-mini et autres modèles
@@ -7,6 +8,7 @@ import axios, { AxiosInstance } from 'axios';
 export class OpenRouterClient {
   private axiosInstance: AxiosInstance;
   private model: string;
+  private openaiClient: OpenAI | null = null;
 
   constructor(model?: string) {
     // Modèle par défaut: GPT-4o-mini (le moins cher et excellent pour function calling)
@@ -21,6 +23,24 @@ export class OpenRouterClient {
         'Content-Type': 'application/json',
       },
     });
+  }
+
+  /**
+   * Retourne un client OpenAI compatible pour ai-helpers.ts
+   * Crée un vrai client OpenAI qui utilise OpenRouter en backend
+   */
+  getOpenAICompatibleClient(): OpenAI {
+    if (!this.openaiClient) {
+      this.openaiClient = new OpenAI({
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: process.env.OPENROUTER_API_KEY,
+        defaultHeaders: {
+          'HTTP-Referer': 'https://billit.tonton202.be',
+          'X-Title': 'Billit Bot',
+        },
+      });
+    }
+    return this.openaiClient;
   }
 
   /**

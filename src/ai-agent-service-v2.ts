@@ -207,17 +207,27 @@ Réponse JSON:`;
         return searchTerm; // Fallback vers le terme original
       }
 
-      // 🔧 FIX: Vérifier que le client IA est disponible
-      const aiClient = this.aiProvider === 'openrouter' ? this.openRouter : this.groq;
-      if (!aiClient) {
-        console.log(`⚠️ Client IA non disponible (${this.aiProvider}), fallback vers terme original`);
-        return searchTerm;
+      // 🔧 FIX: Vérifier que le client IA est disponible et obtenir le bon client
+      let aiClient: any;
+      if (this.aiProvider === 'openrouter') {
+        if (!this.openRouter) {
+          console.log(`⚠️ Client OpenRouter non disponible, fallback vers terme original`);
+          return searchTerm;
+        }
+        // Utiliser le client OpenAI compatible
+        aiClient = this.openRouter.getOpenAICompatibleClient();
+      } else {
+        if (!this.groq) {
+          console.log(`⚠️ Client Groq non disponible, fallback vers terme original`);
+          return searchTerm;
+        }
+        aiClient = this.groq;
       }
 
       // Créer le provider IA
       const provider = {
         type: this.aiProvider,
-        client: aiClient as any
+        client: aiClient
       };
 
       // Appeler aiMatchSupplier
@@ -255,17 +265,27 @@ Réponse JSON:`;
         return searchTerm; // Fallback vers le terme original
       }
 
-      // 🔧 Vérifier que le client IA est disponible
-      const aiClient = this.aiProvider === 'openrouter' ? this.openRouter : this.groq;
-      if (!aiClient) {
-        console.log(`⚠️ Client IA non disponible (${this.aiProvider}), fallback vers terme original`);
-        return searchTerm;
+      // 🔧 FIX: Vérifier que le client IA est disponible et obtenir le bon client
+      let aiClient: any;
+      if (this.aiProvider === 'openrouter') {
+        if (!this.openRouter) {
+          console.log(`⚠️ Client OpenRouter non disponible, fallback vers terme original`);
+          return searchTerm;
+        }
+        // Utiliser le client OpenAI compatible
+        aiClient = this.openRouter.getOpenAICompatibleClient();
+      } else {
+        if (!this.groq) {
+          console.log(`⚠️ Client Groq non disponible, fallback vers terme original`);
+          return searchTerm;
+        }
+        aiClient = this.groq;
       }
 
       // Créer le provider IA
       const provider = {
         type: this.aiProvider,
-        client: aiClient as any
+        client: aiClient
       };
 
       // Appeler aiMatchEmployee
@@ -295,17 +315,27 @@ Réponse JSON:`;
    */
   private async parsePeriodWithAI(text: string): Promise<{ start: Date; end: Date; description: string } | null> {
     try {
-      // 🔧 FIX: Vérifier que le client IA est disponible
-      const aiClient = this.aiProvider === 'openrouter' ? this.openRouter : this.groq;
-      if (!aiClient) {
-        console.log(`⚠️ Client IA non disponible (${this.aiProvider}), impossible de parser la période`);
-        return null;
+      // 🔧 FIX: Vérifier que le client IA est disponible et obtenir le bon client
+      let aiClient: any;
+      if (this.aiProvider === 'openrouter') {
+        if (!this.openRouter) {
+          console.log(`⚠️ Client OpenRouter non disponible, impossible de parser la période`);
+          return null;
+        }
+        // Utiliser le client OpenAI compatible
+        aiClient = this.openRouter.getOpenAICompatibleClient();
+      } else {
+        if (!this.groq) {
+          console.log(`⚠️ Client Groq non disponible, impossible de parser la période`);
+          return null;
+        }
+        aiClient = this.groq;
       }
 
       // Créer le provider IA
       const provider = {
         type: this.aiProvider,
-        client: aiClient as any
+        client: aiClient
       };
 
       // Appeler aiParsePeriod
