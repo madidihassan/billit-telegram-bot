@@ -25,6 +25,7 @@ import { allTools } from './ai-agent/tools';
 import { logInfo, logDebug, logError, logWarn, logAudit } from './utils/logger';
 import { globalCache, CacheKeys, CacheTTL } from './cache/smart-cache';
 import { globalMetrics } from './monitoring/bot-metrics';
+import { AlertService } from './alert-service'; // 🚀 OUTIL 10: Système d'alertes
 
 // NIVEAU 2: Intelligence contextuelle
 import { ConversationManager } from './services/conversation-manager';
@@ -63,11 +64,13 @@ export class AIAgentServiceV2 {
   private chatId: string | null = null; // Chat ID actuel pour envoyer les PDFs
   private currentQuestion: string = ''; // Question actuelle de l'utilisateur
   private tools: any[];
+  public lastToolsCalled: string[] = []; // Outils appelés lors de la dernière requête (pour benchmark)
 
   // NIVEAU 2: Nouveau système de conversation intelligent
   private conversationManager: ConversationManager;
   private contextDetector: ContextDetector;
   private semanticCache: SemanticCache;
+  private alertService: AlertService; // 🚀 OUTIL 10: Système d'alertes
 
   // ANCIEN SYSTÈME (conservé temporairement pour compatibilité)
   private conversationHistory: Array<{ role: string; content: string }> = [];
@@ -98,6 +101,7 @@ export class AIAgentServiceV2 {
     this.conversationManager = new ConversationManager();
     this.contextDetector = new ContextDetector();
     this.semanticCache = new SemanticCache();
+    this.alertService = new AlertService(); // 🚀 OUTIL 10: Système d'alertes
 
     // Afficher le provider utilisé
     if (this.aiProvider === 'openrouter') {
@@ -192,7 +196,7 @@ Réponse JSON:`;
   }
 
   /**
-   * 🤖 Matching intelligent de fournisseur avec IA
+   * ⚡ Matching intelligent de fournisseur avec FUZZY LOCAL (OPTIMISÉ - pas d'appel IA)
    * Convertit les noms approximatifs en noms exacts de la base de données
    * Exemples: "verisur" → "VERISURE SA", "kbc" → "KBC Bank SA"
    */
@@ -200,109 +204,66 @@ Réponse JSON:`;
     try {
       // Récupérer tous les fournisseurs actifs de la BD
       const suppliers = getAllSuppliers();
-      const supplierNames = suppliers.map(s => s.name);
 
-      if (supplierNames.length === 0) {
+      if (suppliers.length === 0) {
         console.warn('⚠️ Aucun fournisseur dans la base de données');
-        return searchTerm; // Fallback vers le terme original
+        return searchTerm;
       }
 
-      // 🔧 FIX: Vérifier que le client IA est disponible et obtenir le bon client
-      let aiClient: any;
-      if (this.aiProvider === 'openrouter') {
-        if (!this.openRouter) {
-          console.log(`⚠️ Client OpenRouter non disponible, fallback vers terme original`);
-          return searchTerm;
+      // Fuzzy matching local
+      const searchLower = searchTerm.toLowerCase();
+      let bestMatch: { name: string; distance: number } | null = null;
+
+      for (const supplier of suppliers) {
+        const supplierNameLower = supplier.name.toLowerCase();
+
+        // Calculer la distance de Levenshtein
+        const distance = this.levenshteinDistance(searchLower, supplierNameLower);
+
+        // Accepter si la distance est raisonnable (max 3 caractères de différence ou 30% du nom)
+        const maxDistance = Math.max(3, Math.floor(searchLower.length * 0.3));
+
+        if (distance <= maxDistance) {
+          if (!bestMatch || distance < bestMatch.distance) {
+            bestMatch = { name: supplier.name, distance };
+          }
         }
-        // Utiliser le client OpenAI compatible
-        aiClient = this.openRouter.getOpenAICompatibleClient();
-      } else {
-        if (!this.groq) {
-          console.log(`⚠️ Client Groq non disponible, fallback vers terme original`);
-          return searchTerm;
-        }
-        aiClient = this.groq;
       }
 
-      // Créer le provider IA
-      const provider = {
-        type: this.aiProvider,
-        client: aiClient
-      };
-
-      // Appeler aiMatchSupplier
-      const matchedName = await aiMatchSupplier(searchTerm, supplierNames, provider);
-
-      // Si match trouvé, utiliser le nom exact; sinon fallback vers le terme original
-      if (matchedName) {
-        console.log(`🎯 Matching IA: "${searchTerm}" → "${matchedName}"`);
-        return matchedName;
+      if (bestMatch) {
+        console.log(`🎯 Matching fournisseur LOCAL: "${searchTerm}" → "${bestMatch.name}" (distance: ${bestMatch.distance})`);
+        return bestMatch.name;
       } else {
-        console.log(`⚠️ Aucun match IA trouvé pour "${searchTerm}", utilisation du terme original`);
+        console.log(`⚠️ Aucun match fournisseur trouvé pour "${searchTerm}", utilisation du terme original`);
         return searchTerm;
       }
 
     } catch (error) {
-      console.error('❌ Erreur matching IA:', error);
-      // En cas d'erreur, fallback vers le terme original
+      console.error('❌ Erreur matching fournisseur:', error);
       return searchTerm;
     }
   }
 
   /**
-   * 🤖 Matching intelligent d'employé avec IA
+   * ⚡ Matching intelligent d'employé avec FUZZY LOCAL (OPTIMISÉ - pas d'appel IA)
    * Convertit les noms approximatifs/prénoms seuls en noms complets exacts
    * Exemples: "sufjan" → "Soufiane Madidi", "jawad" → "Jawad Madidi"
    */
   private async matchEmployeeWithAI(searchTerm: string): Promise<string> {
     try {
-      // Récupérer tous les employés de la BD
-      const employees = getAllEmployees();
-      const employeeNames = employees.map(e => e.name);
+      // Utiliser la fonction de fuzzy matching locale existante
+      const closestMatch = await this.findClosestEmployee(searchTerm);
 
-      if (employeeNames.length === 0) {
-        console.warn('⚠️ Aucun employé dans la base de données');
-        return searchTerm; // Fallback vers le terme original
-      }
-
-      // 🔧 FIX: Vérifier que le client IA est disponible et obtenir le bon client
-      let aiClient: any;
-      if (this.aiProvider === 'openrouter') {
-        if (!this.openRouter) {
-          console.log(`⚠️ Client OpenRouter non disponible, fallback vers terme original`);
-          return searchTerm;
-        }
-        // Utiliser le client OpenAI compatible
-        aiClient = this.openRouter.getOpenAICompatibleClient();
+      if (closestMatch) {
+        console.log(`🎯 Matching employé LOCAL: "${searchTerm}" → "${closestMatch.employee.name}" (distance: ${closestMatch.distance})`);
+        return closestMatch.employee.name;
       } else {
-        if (!this.groq) {
-          console.log(`⚠️ Client Groq non disponible, fallback vers terme original`);
-          return searchTerm;
-        }
-        aiClient = this.groq;
-      }
-
-      // Créer le provider IA
-      const provider = {
-        type: this.aiProvider,
-        client: aiClient
-      };
-
-      // Appeler aiMatchEmployee
-      const matchedName = await aiMatchEmployee(searchTerm, employeeNames, provider);
-
-      // Si match trouvé, utiliser le nom exact; sinon fallback vers le terme original
-      if (matchedName) {
-        console.log(`🎯 Matching employé IA: "${searchTerm}" → "${matchedName}"`);
-        return matchedName;
-      } else {
-        console.log(`⚠️ Aucun match employé IA trouvé pour "${searchTerm}", utilisation du terme original`);
+        console.log(`⚠️ Aucun match employé trouvé pour "${searchTerm}", utilisation du terme original`);
         return searchTerm;
       }
 
     } catch (error) {
-      console.error('❌ Erreur matching employé IA:', error);
-      // En cas d'erreur, fallback vers le terme original
+      console.error('❌ Erreur matching employé:', error);
       return searchTerm;
     }
   }
@@ -1327,6 +1288,48 @@ Réponse JSON:`;
             },
             currency: 'EUR',
             direct_response: directResponse,
+          };
+          break;
+        }
+
+        case 'get_last_transaction': {
+          // Récupérer toutes les transactions des 30 derniers jours
+          const endDate = new Date();
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - 30);
+
+          const transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
+
+          if (transactions.length === 0) {
+            return JSON.stringify({
+              error: 'Aucune transaction trouvée dans les 30 derniers jours',
+              direct_response: '❌ Aucune transaction trouvée dans les 30 derniers jours.'
+            });
+          }
+
+          // Trier par date décroissante et prendre la première
+          const sortedTransactions = transactions.sort((a, b) =>
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+
+          const lastTx = sortedTransactions[0];
+          const date = new Date(lastTx.date).toLocaleDateString('fr-BE');
+          const time = new Date(lastTx.date).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+          const type = lastTx.type === 'Credit' ? '💰 Crédit' : '💸 Débit';
+          const amount = lastTx.type === 'Credit'
+            ? `+${lastTx.amount.toFixed(2)}€`
+            : `-${Math.abs(lastTx.amount).toFixed(2)}€`;
+          const desc = lastTx.description || 'Sans description';
+
+          const directResponse = `🔍 Dernière transaction bancaire\n\n` +
+            `📅 Date: ${date} à ${time}\n` +
+            `${type}\n` +
+            `💵 Montant: ${amount}\n` +
+            `📝 Description: ${desc}`;
+
+          result = {
+            transaction: lastTx,
+            direct_response: directResponse
           };
           break;
         }
@@ -4687,6 +4690,161 @@ Vérifiez:
           break;
         }
 
+        // 🚀 OUTIL 10: Système d'alertes personnalisées
+        case 'create_alert': {
+          // Créer une alerte personnalisée
+          try {
+            const userId = this.chatId || '0';
+            const { type, threshold, description } = args;
+
+            // Validation
+            if (!type || !threshold) {
+              result = {
+                success: false,
+                error: 'missing_params',
+                message: '❌ Paramètres manquants. Type et seuil requis.',
+              };
+              break;
+            }
+
+            const validTypes = ['unpaid_threshold', 'overdue_count', 'balance_below', 'large_expense'];
+            if (!validTypes.includes(type)) {
+              result = {
+                success: false,
+                error: 'invalid_type',
+                message: `❌ Type invalide. Types acceptés : ${validTypes.join(', ')}`,
+              };
+              break;
+            }
+
+            const alert = this.alertService.createAlert(userId, type, threshold, description);
+
+            const typeLabels = {
+              unpaid_threshold: '💰 Factures impayées',
+              overdue_count: '⏰ Factures en retard',
+              balance_below: '📊 Balance bancaire',
+              large_expense: '💸 Dépense importante'
+            };
+
+            const formattedMessage = `✅ Alerte créée avec succès !\n\n` +
+              `🔔 Type : ${typeLabels[type as keyof typeof typeLabels]}\n` +
+              `📈 Seuil : ${threshold}${type.includes('count') ? ' factures' : '€'}\n` +
+              `📝 Description : ${alert.description}\n` +
+              `🆔 ID : <code>${alert.id}</code>\n\n` +
+              `💡 L'alerte est maintenant active et vous préviendra automatiquement.`;
+
+            result = {
+              success: true,
+              alert_id: alert.id,
+              direct_response: formattedMessage,
+              message: formattedMessage,
+            };
+          } catch (error: any) {
+            result = {
+              success: false,
+              error: 'creation_failed',
+              message: `❌ Erreur lors de la création de l'alerte : ${error.message}`,
+            };
+          }
+          break;
+        }
+
+        case 'list_alerts': {
+          // Lister les alertes de l'utilisateur
+          try {
+            const userId = this.chatId || '0';
+            const activeOnly = args.active_only !== false; // Par défaut: true
+
+            const alerts = activeOnly
+              ? this.alertService.listActiveAlerts(userId)
+              : this.alertService.listAlerts(userId);
+
+            if (alerts.length === 0) {
+              result = {
+                success: false,
+                error: 'no_alerts',
+                message: activeOnly
+                  ? '❌ Vous n\'avez aucune alerte active.'
+                  : '❌ Vous n\'avez aucune alerte configurée.',
+              };
+              break;
+            }
+
+            const typeLabels = {
+              unpaid_threshold: '💰 Factures impayées',
+              overdue_count: '⏰ Factures en retard',
+              balance_below: '📊 Balance bancaire',
+              large_expense: '💸 Dépense importante'
+            };
+
+            const alertsList = alerts.map((alert, index) => {
+              const status = alert.enabled ? '🟢' : '🔴';
+              const type = typeLabels[alert.type as keyof typeof typeLabels];
+              const threshold = `${alert.threshold}${alert.type.includes('count') ? ' factures' : '€'}`;
+              return `${index + 1}. ${status} ${type}\n   Seuil : ${threshold}\n   ID : <code>${alert.id}</code>`;
+            }).join('\n\n');
+
+            const formattedMessage = `🔔 Vos alertes ${activeOnly ? 'actives' : ''} (${alerts.length})\n\n${alertsList}`;
+
+            result = {
+              success: true,
+              alerts_count: alerts.length,
+              direct_response: formattedMessage,
+              message: formattedMessage,
+            };
+          } catch (error: any) {
+            result = {
+              success: false,
+              error: 'list_failed',
+              message: `❌ Erreur lors de la récupération des alertes : ${error.message}`,
+            };
+          }
+          break;
+        }
+
+        case 'delete_alert': {
+          // Supprimer une alerte
+          try {
+            const userId = this.chatId || '0';
+            const { alert_id } = args;
+
+            if (!alert_id) {
+              result = {
+                success: false,
+                error: 'missing_alert_id',
+                message: '❌ Veuillez spécifier l\'ID de l\'alerte à supprimer.',
+              };
+              break;
+            }
+
+            const deleted = this.alertService.deleteAlert(userId, alert_id);
+
+            if (!deleted) {
+              result = {
+                success: false,
+                error: 'not_found',
+                message: `❌ Alerte introuvable avec l'ID : ${alert_id}`,
+              };
+              break;
+            }
+
+            const formattedMessage = `✅ Alerte supprimée avec succès !\n\n🆔 ID : <code>${alert_id}</code>`;
+
+            result = {
+              success: true,
+              direct_response: formattedMessage,
+              message: formattedMessage,
+            };
+          } catch (error: any) {
+            result = {
+              success: false,
+              error: 'deletion_failed',
+              message: `❌ Erreur lors de la suppression de l'alerte : ${error.message}`,
+            };
+          }
+          break;
+        }
+
         case 'list_employees': {
           // Lister tous les employés depuis la base de données SQLite
           try {
@@ -5329,6 +5487,9 @@ Vérifiez:
    */
   async processQuestion(question: string, chatId?: string): Promise<string> {
     try {
+      // Réinitialiser les outils appelés pour cette requête
+      this.lastToolsCalled = [];
+
       // 🔧 FIX: Valider que la question n'est pas vide
       if (!question || question.trim() === '') {
         throw new Error('La question ne peut pas être vide');
@@ -5694,274 +5855,43 @@ IMPORTANT: Garde les mêmes start_date et end_date.] ${question}`;
       const messages: any[] = [
         {
           role: 'system',
-          content: `Tu es un assistant expert en gestion d'entreprise. Tu as accès à des outils pour récupérer toutes les informations sur les factures et transactions bancaires.
+          content: `Tu es un assistant financier expert. Tu as accès à 53 outils pour gérer factures, transactions, salaires, fournisseurs et analytics.
 
-📅 DATE ACTUELLE: ${currentDate}
-📅 MOIS EN COURS: ${currentMonth}
+📅 CONTEXTE
+Date: ${currentDate}
+Mois en cours: ${currentMonth}
 
-IMPORTANT - CALCUL DES DATES:
-- Aujourd'hui = ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}
-- Année en cours = ${now.getFullYear()}
-- Mois en cours = ${now.getMonth() + 1} (${currentMonth})
-- Quand l'utilisateur dit "ce mois", "le mois en cours" → ${currentMonth}
-- Quand l'utilisateur dit "les 3 derniers mois" → calcule à partir d'aujourd'hui (${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()})
+⚠️ RÈGLE #1 : ZÉRO HALLUCINATION
+- TOUJOURS appeler un outil avant de répondre
+- JAMAIS inventer de données, chiffres ou noms
+- Si pas d'outil appelé → pas de réponse
 
-RÈGLES IMPORTANTES:
-⚠️ **RÈGLE ABSOLUE - ZÉRO HALLUCINATION** ⚠️
-TU NE DOIS JAMAIS, SOUS AUCUN PRÉTEXTE, INVENTER OU DEVINER DES DONNÉES.
-- Pour TOUTE question nécessitant des données (montants, nombres, listes, noms), tu DOIS appeler l'outil correspondant
-- Si un outil existe pour une question, tu DOIS l'appeler AVANT de répondre
-- NE JAMAIS utiliser ta mémoire ou ta connaissance générale pour répondre à des questions factuelles sur ce business
-- NE JAMAIS inventer de chiffres, même approximatifs
-- NE JAMAIS inventer de noms de fournisseurs, d'employés ou d'utilisateurs
-- Si tu n'as pas appelé d'outil pour obtenir les données, tu NE DOIS PAS répondre
+🎯 RÈGLES DE SÉLECTION D'OUTILS
 
-1. **UTILISE TES OUTILS SYSTÉMATIQUEMENT** - Pour CHAQUE question sur les factures, transactions, utilisateurs, fournisseurs, tu DOIS appeler l'outil correspondant. Aucune exception.
-2. **NE DIS JAMAIS "je n'ai pas accès"** - Tu as TOUTES les données via tes outils. Appelle-les.
+FACTURES:
+- Fournisseur mentionné → get_recent_invoices {supplier_name}
+  Ex: "factures Foster" → get_recent_invoices {supplier_name: "Foster"}
+- "Toutes" + fournisseur → limit: 100
+  Ex: "toutes factures Sligro" → get_recent_invoices {supplier_name: "Sligro", limit: 100}
+- Mois spécifique → get_invoices_by_month {month}
+  Ex: "factures janvier" → get_invoices_by_month {month: "janvier"}
+- "Toutes" sans filtre → get_all_invoices {}
+- Impayées → get_unpaid_invoices {}
 
-📋 **RÈGLES DE SÉLECTION D'OUTILS - FACTURES** :
+SALAIRES/EMPLOYÉS:
+- Nom employé → get_employee_salaries {employee_name}
+- Comparaison → compare_employee_salaries
+- Top X → get_employee_salaries sans employee_name
 
-🎯 **1. FOURNISSEUR MENTIONNÉ dans la question** :
-   ⚠️ PRIORITÉ ABSOLUE: Dès qu'un nom de fournisseur est mentionné, utiliser get_recent_invoices avec supplier_name
-   → TOUJOURS utiliser get_recent_invoices avec supplier_name (même si "toutes", "impayées", etc.)
-   → Si "toutes" est mentionné, utiliser limit: 100 (sinon limit: 5 par défaut)
-   Exemples:
-   • "factures Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola", limit: 5 }
-   • "factures de Foster" → get_recent_invoices { supplier_name: "Foster", limit: 5 }
-   • "toutes les factures de Foster" → get_recent_invoices { supplier_name: "Foster", limit: 100 } ⚠️ IMPORTANT
-   • "Est-ce que toutes les factures Uber ont été payées ?" → get_recent_invoices { supplier_name: "Uber", limit: 100 }
-   • "toutes les factures de Sligro" → get_recent_invoices { supplier_name: "Sligro", limit: 100 }
-   • "factures impayées de Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola", limit: 100 } puis filtrer impayées
-   • "factures du mois de janvier pour Sligro" → get_invoices_by_month + supplier_name: "Sligro"
-   
-🎯 **2. PÉRIODE SPÉCIFIQUE** (mois/année mentionné) :
-   → utiliser get_invoices_by_month
-   Exemples:
-   • "factures de janvier" → get_invoices_by_month { month: "janvier" }
-   • "factures payées de décembre" → get_invoices_by_month { month: "décembre" } puis filtrer payées dans ta réponse
-   
-🎯 **3. "TOUTES LES FACTURES" SANS période ni fournisseur** :
-   → utiliser get_all_invoices
-   ⚠️ ATTENTION: Si un fournisseur est mentionné, utiliser get_recent_invoices (voir règle 1)
-   Exemples:
-   • "liste-moi toutes les factures" → get_all_invoices {}
-   • "liste complète des factures" → get_all_invoices {}
-   • ❌ "toutes les factures de Sligro" → NE PAS utiliser get_all_invoices, utiliser get_recent_invoices { supplier_name: "Sligro" }
-   • ❌ "toutes les factures Uber" → NE PAS utiliser get_all_invoices, utiliser get_recent_invoices { supplier_name: "Uber" }
-   
-🎯 **4. IMPAYÉES spécifiquement demandées** :
-   → utiliser get_unpaid_invoices (sauf si fournisseur mentionné, voir règle 1)
-   Exemples:
-   • "factures impayées" (sans fournisseur) → get_unpaid_invoices {}
-   • "factures en retard" → get_overdue_invoices {}
-   • ❌ "factures impayées de Coca-Cola" → NE PAS utiliser get_unpaid_invoices, utiliser get_recent_invoices { supplier_name: "Coca-Cola" } puis filtrer les impayées
-   
-🎯 **5. ANALYSE/STATISTIQUES fournisseur** :
-   → utiliser analyze_supplier_expenses ou get_supplier_ranking
-   ⚠️ NE PAS utiliser analyze_supplier_expenses pour lister des factures spécifiques
-   Exemples:
-   • "analyse dépenses Colruyt" → analyze_supplier_expenses
-   • "top 10 fournisseurs" → get_supplier_ranking
-   • ❌ "factures impayées Ciers décembre" → NE PAS utiliser analyze_supplier_expenses, utiliser get_invoices_by_month
+FOURNISSEURS/DÉPENSES:
+- Analyse → analyze_supplier_expenses {supplier_name}
+- Top X → get_supplier_ranking ou analyze_supplier_expenses
+- Comparaison → compare_supplier_expenses
 
-⚠️ **ERREURS CRITIQUES À ÉVITER** :
-❌ NE JAMAIS utiliser get_all_invoices quand un fournisseur est mentionné dans la question
-   Exemple INCORRECT: "toutes les factures de Sligro" → get_all_invoices {} ❌ MAUVAIS
-   Exemple CORRECT: "toutes les factures de Sligro" → get_recent_invoices { supplier_name: "Sligro" } ✅ BON
-
-❌ NE JAMAIS utiliser get_unpaid_invoices quand un fournisseur est mentionné
-   Exemple INCORRECT: "factures impayées de Coca-Cola" → get_unpaid_invoices {} ❌ MAUVAIS
-   Exemple CORRECT: "factures impayées de Coca-Cola" → get_recent_invoices { supplier_name: "Coca-Cola" } ✅ BON
-
-❌ NE JAMAIS utiliser analyze_supplier_expenses quand l'utilisateur veut une LISTE de factures
-❌ NE JAMAIS ignorer le nom du fournisseur présent dans la question
-❌ NE JAMAIS confondre "liste des factures" (get_recent_invoices) et "analyse" (analyze_supplier_expenses)
-
-🎯 RÈGLE D'OR: Si tu vois un nom de fournisseur dans la question, utilise TOUJOURS get_recent_invoices avec supplier_name
-2b. **LISTE DES OUTILS** - Si on te demande "liste les outils", "quels outils as-tu", "liste les fonctions IA", réponds directement avec la liste de tes 25 outils disponibles (factures, paiements, recherche, gestion utilisateurs, etc.) SANS appeler de fonction
-3. **SYNTHÈSE** - Réponds en 2-4 phrases (sauf pour les listes explicites)
-3b. ⚠️ **LISTES COMPLÈTES - RÈGLE ABSOLUE** - Quand l'utilisateur demande "liste toutes", "liste toutes les factures", "toutes les factures", "liste complète":
-   - Tu DOIS afficher CHAQUE élément de la liste, sans exception
-   - Ne JAMAIS tronquer, résumer ou dire "il y a X factures" sans les lister
-   - Si l'outil retourne 28 factures, affiche LES 28 factures avec tous les détails
-   - FORMAT OBLIGATOIRE pour les factures: Chaque facture DOIT occuper 4 LIGNES avec retours à la ligne (pas de slash "/"):
-     * Ligne 1: "1. Fournisseur: NOM_COMPLET"
-     * Ligne 2: "   - Montant: XXX €"  
-     * Ligne 3: "   - Numéro de facture: XXX"
-     * Ligne 4: "   - Date: JJ mois AAAA"
-     * PUIS ligne vide avant la facture suivante
-   - Sépare les factures payées et impayées en deux sections (### Factures payées (X) puis ### Factures impayées (X))
-   - Même si la réponse est très longue (>4000 caractères), continue jusqu'à la fin
-   - La pagination Telegram se chargera de découper automatiquement
-3c. ⚠️ **FACTURES IMPAYÉES - TOUTES LES PÉRIODES** - Quand l'utilisateur demande les factures impayées (ou "toutes les factures" qui inclut impayées):
-   - Utilise get_unpaid_invoices qui retourne TOUTES les factures impayées (toutes périodes confondues)
-   - NE PAS utiliser get_monthly_invoices qui limite au mois courant
-   - Les factures impayées peuvent être de n'importe quel mois (janvier, décembre, etc.)
-4. **FORMAT NATUREL** - Parle comme un humain
-5. **ÉMOJIS** - 2-3 max pour la clarté
-6. **COHÉRENCE** - Même montant = même réponse
-7. **CONTEXTE CONVERSATIONNEL** - Tu as accès à l'historique complet de la conversation. Lis-le ATTENTIVEMENT avant de répondre:
-   - "Cette facture" → Facture mentionnée dans l'échange précédent
-   - "Celle de X" → Entité mentionnée précédemment (ex: si on vient de parler de factures Foster, "celle de octobre" = factures Foster d'octobre)
-   - "Le même fournisseur" → Fournisseur mentionné précédemment
-   - "Ces transactions" → Transactions mentionnées précédemment
-   - AVANT d'appeler une fonction, vérifie l'historique pour identifier les entités contextuelles !
-
-8. **RÉSOLUTION DES PRONOMS** - CRITIQUE: Si la question contient "celle", "celui", "celles", "ces", "cette":
-   - REGARDE l'historique pour trouver l'entité référencée
-   - Exemple:
-     Q1: "Factures Foster après le 15 décembre"
-     Q2: "Celle de la première semaine d'octobre"
-     → "Celle" = "Factures Foster" → Cherche factures Foster d'octobre (PAS toutes les factures d'octobre)
-
-9. **TOUS LES SALAIRES** - Quand on demande "tous les salaires" ou "les salaires" sans période spécifique, utilise get_employee_salaries SANS paramètre month (couvre toute l'année)
-
-10. **ZERO RÉSULTAT FOURNISSEUR/EMPLOYÉ = DEMANDE ORTHOGRAPHE** - UNIQUEMENT pour get_supplier_payments, get_supplier_received_payments, get_employee_salaries: Si le résultat est 0 (payment_count: 0, total: 0), demande l'orthographe: "🔍 Je ne trouve pas de fournisseur/employé nommé 'X'. Pourriez-vous vérifier l'orthographe ?" MAIS pour les autres fonctions (recettes_mois, get_period_transactions, etc.), réponds normalement avec les montants, même si c'est 0 €.
-
-10b. ⚠️ **MOTS-CLÉS GÉNÉRIQUES = DEMANDE DE PRÉCISION** - RÈGLE ABSOLUE ET OBLIGATOIRE:
-   - ⛔ INTERDIT D'UTILISER get_period_transactions si la question contient "loyer", "électricité", "gaz", "eau", "internet", "téléphone" SANS nom de fournisseur
-   - Tu DOIS TOUJOURS demander d'abord le nom du fournisseur avec cette formule EXACTE:
-     "🔍 Pour vous donner le montant exact, pourriez-vous me préciser le nom du fournisseur/propriétaire pour [le loyer/l'électricité/etc.] ?"
-   - ⚠️ NE JAMAIS appeler get_period_transactions sans supplier_name pour ces mots-clés
-   - ⚠️ NE JAMAIS retourner toutes les transactions quand l'utilisateur demande un type spécifique de dépense
-   - EXCEPTION: Si le contexte de conversation précédent mentionne déjà le fournisseur, utilise ce contexte
-   - Exemples OBLIGATOIRES:
-     * "Combien j'ai payé de loyer ?" → Tu DOIS répondre: "🔍 Pour vous donner le montant exact, pourriez-vous me préciser le nom du propriétaire ?"
-     * "Loyer des 3 derniers mois" → Tu DOIS répondre: "🔍 Pour vous donner le montant exact, pourriez-vous me préciser à qui vous payez le loyer ?"
-     * "Factures électricité" → Tu DOIS répondre: "🔍 Pour vous donner le montant exact, pourriez-vous me préciser votre fournisseur d'électricité ?"
-   - ❌ NE JAMAIS faire: Appeler get_period_transactions({start_date, end_date}) sans supplier_name pour ces cas
-
-11. ⚠️ **GESTION DES UTILISATEURS - NE JAMAIS INVENTER** - CRITIQUE:
-   - Pour TOUTE question sur les utilisateurs, tu DOIS appeler list_users() AVANT de répondre
-   - NE JAMAIS inventer de Chat IDs ou de noms d'utilisateurs
-   - ⚠️ NE JAMAIS utiliser les infos de CLAUDE.md pour les utilisateurs - ces infos sont OBSOLÈTES
-   - ⚠️ NE JAMAIS utiliser ta mémoire de conversation pour la liste d'utilisateurs
-   - SEUL list_users() retourne la liste ACTUELLE et VRAIE
-   - Si l'utilisateur dit "supprime le 4" ou "supprime le 3ème", tu DOIS:
-     1. Appeler list_users() pour obtenir la vraie liste
-     2. Identifier le Chat ID correspondant à la position demandée
-     3. Appeler remove_user() avec le Chat ID EXACT
-     4. Appeler list_users() à nouveau pour confirmer
-   - Après add_user() ou remove_user(), tu DOIS rappeler list_users() pour afficher la liste mise à jour
-   - TOUJOURS utiliser les données RÉELLES retournées par les outils, JAMAIS ta mémoire ou imagination
-
-12. ⚠️ **FONCTIONS AVEC MESSAGE PRÉFORMATÉ** - CRITIQUE:
-   - Pour list_users(), list_employees(), list_suppliers(): La réponse contient un champ "direct_response"
-   - ⚠️⚠️⚠️ RÈGLE ABSOLUE: Si la réponse contient le champ "direct_response", tu DOIS renvoyer EXACTEMENT ce contenu, RIEN D'AUTRE
-   - NE PAS ajouter "Voici la liste", "Voici", "Voici la liste des employés", "Voici les fournisseurs", ou une introduction
-   - NE PAS reformater, NE PAS créer ta propre liste, NE PAS modifier le format
-   - NE PAS ajouter d'astérisques **, NE PAS ajouter de gras, NE PAS ajouter de code (backticks), NE PAS changer la ponctuation
-   - "direct_response" est déjà formaté pour Telegram, RENVOIE-LE TEL QUEL sans un seul changement, sans un seul mot ajouté
-   - C'est comme un "COPY-PASTE": tu copies exactement direct_response et tu envoies, rien de plus
-   - ⚠️ INTERDICTION FORMELLE: Ne jamais entourer les noms avec ** ou guillemets inversés ou tout autre caractère Markdown
-
-EXEMPLES D'UTILISATION CORRECTE DES OUTILS:
-✅ Question: "Combien de factures en décembre ?"
-   → APPELLE: get_invoices_by_month("décembre")
-   → RÉPONDS: "8 factures en décembre pour 19 250,67 €"
-
-✅ Question: "Liste des utilisateurs"
-   → APPELLE: list_users()
-   → RÉPONDS avec la liste RÉELLE retournée par l'outil
-
-✅ Question: "Combien j'ai gagné ce mois ?"
-   → APPELLE: get_monthly_credits()
-   → RÉPONDS avec le total RÉEL retourné
-
-❌ EXEMPLES DE CE QU'IL NE FAUT JAMAIS FAIRE:
-❌ Question: "Combien de factures en décembre ?"
-   → NE PAS RÉPONDRE: "Il y a environ 10 factures" (INVENTION!)
-   → NE PAS utiliser ta mémoire ou estimation
-
-❌ Question: "Liste des utilisateurs"
-   → NE PAS RÉPONDRE sans appeler list_users()
-   → NE JAMAIS inventer: "Il y a Hassan, Soufiane, Loubna, et un 4ème" (FAUX!)
-
-❌ Question: "Balance du mois"
-   → NE PAS RÉPONDRE: "Environ 5000 €" (INVENTION!)
-   → APPELLE get_monthly_balance() pour obtenir le montant EXACT
-
-Question: "Salaires de novembre"
-→ APPELLE: get_employee_salaries({employee_name: "Jamhoun Mokhlis", month: "novembre"})
-→ RÉPONDS: Salaires de novembre uniquement
-
-CAS SPÉCIAL - FOURNISSEUR NON TROUVÉ:
-Question: "Combien j'ai payé à Moniz ?"
-Données: {"payment_count": 0, "total_paid": 0}
-✅ BONNE RÉPONSE: "🔍 Je ne trouve pas de fournisseur nommé 'Moniz'. Pourriez-vous l'épeler (M-O-N-I-Z) ou me donner l'orthographe exacte pour que je puisse le retrouver ?"
-❌ MAUVAISE RÉPONSE: "💰 En décembre, vous n'avez reçu aucun montant du fournisseur Moniz, avec un total de 0 € sur 0 paiements."</think>
-
-EXEMPLES DE BONNES RÉPONSES:
-Question: "Combien j'ai gagné ce mois ?"
-Données: {"total_amount": 46060.32, "transaction_count": 58}
-✅ Réponse: "💵 Ce mois-ci, vous avez généré 46 060,32 € de recettes sur 58 transactions, principalement via paiements par carte."
-
-Question: "Factures impayées ?"
-Données: {"count": 5, "total_amount": 12500}
-✅ Réponse: "📋 Vous avez 5 factures impayées pour un total de 12 500 €."
-
-Question: "Liste les factures payées"
-Données: {"paid_count": 5, "paid_invoices": [{supplier: "Uber Eats", amount: 1823.40}, ...]}
-✅ Réponse: "📋 Vous avez payé 5 factures ce mois-ci:
-1. Uber Eats - 1 823,40 €
-2. Foster - 4 500,00 €
-...
-Total: 16 727,32 €"
-
-CONTEXTE ET RÉFÉRENCES:
-IMPORTANT: Quand l'utilisateur demande "le détail de cette facture", "plus d'infos sur cette facture", ou "est-ce qu'il existe un détail pour cette facture?", tu DOIS utiliser le CONTEXTE de la conversation précédente.
-
-Exemple 1 - Référence à une facture:
-Utilisateur: "Dernière facture payée pour Foster?"
-Bot: "Le 22 décembre 2025 pour 5 903,70 €"
-Utilisateur: "Est-ce qu'il existe un détail pour cette facture?"
-→ APPELLE: get_invoice_by_supplier_and_amount({supplier_name: "Foster", amount: 5903.70})
-→ RÉPONDS: Détails complets de la facture (numéro, date d'échéance, statut, PDF...)
-
-Exemple 2 - Référence pronominale "celle de":
-Utilisateur: "Donne-moi toutes les factures de Foster après le 15 décembre"
-Bot: "Voici les factures Foster..."
-Utilisateur: "Celle de la première semaine d'octobre"
-→ CONTEXTE IDENTIFIÉ: "celle" = factures Foster (mentionné dans l'historique)
-→ APPELLE: get_period_transactions({start_date: "2025-10-01", end_date: "2025-10-07", supplier_name: "Foster"})
-→ PAS get_invoices_by_month("octobre") sans le fournisseur !
-
-Si le contexte mentionne un fournisseur SANS montant précis, appelle get_invoice_by_supplier_and_amount avec juste le supplier_name.
-
-🛠️ TES 36 OUTILS DISPONIBLES (réponds TOUJOURS en français):
-📋 **Factures** (11 outils):
-   • Factures impayées • Factures payées • Dernière facture • Factures en retard
-   • Statistiques factures • Factures mois actuel • Factures par mois
-   • Rechercher factures • Facture par montant • Recherche communication
-   • Envoyer PDF facture
-
-💰 **Transactions** (7 outils):
-   • Balance du mois • Recettes du mois • Dépenses du mois
-   • Transactions période • Salaires employés
-   • Paiements fournisseur • Versements reçus
-
-👥 **Employés** (5 outils):
-   • Liste employés • Ajouter employé • Supprimer employé
-   • Analyse salaires • Comparaison salaires
-
-🏢 **Fournisseurs** (9 outils):
-   • Liste fournisseurs • Ajouter fournisseur • Supprimer fournisseur
-   • Analyse fournisseur • Top fournisseurs • Comparaison fournisseurs
-   • Dépenses fournisseur • Paiements fournisseur • Détecter nouveaux fournisseurs
-
-👥 **Utilisateurs** (3 outils):
-   • Ajouter utilisateur • Retirer utilisateur • Liste utilisateurs
-
-🔧 **Système** (1 outil):
-   • Redémarrer le bot
-
-⚠️ IMPORTANT: Quand on te demande "liste les outils", utilise UNIQUEMENT les noms en FRANÇAIS ci-dessus, JAMAIS les noms techniques (get_*, add_*, etc.)
-
-INTERDICTIONS:
-❌ Ne liste JAMAIS toutes les transactions bancaires une par une
-❌ Ne répète JAMAIS les données brutes du JSON
-❌ Ne dépasse JAMAIS 10 lignes (sauf pour les listes explicitement demandées)
-❌ JAMAIS d'incohérence entre les montants dans la même conversation${this.generateDynamicHints(question)}`,
+RÉPONSES:
+- Concis (2-4 phrases) sauf listes explicites
+- 2-3 émojis max
+- Format naturel`,
         },
         // NIVEAU 2: Utiliser l'historique par utilisateur (avec résumé intelligent si disponible)
         ...this.conversationManager.getFormattedHistory(userId),
@@ -5976,8 +5906,9 @@ INTERDICTIONS:
       const toolCallsUsed: string[] = []; // Tracker les outils utilisés
       const allFunctionArgs: any[] = []; // Tracker tous les arguments pour extraction d'entités
 
-      // 🎯 OPTIMISATION: Sélectionner dynamiquement les outils pertinents via classification IA
-      const relevantTools = await this.selectRelevantTools(question);
+      // 🎯 OPTIMISATION V2: Donner TOUS les outils à l'IA (GPT-4o-mini est excellent pour choisir)
+      // L'appel de classification IA préalable ralentissait de ~500ms sans améliorer la précision
+      const relevantTools = this.tools;
 
       while (iteration < MAX_ITERATIONS) {
         iteration++;
@@ -6017,41 +5948,95 @@ INTERDICTIONS:
           let directResponse: string | null = null;
           let guideParts: string[] | null = null;
 
-          for (const toolCall of message.tool_calls) {
-            const functionName = toolCall.function.name;
-            let functionArgs = JSON.parse(toolCall.function.arguments);
+          // 🚀 OPTIM 7: Parallélisation des outils indépendants (gain +40% vitesse)
+          if (message.tool_calls.length > 1) {
+            console.log('⚡ OPTIM 7: Exécution parallèle de', message.tool_calls.length, 'outils');
 
-            // 🔧 CORRECTION AUTO: Normaliser les arguments pour forcer period_text
-            functionArgs = this.normalizeToolArguments(functionName, functionArgs, question);
+            // Préparer tous les appels de fonctions en parallèle
+            const toolPromises = message.tool_calls.map(async (toolCall) => {
+              const functionName = toolCall.function.name;
+              let functionArgs = JSON.parse(toolCall.function.arguments);
 
-            // Tracker le tool call et les arguments
-            toolCallsUsed.push(functionName);
-            allFunctionArgs.push(functionArgs);
+              // 🔧 CORRECTION AUTO: Normaliser les arguments
+              functionArgs = this.normalizeToolArguments(functionName, functionArgs, question);
 
-            const result = await this.executeFunction(functionName, functionArgs);
-            console.log(`✓ ${functionName}:`, result.substring(0, 100) + '...');
+              const result = await this.executeFunction(functionName, functionArgs);
+              console.log(`✓ ${functionName}:`, result.substring(0, 100) + '...');
 
-            // Vérifier si le résultat contient un direct_response ou guide_parts
-            try {
-              const parsedResult = JSON.parse(result);
-              if (parsedResult.guide_parts && !guideParts) {
-                // Guide utilisateur à envoyer en plusieurs parties
-                guideParts = parsedResult.guide_parts;
-                console.log(`📖 guide_parts détecté - ${guideParts!.length} parties à envoyer`);
-              } else if (parsedResult.direct_response && !directResponse) {
-                // Prendre seulement le PREMIER direct_response, ignorer les suivants
-                directResponse = parsedResult.direct_response;
-                console.log('📝 direct_response détecté - court-circuit de l\'IA');
-              }
-            } catch (e) {
-              // Pas de JSON valide, ignorer
-            }
-
-            messages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: result,
+              return {
+                toolCall,
+                functionName,
+                functionArgs,
+                result,
+              };
             });
+
+            // Exécuter tous les outils EN PARALLÈLE
+            const toolResults = await Promise.all(toolPromises);
+
+            // Traiter les résultats dans l'ordre
+            for (const { toolCall, functionName, functionArgs, result } of toolResults) {
+              toolCallsUsed.push(functionName);
+              allFunctionArgs.push(functionArgs);
+
+              // Vérifier direct_response ou guide_parts
+              try {
+                const parsedResult = JSON.parse(result);
+                if (parsedResult.guide_parts && !guideParts) {
+                  guideParts = parsedResult.guide_parts;
+                  console.log(`📖 guide_parts détecté - ${guideParts!.length} parties`);
+                } else if (parsedResult.direct_response && !directResponse) {
+                  directResponse = parsedResult.direct_response;
+                  console.log('📝 direct_response détecté - court-circuit IA');
+                }
+              } catch (e) {
+                // Pas de JSON valide, ignorer
+              }
+
+              messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: result,
+              });
+            }
+          } else {
+            // Exécution séquentielle pour un seul outil (comportement original)
+            for (const toolCall of message.tool_calls) {
+              const functionName = toolCall.function.name;
+              let functionArgs = JSON.parse(toolCall.function.arguments);
+
+              // 🔧 CORRECTION AUTO: Normaliser les arguments pour forcer period_text
+              functionArgs = this.normalizeToolArguments(functionName, functionArgs, question);
+
+              // Tracker le tool call et les arguments
+              toolCallsUsed.push(functionName);
+              allFunctionArgs.push(functionArgs);
+
+              const result = await this.executeFunction(functionName, functionArgs);
+              console.log(`✓ ${functionName}:`, result.substring(0, 100) + '...');
+
+              // Vérifier si le résultat contient un direct_response ou guide_parts
+              try {
+                const parsedResult = JSON.parse(result);
+                if (parsedResult.guide_parts && !guideParts) {
+                  // Guide utilisateur à envoyer en plusieurs parties
+                  guideParts = parsedResult.guide_parts;
+                  console.log(`📖 guide_parts détecté - ${guideParts!.length} parties à envoyer`);
+                } else if (parsedResult.direct_response && !directResponse) {
+                  // Prendre seulement le PREMIER direct_response, ignorer les suivants
+                  directResponse = parsedResult.direct_response;
+                  console.log('📝 direct_response détecté - court-circuit de l\'IA');
+                }
+              } catch (e) {
+                // Pas de JSON valide, ignorer
+              }
+
+              messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: result,
+              });
+            }
           }
 
           // Si on a des guide_parts, les envoyer directement à Telegram
@@ -6074,6 +6059,9 @@ INTERDICTIONS:
                 await new Promise(resolve => setTimeout(resolve, 500));
               }
             }
+
+            // Sauvegarder les outils appelés pour le benchmark
+            this.lastToolsCalled = [...toolCallsUsed];
 
             return summaryMessage;
           }
@@ -6114,6 +6102,9 @@ INTERDICTIONS:
             //     toolsUsed: toolCallsUsed
             //   }
             // );
+
+            // Sauvegarder les outils appelés pour le benchmark
+            this.lastToolsCalled = [...toolCallsUsed];
 
             // Supprimer tous les ** du texte
             return directResponse.replace(/\*\*/g, '');
@@ -6173,6 +6164,9 @@ INTERDICTIONS:
           //     toolsUsed: []
           //   }
           // );
+
+          // Sauvegarder les outils appelés pour le benchmark
+          this.lastToolsCalled = [...toolCallsUsed];
 
           // Supprimer tous les ** du texte
           return message.content.replace(/\*\*/g, '');

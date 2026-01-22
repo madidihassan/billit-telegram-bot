@@ -13,9 +13,10 @@ import { userTools } from './user-tools';
 import { systemTools } from './system-tools';
 import { aggregationTools } from './aggregation-tools';
 import { analyticsTools } from './analytics-tools';
+import { alertTools } from './alert-tools';
 
 /**
- * Tous les outils IA disponibles (50 outils au total)
+ * Tous les outils IA disponibles (53 outils au total)
  *
  * Catégories:
  * - Factures: 12 outils
@@ -26,6 +27,7 @@ import { analyticsTools } from './analytics-tools';
  * - Analytique: 4 outils (prédictions, anomalies, tendances, export)
  * - Utilisateurs: 3 outils
  * - Système: 1 outil
+ * - Alertes: 3 outils (🚀 NOUVEAU - OUTIL 10)
  */
 export const allTools = [
   ...invoiceTools,
@@ -36,6 +38,7 @@ export const allTools = [
   ...analyticsTools,
   ...userTools,
   ...systemTools,
+  ...alertTools,
 ];
 
 // Exports individuels pour utilisation sélective
@@ -47,3 +50,4 @@ export { aggregationTools } from './aggregation-tools';
 export { analyticsTools } from './analytics-tools';
 export { userTools } from './user-tools';
 export { systemTools } from './system-tools';
+export { alertTools } from './alert-tools';

@@ -1,7 +1,7 @@
 import type Groq from 'groq-sdk';
 
 /**
- * Outils IA pour la gestion des transactions bancaires (9 outils)
+ * Outils IA pour la gestion des transactions bancaires (10 outils)
  *
  * @module TransactionTools
  * @category AI Tools
@@ -118,8 +118,20 @@ export const transactionTools: Groq.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'get_last_transaction',
+      description: '⚠️ APPEL OBLIGATOIRE quand l\'utilisateur demande "dernière transaction", "transaction la plus récente", "last transaction". Retourne UNIQUEMENT la toute dernière transaction bancaire avec tous ses détails (date, montant, description, type). Ne JAMAIS utiliser get_period_transactions pour "dernière transaction".',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_period_transactions',
-      description: '⚠️ OUTIL PAR DÉFAUT pour les balances mensuelles. Utilise cet outil pour: (1) balance d\'UN SEUL mois (ex: "balance d\'octobre", "balance du mois de novembre"), (2) transactions sur une période spécifique, (3) filtrer par fournisseur. Retourne un résumé (crédits, débits, balance) + liste des transactions. Si l\'utilisateur demande SEULEMENT la balance sans mentionner "liste" ou "transactions", tu PEUX limiter l\'affichage au résumé.',
+      description: '⚠️ OUTIL PAR DÉFAUT pour les balances mensuelles. Utilise cet outil pour: (1) balance d\'UN SEUL mois (ex: "balance d\'octobre", "balance du mois de novembre"), (2) transactions sur une période spécifique, (3) filtrer par fournisseur. ⚠️ NE PAS utiliser pour "dernière transaction" (utiliser get_last_transaction à la place). Retourne un résumé (crédits, débits, balance) + liste des transactions. Si l\'utilisateur demande SEULEMENT la balance sans mentionner "liste" ou "transactions", tu PEUX limiter l\'affichage au résumé.',
       parameters: {
         type: 'object',
         properties: {
