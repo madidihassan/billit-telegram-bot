@@ -113,9 +113,12 @@ export class TelegramBotInteractive {
         this.currentChatId = msg.chat.id;
       }
 
-      // Répondre au callback pour enlever l'animation de chargement
+      // Répondre au callback avec feedback immédiat
       try {
-        await this.bot.answerCallbackQuery(callbackQuery.id);
+        await this.bot.answerCallbackQuery(callbackQuery.id, {
+          text: '⏳ Chargement en cours...',
+          show_alert: false // Affiche un toast, pas une popup bloquante
+        });
       } catch (error: any) {
         console.error('Erreur answerCallbackQuery:', error.message);
       }
@@ -125,9 +128,24 @@ export class TelegramBotInteractive {
       try {
         // Parser le callback data
         const [command, ...args] = data.split(':');
-        
+
         console.log(`📨 Callback commande: ${command} ${args.join(' ')}`);
-        
+
+        // Liste des commandes qui ouvrent juste des sous-menus (pas besoin de loading)
+        const quickCommands = ['submenu_invoices', 'submenu_finances', 'search_prompt', 'supplier_prompt', 'lastinvoice_prompt', 'show_guide'];
+        const isQuickCommand = quickCommands.includes(command) || command.startsWith('guide_');
+
+        // Envoyer message de chargement pour toutes les commandes sauf les menus rapides
+        let loadingMsg: any = null;
+        if (!isQuickCommand) {
+          loadingMsg = await this.bot.sendMessage(this.currentChatId, '⏳ <b>Chargement...</b>', {
+            parse_mode: 'HTML'
+          });
+        } else {
+          // Pour les menus rapides, juste afficher "typing"
+          await this.bot.sendChatAction(this.currentChatId, 'typing');
+        }
+
         let response: string;
 
         // Gérer les commandes spéciales
@@ -146,7 +164,7 @@ export class TelegramBotInteractive {
           return;
         } else if (command === 'submenu_invoices') {
           this.waitingForInput = null;
-          await this.bot.sendMessage(this.currentChatId, '📋 <b>Factures</b>\n\nChoisissez une action :', {
+          await this.bot.sendMessage(this.currentChatId, '📋 <b>Gestion des factures</b>\n\nSélectionnez une option ci-dessous :', {
             parse_mode: 'HTML',
             reply_markup: this.getInvoicesSubmenuKeyboard()
           });
@@ -185,6 +203,20 @@ export class TelegramBotInteractive {
         } else if (command === 'lastinvoice_prompt') {
           this.waitingForInput = 'lastinvoice';
           response = '🧾 <b>Dernière facture</b>\n\nTapez le nom du fournisseur pour voir sa dernière facture.';
+        } else if (command === 'unpaid' || command === 'overdue' || command === 'due') {
+          // 🔧 FIX: Utiliser l'IA pour factures impayées/retard/échéance (format détaillé)
+          this.waitingForInput = null;
+
+          let question: string;
+          if (command === 'unpaid') {
+            question = 'donne moi les factures impayées';
+          } else if (command === 'overdue') {
+            question = 'donne moi les factures en retard';
+          } else {
+            question = 'donne moi les factures à échéance dans les 15 prochains jours';
+          }
+
+          response = await this.aiAgentService.processQuestion(question, String(this.currentChatId));
         } else {
           // Commandes normales
           this.waitingForInput = null;
@@ -194,7 +226,40 @@ export class TelegramBotInteractive {
           this.captureInvoiceContext(command, args, response);
         }
 
-        await this.sendMessageWithButtons(response);
+        // Envoyer ou éditer la réponse selon si on a un message de loading
+        if (loadingMsg && response) {
+          try {
+            // Si le message est trop long (>4096 chars), l'édition échouera
+            if (response.length <= 4000) {
+              await this.bot.editMessageText(response, {
+                chat_id: this.currentChatId,
+                message_id: loadingMsg.message_id,
+                parse_mode: 'HTML',
+                disable_web_page_preview: true
+              });
+
+              // Ajouter les boutons de navigation
+              await this.bot.editMessageReplyMarkup(this.getNavigationKeyboard(), {
+                chat_id: this.currentChatId,
+                message_id: loadingMsg.message_id
+              });
+            } else {
+              // Message trop long : supprimer le message de chargement et envoyer normalement
+              await this.bot.deleteMessage(this.currentChatId, loadingMsg.message_id);
+              await this.sendMessageWithButtons(response);
+            }
+          } catch (error: any) {
+            console.error('Erreur lors de l\'édition du message:', error.message);
+            // En cas d'erreur, supprimer et envoyer normalement
+            try {
+              await this.bot.deleteMessage(this.currentChatId, loadingMsg.message_id);
+            } catch (e) {}
+            await this.sendMessageWithButtons(response);
+          }
+        } else if (response) {
+          // Pas de loading message, envoyer normalement
+          await this.sendMessageWithButtons(response);
+        }
       } catch (error: any) {
         console.error('Erreur lors du traitement du callback:', error);
         const safeMessage = sanitizeError(error, 'Une erreur est survenue lors du traitement de votre demande');
@@ -231,6 +296,9 @@ export class TelegramBotInteractive {
       }
 
       try {
+        // Afficher l'action "typing" pendant le traitement
+        await this.bot.sendChatAction(this.currentChatId, 'typing');
+
         const response = await this.commandHandler.handleCommand(command, args);
 
         // Capturer le contexte
@@ -290,11 +358,14 @@ export class TelegramBotInteractive {
         console.log('📨 Réponse reçue pour:', this.waitingForInput, '- Valeur:', validation.sanitized);
 
         try {
+          // Afficher l'action "typing" pendant le traitement
+          await this.bot.sendChatAction(this.currentChatId, 'typing');
+
           let response: string;
 
           const command = this.waitingForInput;
           const args = [validation.sanitized!];
-          
+
           switch (command) {
             case 'search':
               response = await this.commandHandler.handleCommand('search', args);
@@ -349,6 +420,8 @@ export class TelegramBotInteractive {
           }
 
           console.log('🤖 Question détectée, traitement par IA conversationnelle');
+          // Afficher l'action "typing" pendant le traitement IA
+          await this.bot.sendChatAction(this.currentChatId, 'typing');
           await this.handleAIQuestion(validation.sanitized!);
         } else {
           console.log('📨 Message texte reçu, envoi du menu');
@@ -440,18 +513,22 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
     return {
       inline_keyboard: [
         [
-          { text: '📋 Impayées', callback_data: 'unpaid' },
-          { text: '⚠️ En retard', callback_data: 'overdue' }
+          { text: '📋 Factures impayées', callback_data: 'unpaid' }
         ],
         [
-          { text: '📅 Échéances', callback_data: 'due' },
-          { text: '🧾 Dernière', callback_data: 'lastinvoice_prompt' }
+          { text: '⚠️ Factures en retard', callback_data: 'overdue' }
         ],
         [
-          { text: '📁 Par fournisseur', callback_data: 'supplier_prompt' }
+          { text: '📅 Factures à échéance', callback_data: 'due' }
         ],
         [
-          { text: '🔙 Retour', callback_data: 'menu' }
+          { text: '🧾 Dernière facture', callback_data: 'lastinvoice_prompt' }
+        ],
+        [
+          { text: '📁 Factures par fournisseur', callback_data: 'supplier_prompt' }
+        ],
+        [
+          { text: '🔙 Retour au menu', callback_data: 'menu' }
         ]
       ]
     };

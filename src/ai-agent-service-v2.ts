@@ -5975,7 +5975,15 @@ FOURNISSEURS/DÉPENSES:
 RÉPONSES:
 - Concis (2-4 phrases) sauf listes explicites
 - 2-3 émojis max
-- Format naturel`,
+- Format naturel
+
+📱 FORMATAGE TELEGRAM (CRITIQUE):
+⚠️ JAMAIS d'espaces au début des lignes (cause problème largeur)
+✅ Bon: "🏪 Fournisseur : Foster"
+❌ Mauvais: "   🏪 Fournisseur : Foster"
+- Commence toujours chaque ligne au début (colonne 0)
+- Pas d'indentation, pas d'espaces avant les émojis
+- Utilise des sauts de ligne pour structurer`,
         },
         // NIVEAU 2: Utiliser l'historique par utilisateur (avec résumé intelligent si disponible)
         ...this.conversationManager.getFormattedHistory(userId),
