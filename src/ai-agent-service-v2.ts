@@ -337,7 +337,24 @@ Réponse JSON:`;
     selectedTools.push(...systemTools);
 
     // 🤖 Classification IA de la question
-    const categories = await this.classifyQuestionWithAI(question);
+    let categories = await this.classifyQuestionWithAI(question);
+
+    // 🔧 FIX CRITIQUE: Forcer aggregation pour questions bénéfice/résultat annuel
+    const questionLower = question.toLowerCase();
+    const isBenefitQuestion = (questionLower.includes('bénéfice') || questionLower.includes('benef') ||
+                               questionLower.includes('résultat') || questionLower.includes('profit') ||
+                               questionLower.includes('gagné') || questionLower.includes('perdu')) &&
+                              (/\d{4}|année|annuel/.test(questionLower));
+
+    if (isBenefitQuestion) {
+      console.log('🔧 DÉTECTION: Question bénéfice annuel → Force aggregation, exclut transactions');
+      // Forcer aggregation
+      if (!categories.includes('aggregation')) {
+        categories.push('aggregation');
+      }
+      // Exclure transactions pour éviter get_period_transactions
+      categories = categories.filter(c => c !== 'transactions');
+    }
 
     // Sélection des outils selon les catégories
     if (categories.includes('invoices')) {
@@ -5858,23 +5875,25 @@ Cela affichera tous les fournisseurs de cette catégorie (Foster, Colruyt, Sligr
       }
 
       // ========== DÉTECTION DE LA BALANCE ANNUELLE ==========
-      // Détection de demande de balance, bénéfice, chiffre d'affaires pour une année complète
-      // Patterns: "balance de 2025", "bénéfice pour l'année 2025", "chiffre d'affaires 2025", "CA 2025", "recettes 2025"
-      const annualBalancePattern = /(balance|bénéfice|benefice|profit|chiffre d'affaires|CA|recettes|dépenses|revenus?|résultat).*?(?:pour l'année\s+|de l'année\s+|de\s+|en\s+)?(\d{4})/i;
-      const annualBalanceMatch = question.match(annualBalancePattern);
-      if (annualBalanceMatch && !hasMultipleMonths) {
+      // 🔧 CORRECTION CRITIQUE: Détection de demande de bénéfice, résultat pour une année complète
+      // Patterns: "bénéfice de 2025", "résultat pour l'année 2025", "profit 2025"
+      const benefitPattern = /(bénéfice|benefice|profit|résultat|gagné|perdu).*?(?:pour l'année\s+|de l'année\s+|de\s+|en\s+|réalisé en\s+)?(\d{4})/i;
+      const benefitMatch = question.match(benefitPattern);
+      if (benefitMatch && !hasMultipleMonths) {
         // Extraire l'année
-        const year = annualBalanceMatch[2];
-        console.log(`🔍 Détection: Analyse annuelle (${annualBalanceMatch[1]}) pour ${year} - ajout d'un hint pour l'IA`);
-        question = `[HINT: CRITIQUE - L'utilisateur demande une analyse annuelle (${annualBalanceMatch[1]}) pour l'année ${year} COMPLÈTE.
-Tu DOIS utiliser get_period_transactions avec:
-- start_date: "${year}-01-01"
-- end_date: "${year}-12-31"
-- NE PAS utiliser de filtre_type (pour avoir les crédits ET débits)
-- NE PAS utiliser de limite (laisser la pagination récupérer toutes les transactions)
-- NE PAS utiliser get_monthly_credits ni get_monthly_debits (ne donnent que les totaux par mois, pas les transactions détaillées)
-- La réponse doit montrer TOUTES les transactions de l'année ${year}, pas seulement quelques-unes.
-- Calculer: Recettes totales - Dépenses totales = Bénéfice
+        const year = benefitMatch[2];
+        console.log(`🔍 Détection: Question BÉNÉFICE/RÉSULTAT pour ${year} - FORCE get_year_summary`);
+        question = `[HINT: CRITIQUE - L'utilisateur demande le BÉNÉFICE/RÉSULTAT pour l'année ${year}.
+⚠️⚠️⚠️ Tu DOIS utiliser get_year_summary avec:
+- year: "${year}"
+- include_comparison: true (comparer avec ${parseInt(year) - 1})
+⚠️⚠️⚠️ NE PAS utiliser get_period_transactions (trop basique, pas pédagogique)
+⚠️⚠️⚠️ La réponse doit être en format NOVICE-FRIENDLY avec:
+- Explications claires: "Recettes (argent reçu)", "Dépenses (argent dépensé)"
+- Calcul visible: "BÉNÉFICE NET = Recettes - Dépenses"
+- Top 10 fournisseurs avec %
+- Répartition par catégorie
+- Message pédagogique: "Vous avez gagné X € sur l'année"
 ] ${question}`;
       }
 
