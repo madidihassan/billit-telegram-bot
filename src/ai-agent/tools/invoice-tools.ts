@@ -124,7 +124,7 @@ export const invoiceTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_supplier_invoices',
-      description: '⚠️ APPEL OBLIGATOIRE: Obtenir TOUTES les factures RÉELLES d\'un fournisseur spécifique, avec filtrage optionnel par mois/année. Tu DOIS TOUJOURS appeler cet outil quand l\'utilisateur demande les factures d\'un fournisseur. Retourne factures payées ET impayées. Exemples: "factures de Foster", "factures Foster en janvier", "toutes les factures Coca-Cola", "factures Sligro de décembre 2025"',
+      description: '⚠️ APPEL OBLIGATOIRE: Obtenir TOUTES les factures RÉELLES d\'un fournisseur spécifique (filtrage par invoice_date).\n\n⚠️⚠️ UTILISER CET OUTIL pour "factures de [fournisseur]" + période → filtre par DATE DE FACTURE (invoice_date), PAS date de paiement ⚠️⚠️\n\nRetourne factures payées ET impayées avec filtrage optionnel par mois/année.\n\nExemples:\n- "factures de Foster" → {supplier_name: "Foster"}\n- "factures Foster pour 2025" → {supplier_name: "Foster", year: "2025"}\n- "factures Foster en janvier" → {supplier_name: "Foster", month: "janvier"}\n- "toutes les factures Coca-Cola de décembre 2025" → {supplier_name: "Coca-Cola", month: "décembre", year: "2025"}',
       parameters: {
         type: 'object',
         properties: {

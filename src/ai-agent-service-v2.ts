@@ -4219,23 +4219,34 @@ Vérifiez:
           // Filtrer par mois/année si demandé
           let filteredInvoices = supplierInvoices;
           let periodLabel = 'Toutes périodes';
-          
+
           if (args.month) {
             const monthMap: { [key: string]: number } = {
               'janvier': 0, 'fevrier': 1, 'février': 1, 'mars': 2, 'avril': 3,
               'mai': 4, 'juin': 5, 'juillet': 6, 'aout': 7, 'août': 7,
               'septembre': 8, 'octobre': 9, 'novembre': 10, 'decembre': 11, 'décembre': 11,
             };
-            
+
             const targetMonth = monthMap[args.month.toLowerCase()] ?? parseInt(args.month) - 1;
             const targetYear = args.year ? parseInt(args.year) : new Date().getFullYear();
-            
+
             filteredInvoices = supplierInvoices.filter(inv => {
               const invDate = new Date(inv.invoice_date);
               return invDate.getFullYear() === targetYear && invDate.getMonth() === targetMonth;
             });
-            
+
             periodLabel = `${args.month} ${targetYear}`;
+            console.log(`✓ Filtrage période: ${supplierInvoices.length} → ${filteredInvoices.length} factures pour ${periodLabel}`);
+          } else if (args.year) {
+            // 🔧 FIX: Filtrage par ANNÉE seule (ex: "factures de foster pour 2025")
+            const targetYear = parseInt(args.year);
+
+            filteredInvoices = supplierInvoices.filter(inv => {
+              const invDate = new Date(inv.invoice_date);
+              return invDate.getFullYear() === targetYear;
+            });
+
+            periodLabel = `année ${targetYear}`;
             console.log(`✓ Filtrage période: ${supplierInvoices.length} → ${filteredInvoices.length} factures pour ${periodLabel}`);
           }
           
