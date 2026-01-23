@@ -75,15 +75,32 @@ export async function getYearSummary(
     const sortedCategories = Array.from(categoryMap.entries())
       .sort((a, b) => b[1] - a[1]);
 
-    // Construire la réponse
-    let response = `📊 Résumé annuel ${targetYear}\n`;
-    response += `${'='.repeat(30)}\n\n`;
+    // Construire la réponse pédagogique
+    let response = `📊 **Résumé financier ${targetYear}**\n`;
+    response += `${'='.repeat(40)}\n\n`;
 
-    response += `💰 Finances globales:\n`;
-    response += `  📈 Recettes: ${totalRevenue.toFixed(2)}€ (${revenues.length} tx)\n`;
-    response += `  📉 Dépenses: ${totalExpenses.toFixed(2)}€ (${expenses.length} tx)\n`;
-    response += `  💵 Solde net: ${netBalance >= 0 ? '+' : ''}${netBalance.toFixed(2)}€\n`;
-    response += `  📊 Total transactions: ${transactions.length}\n\n`;
+    response += `💰 **Résultat de l'année:**\n\n`;
+
+    // Explication pédagogique du bénéfice
+    response += `📈 **Recettes** (argent reçu):\n`;
+    response += `   ${totalRevenue.toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €\n`;
+    response += `   (${revenues.length} entrées d'argent)\n\n`;
+
+    response += `📉 **Dépenses** (argent dépensé):\n`;
+    response += `   ${totalExpenses.toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €\n`;
+    response += `   (${expenses.length} sorties d'argent)\n\n`;
+
+    response += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    response += `💵 **BÉNÉFICE NET** (Recettes - Dépenses):\n`;
+    response += `   ${netBalance >= 0 ? '✅' : '⚠️'} ${netBalance >= 0 ? '+' : ''}${netBalance.toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €\n`;
+    if (netBalance >= 0) {
+      response += `   → Vous avez gagné ${netBalance.toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € sur l'année\n`;
+    } else {
+      response += `   → Attention : déficit de ${Math.abs(netBalance).toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €\n`;
+    }
+    response += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    response += `📊 Total transactions: ${transactions.length}\n\n`;
 
     response += `🏆 Top 10 fournisseurs:\n`;
     topSuppliers.forEach((s, i) => {

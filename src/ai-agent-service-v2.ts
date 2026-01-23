@@ -485,9 +485,9 @@ Réponse JSON:`;
       hints.push('💡 COMPARAISON PÉRIODES: Utilise compare_periods pour comparer 2 périodes personnalisées. Affiche variation en € et %.');
     }
 
-    // Hints pour les résumés annuels
-    if ((q.includes('résumé') || q.includes('bilan') || q.includes('rapport')) && (q.includes('année') || q.includes('annuel'))) {
-      hints.push('💡 RÉSUMÉ ANNUEL: Utilise get_year_summary avec top 10 fournisseurs et comparaison YoY si disponible.');
+    // Hints pour les résumés annuels et bénéfices
+    if ((q.includes('résumé') || q.includes('bilan') || q.includes('rapport') || q.includes('bénéfice') || q.includes('benef') || q.includes('résultat') || q.includes('profit') || q.includes('perte')) && (q.includes('année') || q.includes('annuel') || /\d{4}/.test(q))) {
+      hints.push('💡 RÉSUMÉ ANNUEL: Utilise get_year_summary avec top 10 fournisseurs et comparaison YoY. Explique clairement pour un novice : recettes = argent reçu, dépenses = argent dépensé, bénéfice = recettes - dépenses.');
     }
 
     // Hints pour les exports

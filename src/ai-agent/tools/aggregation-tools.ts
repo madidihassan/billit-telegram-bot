@@ -12,7 +12,7 @@ export const aggregationTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_year_summary',
-      description: '⚠️ APPEL OBLIGATOIRE pour obtenir le résumé annuel complet. Répond aux questions: "Résumé de l\'année?", "Bilan annuel?", "Statistiques de l\'année?", "Résumé complet 2025?". Affiche un rapport détaillé avec recettes, dépenses, solde net, top 10 fournisseurs, top 10 employés, répartition par catégorie, et comparaison avec l\'année précédente si disponible.',
+      description: '⚠️ APPEL OBLIGATOIRE pour obtenir le résumé annuel complet et répondre aux questions sur les BÉNÉFICES/RÉSULTATS.\n\n🎯 UTILISER pour:\n- "Quel est le bénéfice de [année]?" → calcule recettes - dépenses avec explications claires\n- "Résumé de l\'année?", "Bilan annuel?"\n- "Statistiques de l\'année?", "Résumé complet 2025?"\n- "Quel est le résultat de l\'année?"\n\n📊 Affiche un rapport PÉDAGOGIQUE avec:\n- Recettes (argent reçu) et Dépenses (argent dépensé) clairement expliquées\n- Solde net / Bénéfice = Recettes - Dépenses\n- Top 10 fournisseurs avec pourcentages\n- Répartition par catégorie (salaires, alimentation, etc.)\n- Comparaison avec année précédente si disponible\n\n⚠️ Format novice-friendly : explique chaque terme pour être compris par tous',
       parameters: {
         type: 'object',
         properties: {
