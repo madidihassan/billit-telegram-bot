@@ -131,7 +131,7 @@ export const transactionTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_period_transactions',
-      description: '⚠️ OUTIL PAR DÉFAUT pour les balances mensuelles. Utilise cet outil pour: (1) balance d\'UN SEUL mois (ex: "balance d\'octobre", "balance du mois de novembre"), (2) transactions sur une période spécifique, (3) filtrer par fournisseur. ⚠️ NE PAS utiliser pour "dernière transaction" (utiliser get_last_transaction à la place). Retourne un résumé (crédits, débits, balance) + liste des transactions. Si l\'utilisateur demande SEULEMENT la balance sans mentionner "liste" ou "transactions", tu PEUX limiter l\'affichage au résumé.',
+      description: '⚠️ OUTIL PAR DÉFAUT pour les balances mensuelles SEULEMENT.\n\n⚠️⚠️ NE PAS UTILISER pour:\n- Questions sur BÉNÉFICE/RÉSULTAT annuel (ex: "bénéfice de 2025") → utiliser get_year_summary\n- RÉSUMÉ/BILAN complet d\'une année → utiliser get_year_summary\n- Questions nécessitant top fournisseurs + répartition catégories → utiliser get_year_summary\n\n🎯 UTILISER pour:\n- Balance d\'UN SEUL mois (ex: "balance d\'octobre", "balance novembre")\n- Transactions sur une période spécifique avec liste détaillée\n- Filtrer par fournisseur/employé spécifique\n\n⚠️ NE PAS utiliser pour "dernière transaction" (utiliser get_last_transaction à la place).\n\nRetourne: résumé (crédits, débits, balance) + liste transactions si demandé.',
       parameters: {
         type: 'object',
         properties: {

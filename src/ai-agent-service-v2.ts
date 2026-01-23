@@ -138,10 +138,10 @@ export class AIAgentServiceV2 {
 
 Catégories disponibles:
 - invoices: Questions sur les factures (liste, statut, impayées, en retard, dernière facture)
-- transactions: Questions sur les transactions bancaires, paiements généraux, flux financiers
+- transactions: Questions sur les transactions bancaires (balance mensuelle simple, paiements généraux, flux financiers, dernière transaction)
 - employees: Questions sur les employés, salaires, paie, staff
 - suppliers: Questions sur les fournisseurs, dépenses chez un fournisseur, paiements à un fournisseur spécifique
-- aggregation: Résumés, bilans, rapports annuels/trimestriels, comparaisons de périodes
+- aggregation: Résumés complets, bilans annuels, BÉNÉFICES, RÉSULTATS, profits, rapports annuels/trimestriels, comparaisons de périodes, questions "combien gagné/perdu sur l'année"
 - analytics: Prévisions, analyses de tendances, détection d'anomalies, exports de données
 - users: Gestion des utilisateurs et accès
 
@@ -150,7 +150,11 @@ Question: "${question}"
 Retourne UNIQUEMENT un tableau JSON des catégories pertinentes, sans explication.
 Exemple: ["suppliers", "transactions"]
 
-Si la question mentionne un fournisseur spécifique (nom propre d'entreprise), inclus TOUJOURS "suppliers".
+Règles spéciales:
+- Si la question mentionne un fournisseur spécifique (nom propre d'entreprise), inclus TOUJOURS "suppliers"
+- Si la question mentionne "bénéfice", "résultat", "profit", "perte", "gagné", "perdu" sur une année, inclus TOUJOURS "aggregation" (et pas "transactions")
+- Si demande de résumé/bilan annuel complet, utilise "aggregation" (pas "transactions")
+
 Réponse JSON:`;
 
       let response;
