@@ -466,31 +466,48 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
   }
 
   /**
-   * Crée le clavier de navigation principal (après chaque réponse)
+   * 🏠 Menu PRINCIPAL UNIFIÉ
+   * Utilisé pour: /start, /help, navigation après réponses
+   * UN SEUL MENU pour éviter les doublons et la confusion
    */
-  private getNavigationKeyboard(): any {
+  private getUnifiedMenuKeyboard(): any {
     return {
       inline_keyboard: [
         [
-          { text: '📖 Guide', callback_data: 'show_guide' },
-          { text: '🔍 Rechercher', callback_data: 'search_prompt' },
-          { text: '📊 Stats', callback_data: 'stats' }
-        ],
-        [
           { text: '📋 Factures', callback_data: 'submenu_invoices' },
-          { text: '💰 Finances', callback_data: 'submenu_finances' }
+          { text: '💰 Finances', callback_data: 'submenu_finances' },
+          { text: '📖 Guide', callback_data: 'show_guide' }
         ],
         [
-          { text: '🏠 Menu', callback_data: 'menu' }
+          { text: '🔍 Rechercher', callback_data: 'search_prompt' },
+          { text: '📊 Stats', callback_data: 'stats' },
+          { text: '🗑️ Vider l\'historique', callback_data: 'clear_history' }
         ]
       ]
     };
   }
 
   /**
-   * Menu principal unifié (pour /start et /help)
+   * @deprecated Utiliser getUnifiedMenuKeyboard() à la place
+   * Gardé pour compatibilité, mais redirige vers le menu unifié
    */
   private getMainMenuKeyboard(): any {
+    return this.getUnifiedMenuKeyboard();
+  }
+
+  /**
+   * @deprecated Utiliser getUnifiedMenuKeyboard() à la place
+   * Gardé pour compatibilité, mais redirige vers le menu unifié
+   */
+  private getNavigationKeyboard(): any {
+    return this.getUnifiedMenuKeyboard();
+  }
+
+  /**
+   * Menu principal unifié (pour /start et /help)
+   * @deprecated Utiliser getUnifiedMenuKeyboard() à la place
+   */
+  private getMainMenuKeyboard_OLD(): any {
     return {
       inline_keyboard: [
         [
@@ -510,28 +527,21 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
   }
 
   /**
-   * Sous-menu Factures
+   * 📋 Sous-menu Factures
+   * 3 boutons par ligne pour optimiser l'affichage mobile
    */
   private getInvoicesSubmenuKeyboard(): any {
     return {
       inline_keyboard: [
         [
-          { text: '📋 Factures impayées', callback_data: 'unpaid' }
+          { text: '📋 Impayées', callback_data: 'unpaid' },
+          { text: '⚠️ En retard', callback_data: 'overdue' },
+          { text: '📅 À échéance', callback_data: 'due' }
         ],
         [
-          { text: '⚠️ Factures en retard', callback_data: 'overdue' }
-        ],
-        [
-          { text: '📅 Factures à échéance', callback_data: 'due' }
-        ],
-        [
-          { text: '🧾 Dernière facture', callback_data: 'lastinvoice_prompt' }
-        ],
-        [
-          { text: '📁 Factures par fournisseur', callback_data: 'supplier_prompt' }
-        ],
-        [
-          { text: '🔙 Retour au menu', callback_data: 'menu' }
+          { text: '🧾 Dernière', callback_data: 'lastinvoice_prompt' },
+          { text: '📁 Par fournisseur', callback_data: 'supplier_prompt' },
+          { text: '🔙 Retour', callback_data: 'menu' }
         ]
       ]
     };
@@ -545,16 +555,12 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
       inline_keyboard: [
         [
           { text: '📊 Statistiques', callback_data: 'stats' },
-          { text: '🏦 Soldes', callback_data: 'balance' }
-        ],
-        [
-          { text: '💵 Salaires', callback_data: 'salaries_menu' },
-          { text: '🏢 Fournisseurs', callback_data: 'suppliers_menu' }
-        ],
-        [
+          { text: '🏦 Soldes', callback_data: 'balance' },
           { text: '🔮 Analytics', callback_data: 'guide_analytics' }
         ],
         [
+          { text: '💵 Salaires', callback_data: 'salaries_menu' },
+          { text: '🏢 Fournisseurs', callback_data: 'suppliers_menu' },
           { text: '🔙 Retour', callback_data: 'menu' }
         ]
       ]
@@ -575,19 +581,53 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
   }
 
   /**
-   * Affiche le guide utilisateur complet (menu principal interactif)
+   * 📖 GUIDE UTILISATEUR - VERSION APLATIE
+   * Tous les exemples sont visibles en une seule fois
+   * Plus besoin de cliquer sur chaque catégorie
    */
   private async showUserGuide(): Promise<void> {
     try {
-      const guideText = `📖 <b>GUIDE INTERACTIF - 50 OUTILS IA</b>
-
-Choisissez une catégorie pour voir des exemples concrets :
+      const guideText = `📖 <b>GUIDE - Exemples de questions</b>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-👇 <b>Cliquez sur une catégorie ci-dessous</b>
+📋 <b>Factures</b>
+• "Quelles factures sont impayées ?"
+• "Factures en retard"
+• "Dernière facture de Foster"
+• "Les 20 dernières factures"
 
-💡 <i>Chaque catégorie contient des exemples de questions que vous pouvez poser au bot.</i>`;
+🏢 <b>Fournisseurs</b>
+• "Top 10 des fournisseurs"
+• "Combien j'ai payé à Foster ?"
+• "Dépenses chez Sligro en décembre"
+• "Compare Colruyt et Sligro"
+
+💵 <b>Salaires</b>
+• "Salaires de décembre"
+• "Top 10 employés les mieux payés"
+• "Salaire de Mokhlis Jamhoun"
+• "Compare Hassan et Soufiane"
+
+🏦 <b>Banque & Transactions</b>
+• "Solde actuel"
+• "Transactions du mois"
+• "Balance de décembre"
+• "Recettes et dépenses"
+
+📊 <b>Agrégation & Rapports</b>
+• "Résumé de l'année 2025"
+• "Bilan annuel avec top fournisseurs"
+• "Compare janvier et février"
+• "Rapport trimestriel Q1"
+
+🔮 <b>Analytics & Prédictions</b>
+• "Prévision des dépenses du mois prochain"
+• "Détection d'anomalies"
+• "Analyse les tendances"
+• "Exporte en CSV"
+
+💡 <i>Utilisez simplement ces questions en langage naturel, l'IA comprend automatiquement !</i>`;
 
       await this.bot.sendMessage(this.currentChatId, guideText, {
         parse_mode: 'HTML',
@@ -595,23 +635,7 @@ Choisissez une catégorie pour voir des exemples concrets :
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '📋 Factures', callback_data: 'guide_invoices' },
-              { text: '🏢 Fournisseurs', callback_data: 'guide_suppliers' }
-            ],
-            [
-              { text: '💵 Salaires', callback_data: 'guide_salaries' },
-              { text: '🏦 Banque', callback_data: 'guide_bank' }
-            ],
-            [
-              { text: '📊 Agrégation', callback_data: 'guide_aggregation' },
-              { text: '🔮 Analytics', callback_data: 'guide_analytics' }
-            ],
-            [
-              { text: '👥 Utilisateurs', callback_data: 'guide_users' },
-              { text: '💡 Conseils', callback_data: 'guide_tips' }
-            ],
-            [
-              { text: '🔙 Retour', callback_data: 'menu' }
+              { text: '🔙 Retour au menu', callback_data: 'menu' }
             ]
           ]
         }
