@@ -409,9 +409,12 @@ export class TelegramBotInteractive {
         }
 
         // Vérifier si c'est une question qui nécessite une réponse IA
-        const isQuestion = this.detectQuestionIntent(validation.sanitized!);
+        const intentResult = this.detectQuestionIntent(validation.sanitized!);
 
-        if (isQuestion) {
+        if (intentResult === 'quick_response') {
+          // Réponse rapide déjà envoyée, ne pas continuer
+          return;
+        } else if (intentResult) {
           // RATE LIMITING: Limiter les questions IA (plus coûteuses)
           const aiRateLimit = this.rateLimitManager.check('ai', msg.chat.id);
           if (!aiRateLimit.allowed) {
@@ -1171,8 +1174,10 @@ Choisissez une catégorie pour voir des exemples concrets :
   /**
    * Détecte si un message est une question qui nécessite une réponse IA
    * 🚀 OPTIM 6: Détection locale des commandes simples (gain +20% vitesse)
+   *
+   * @returns 'quick_response' si une réponse rapide a été envoyée, true si question IA, false si menu de bienvenue
    */
-  private detectQuestionIntent(text: string): boolean {
+  private detectQuestionIntent(text: string): boolean | 'quick_response' {
     const t = text.toLowerCase().trim();
 
     // 🎯 OPTIM 6.1: Détection locale des salutations (réponse directe)
@@ -1183,7 +1188,7 @@ Choisissez une catégorie pour voir des exemples concrets :
     if (greetings.some(g => t === g || t.startsWith(g + ' ') || t.endsWith(' ' + g))) {
       // Réponse directe sans IA
       this.sendQuickResponse('👋 Bonjour ! Comment puis-je vous aider ?');
-      return false; // Pas besoin d'IA
+      return 'quick_response'; // Réponse déjà envoyée, ne pas continuer
     }
 
     // 🎯 OPTIM 6.2: Détection locale des remerciements (réponse directe)
@@ -1193,21 +1198,21 @@ Choisissez une catégorie pour voir des exemples concrets :
     ];
     if (thanks.some(t => text.toLowerCase().trim().startsWith(t))) {
       this.sendQuickResponse('✅ De rien ! N\'hésitez pas si vous avez d\'autres questions.');
-      return false;
+      return 'quick_response'; // Réponse déjà envoyée, ne pas continuer
     }
 
     // 🎯 OPTIM 6.3: Détection locale des confirmations simples (réponse directe)
     const confirmations = ['ok', 'd\'accord', 'okay', 'cool', 'parfait', 'bien', 'super', 'nice', 'top', 'oui'];
     if (confirmations.includes(t)) {
       this.sendQuickResponse('👍 Parfait ! Autre chose ?');
-      return false;
+      return 'quick_response'; // Réponse déjà envoyée, ne pas continuer
     }
 
     // 🎯 OPTIM 6.4: Détection locale des demandes d'aide (réponse directe)
     const helpKeywords = ['aide', 'help', 'comment ça marche', 'quoi faire', 'comment faire'];
     if (helpKeywords.some(k => t === k || t.includes(k))) {
       this.sendWelcomeMessage(); // Menu principal
-      return false;
+      return 'quick_response'; // Réponse déjà envoyée, ne pas continuer
     }
 
     // Mots-clés qui indiquent une question explicite nécessitant l'IA
