@@ -154,13 +154,21 @@ export async function getSupplierRanking(
 ): Promise<string> {
   try {
     const currentDate = new Date();
-    const targetYear = year ? parseInt(year) : currentDate.getFullYear();
-    const targetMonth = month || 'année';
+
+    // Déterminer l'année par défaut intelligemment
+    let defaultYear = currentDate.getFullYear();
+    if (!year && (currentDate.getMonth() === 0 || currentDate.getMonth() === 1)) {
+      // Si janvier ou février et aucune année spécifiée, utiliser l'année précédente
+      defaultYear = currentDate.getFullYear() - 1;
+    }
+
+    const targetYear = year ? parseInt(year) : defaultYear;
+    const targetMonth = month;
 
     // Récupérer les transactions
     let transactions;
     if (month) {
-      // Convertir le mois en dates
+      // Mois spécifique (avec année par défaut ou spécifiée)
       const monthMap: { [key: string]: number } = {
         'janvier': 0, 'février': 1, 'mars': 2, 'avril': 3,
         'mai': 4, 'juin': 5, 'juillet': 6, 'août': 7,
@@ -171,7 +179,7 @@ export async function getSupplierRanking(
       const endDate = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59);
       transactions = await bankClient.getTransactionsByPeriod(startDate, endDate);
     } else {
-      // Toute l'année
+      // Année uniquement (par défaut ou spécifiée)
       transactions = await bankClient.getAllTransactions();
       transactions = transactions.filter(t => {
         const txDate = new Date(t.date);
@@ -260,7 +268,12 @@ export async function getSupplierRanking(
     }
 
     // Construire la réponse
-    const period = month ? `${month} ${targetYear}` : `année ${targetYear}`;
+    let period: string;
+    if (month) {
+      period = `${month} ${targetYear}`;
+    } else {
+      period = `année ${targetYear}`;
+    }
     let response = `🏆 Top ${limit} fournisseurs\n`;
     response += `Période: ${period}\n\n`;
 

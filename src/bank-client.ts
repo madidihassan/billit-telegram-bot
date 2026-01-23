@@ -90,37 +90,16 @@ export class BankClient {
 
       let transactions: BankTransaction[];
 
-      // Si une période spécifique est demandée, utiliser la pagination pour contourner la limite de 120
-      if (startDate && endDate) {
-        transactions = await this.getAllTransactionsWithPagination(filter, limit);
+      // TOUJOURS utiliser la pagination pour récupérer TOUTES les transactions
+      // (pas seulement pour les périodes spécifiques)
+      transactions = await this.getAllTransactionsWithPagination(filter, limit);
 
-        // NE PAS mettre en cache les périodes spécifiques pour éviter les données obsolètes
-        // Les transactions peuvent être ajoutées à tout moment
-      } else {
-        // Sinon, requête simple (comportement par défaut)
-        const params: any = {
-          $top: limit || 120,
-        };
-
-        if (filter) {
-          params.$filter = filter;
-        }
-
-        const response = await this.axiosInstance.get<BillitTransactionsResponse>('/v1/financialTransactions', {
-          params,
-        });
-
-        const items = response.data.Items || response.data.items || response.data || [];
-        console.log(`✓ ${Array.isArray(items) ? items.length : 0} transaction(s) récupérée(s)`);
-        transactions = Array.isArray(items) ? this.convertTransactions(items) : [];
-
-        // Sauvegarder dans le cache uniquement pour les requêtes globales (pas de dates spécifiques)
-        // et uniquement s'il y a des résultats (JAMAIS mettre en cache un résultat vide)
-        if (transactions.length > 0) {
-          const cacheKey = 'all_transactions';
-          this.saveToCache(cacheKey, transactions, 5 * 60 * 1000); // 5 minutes pour le cache global
-          console.log('💾 Résultats mis en cache (5 minutes)');
-        }
+      // Sauvegarder dans le cache uniquement pour les requêtes globales (pas de dates spécifiques)
+      // et uniquement s'il y a des résultats (JAMAIS mettre en cache un résultat vide)
+      if (transactions.length > 0 && !startDate && !endDate) {
+        const cacheKey = 'all_transactions';
+        this.saveToCache(cacheKey, transactions, 5 * 60 * 1000); // 5 minutes pour le cache global
+        console.log('💾 Résultats mis en cache (5 minutes)');
       }
 
       return transactions;

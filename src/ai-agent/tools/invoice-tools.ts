@@ -12,7 +12,7 @@ export const invoiceTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_unpaid_invoices',
-      description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures impayées RÉELLES. Tu DOIS appeler cet outil pour TOUTE question sur les factures impayées. Ne JAMAIS inventer de montants ou de nombres de factures. Exemples: "Factures impayées?", "Combien de factures à payer?", "Montant total impayé?"',
+      description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures impayées RÉELLES avec détails complets.\n\n🎯 FORMAT OBLIGATOIRE (label et valeur sur la MÊME ligne) :\n"📋 Vous avez X factures impayées totalisant Y €.\n\n━━━━━━━━━━━━━━━━━━\n📄 Facture 1/X (numéro absolu sur total)\n🏪 Fournisseur : [supplier]\n💰 Prix : [amount] €\n📋 N° de facture : [invoice_number]\n📅 Date : [invoice_date]\n⏰ Date d\'échéance : [due_date]\n💬 Communication : [communication]\n📊 Statut : [status]\n━━━━━━━━━━━━━━━━━━"\n\n⚠️ NUMÉROTATION : Si 9 factures, numéroter de 1/9 à 9/9 (pas 1/1, 2/1, etc.)\n\n⚠️ CRITIQUE : Chaque ligne = emoji + label + ":" + espace + valeur. PAS de saut de ligne entre label et valeur.\n\nExemples: "Factures impayées?", "Combien de factures à payer?", "Montant total impayé?"',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -20,8 +20,17 @@ export const invoiceTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_paid_invoices',
-      description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures payées RÉELLES récentes. Tu DOIS appeler cet outil pour TOUTE question sur les factures payées. Ne JAMAIS inventer de liste ou de montants. Exemples: "Factures payées?", "Combien de factures payées ce mois?", "Dernières factures payées?"',
-      parameters: { type: 'object', properties: {}, required: [] },
+      description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures payées RÉELLES avec pagination (5 par page).\n\n🎯 FORMAT OBLIGATOIRE (label et valeur sur la MÊME ligne) :\n"📋 Vous avez X factures payées totalisant Y €.\n\nAffichage : Factures Z1 à Z2 (Page P/Total_Pages)\n\n━━━━━━━━━━━━━━━━━━\n📄 Facture [NUMERO_ABSOLU]/[TOTAL]\n🏪 Fournisseur : [supplier]\n💰 Prix : [amount] €\n📋 N° de facture : [invoice_number]\n📅 Date : [invoice_date]\n⏰ Date d\'échéance : [due_date]\n💬 Communication : [communication]\n📊 Statut : Payée\n━━━━━━━━━━━━━━━━━━\n\n💡 Pour voir les 5 suivantes, demandez : \'Factures payées page 2\' ou \'5 factures payées suivantes\'"\n\n⚠️⚠️ NUMÉROTATION ABSOLUE : Pour la facture N de la page, utiliser : NUMERO_ABSOLU = (page-1)*5 + N\nExemple : Page 2, facture 1 → (2-1)*5 + 1 = 6 → "📄 Facture 6/64"\n\n⚠️ PAGINATION : Par défaut page=1 (5 premières). Si utilisateur dit "page 2", "suivantes", "page 3" → utiliser le paramètre page.\n\nExemples: "Factures payées", "Factures payées page 2", "5 factures suivantes"',
+      parameters: {
+        type: 'object',
+        properties: {
+          page: {
+            type: 'number',
+            description: 'Numéro de page (1 = 5 premières, 2 = factures 6-10, etc.). Par défaut: 1',
+          },
+        },
+        required: [],
+      },
     },
   },
   {
@@ -57,7 +66,7 @@ export const invoiceTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_overdue_invoices',
-      description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures en retard RÉELLES. Tu DOIS appeler cet outil pour TOUTE question sur les factures en retard/overdue. Ne JAMAIS inventer de nombres ou montants. Exemples: "Factures en retard?", "Combien de factures overdue?", "Retards de paiement?"',
+      description: '⚠️ APPEL OBLIGATOIRE: Obtenir les factures en retard RÉELLES avec détails complets.\n\n🎯 FORMAT OBLIGATOIRE (label et valeur sur la MÊME ligne) :\n"⚠️ Vous avez X factures en retard totalisant Y €.\n\n━━━━━━━━━━━━━━━━━━\n📄 Facture 1/X (numéro absolu sur total)\n🏪 Fournisseur : [supplier]\n💰 Prix : [amount] €\n📋 N° de facture : [invoice_number]\n📅 Date : [invoice_date]\n⏰ Date d\'échéance : [due_date]\n💬 Communication : [communication]\n📊 Statut : [status]\n⚠️ Retard : [days_overdue] jours\n━━━━━━━━━━━━━━━━━━"\n\n⚠️ NUMÉROTATION : Si 3 factures, numéroter de 1/3 à 3/3 (pas 1/1, 2/1, etc.)\n\n⚠️ CRITIQUE : Chaque ligne = emoji + label + ":" + espace + valeur. PAS de saut de ligne entre label et valeur.\n\nExemples: "Factures en retard?", "Combien de factures overdue?", "Retards de paiement?"',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -169,7 +178,7 @@ export const invoiceTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'search_invoices',
-      description: '⚠️ APPEL OBLIGATOIRE: Rechercher des factures RÉELLES par fournisseur, numéro ou montant. Tu DOIS appeler cet outil pour TOUTE recherche de facture. Ne JAMAIS inventer de résultats.\n\n🎯 UTILISER pour filtres par MONTANT:\n- "Factures de plus de 3000€" → {min_amount: 3000}\n- "Factures moins de 500€" → {max_amount: 500}\n- "Factures entre 1000 et 5000€" → {min_amount: 1000, max_amount: 5000}\n\nExemples: "Cherche factures Foster", "Trouve facture 123", "Recherche Coca-Cola", "Factures plus de 10000€"',
+      description: '⚠️ Rechercher des factures RÉELLES par fournisseur, numéro ou montant.\n\n⚠️⚠️ NE PAS UTILISER si:\n- La question mentionne une PÉRIODE/DATE (année, mois, 2025, 2024, novembre, etc.) → utiliser analyze_supplier_expenses à la place\n- La question demande "toutes les factures de [fournisseur] pour [période]" → utiliser analyze_supplier_expenses\n\n🎯 UTILISER UNIQUEMENT pour:\n- Recherche simple par fournisseur SANS période: "Cherche factures Foster", "Recherche Coca-Cola"\n- Recherche par numéro: "Trouve facture 123"\n- Filtres par MONTANT: "Factures de plus de 3000€" → {min_amount: 3000}, "Factures moins de 500€" → {max_amount: 500}\n\n⚠️ Cet outil NE FILTRE PAS par date! Pour les requêtes avec période, utiliser analyze_supplier_expenses.',
       parameters: {
         type: 'object',
         properties: {

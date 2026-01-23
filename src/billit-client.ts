@@ -258,12 +258,20 @@ export class BillitClient {
     const invoices = await this.getInvoices({ limit: 100 });
     const now = new Date();
 
+    // Comparer UNIQUEMENT les dates (sans les heures)
+    // Une facture échéance 23 janvier n'est en retard que le 24 janvier
+    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     return invoices.filter(inv => {
       const isPaid = inv.status.toLowerCase() === 'paid' || inv.status.toLowerCase() === 'payé';
       if (isPaid) return false;
 
       const dueDate = new Date(inv.due_date);
-      return dueDate < now;
+      const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+
+      // En retard seulement si au moins 1 jour complet écoulé
+      const daysOverdue = Math.floor((nowDateOnly.getTime() - dueDateOnly.getTime()) / (1000 * 60 * 60 * 24));
+      return daysOverdue >= 1;
     });
   }
 

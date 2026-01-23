@@ -530,16 +530,50 @@ Réponse JSON:`;
         case 'get_unpaid_invoices': {
           const invoices = await this.billitClient.getUnpaidInvoices();
           const total = invoices.reduce((sum, inv) => sum + inv.total_amount, 0);
+
+          // Calculer les jours de retard pour chaque facture
+          const now = new Date();
+          const invoicesWithDetails = invoices.map(inv => {
+            const dueDate = inv.due_date ? new Date(inv.due_date) : null;
+
+            // Comparer UNIQUEMENT les dates (sans les heures)
+            // Une facture échéance 23 janvier n'est en retard que le 24 janvier
+            let daysOverdue = 0;
+            let isOverdue = false;
+
+            if (dueDate) {
+              const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+              daysOverdue = Math.floor((nowDateOnly.getTime() - dueDateOnly.getTime()) / (1000 * 60 * 60 * 24));
+              isOverdue = daysOverdue >= 1; // En retard seulement si au moins 1 jour complet écoulé
+            }
+
+            // Traduire le statut
+            let statusLabel = 'A payer';
+            if (inv.status === 'Paid' || inv.status === 'paid') {
+              statusLabel = 'Payée';
+            } else if (inv.status === 'DirectDebit' || inv.status === 'domiciliation') {
+              statusLabel = 'Domiciliation';
+            }
+
+            return {
+              supplier: inv.supplier_name,
+              amount: inv.total_amount,
+              invoice_number: inv.invoice_number,
+              invoice_date: inv.invoice_date,
+              due_date: inv.due_date,
+              communication: inv.communication || 'N/A',
+              status: statusLabel,
+              days_overdue: daysOverdue > 0 ? daysOverdue : 0,
+              is_overdue: isOverdue,
+            };
+          });
+
           result = {
             count: invoices.length,
             total_amount: total,
             currency: 'EUR',
-            // 🔧 FIX: Retourner TOUTES les factures impayées (pas seulement 5)
-            invoices: invoices.map(inv => ({
-              supplier: inv.supplier_name,
-              amount: inv.total_amount,
-              invoice_number: inv.invoice_number,
-            })),
+            invoices: invoicesWithDetails,
           };
           break;
         }
@@ -550,9 +584,9 @@ Réponse JSON:`;
           let allInvoices: any[] = [];
           let skip = 0;
           const pageSize = 120;
-          
+
           while (true) {
-            const batch = await this.billitClient.getInvoices({ 
+            const batch = await this.billitClient.getInvoices({
               limit: pageSize,
               skip: skip
             });
@@ -565,15 +599,33 @@ Réponse JSON:`;
             inv.status.toLowerCase().includes('paid') || inv.status.toLowerCase().includes('payé')
           );
           const total = invoices.reduce((sum, inv) => sum + inv.total_amount, 0);
+
+          // Pagination : 5 factures par page
+          const page = (args.page as number) || 1;
+          const perPage = 5;
+          const startIndex = (page - 1) * perPage;
+          const endIndex = startIndex + perPage;
+          const totalPages = Math.ceil(invoices.length / perPage);
+
+          // Enrichir avec tous les détails (comme pour impayées)
+          const invoicesWithDetails = invoices.slice(startIndex, endIndex).map(inv => ({
+            supplier: inv.supplier_name,
+            amount: inv.total_amount,
+            invoice_number: inv.invoice_number,
+            invoice_date: inv.invoice_date,
+            due_date: inv.due_date,
+            communication: inv.communication || 'N/A',
+            status: 'Payée',
+          }));
+
           result = {
             count: invoices.length,
             total_amount: total,
             currency: 'EUR',
-            latest: invoices.slice(0, 5).map(inv => ({
-              supplier: inv.supplier_name,
-              amount: inv.total_amount,
-              date: inv.invoice_date,
-            })),
+            invoices: invoicesWithDetails,
+            page: page,
+            total_pages: totalPages,
+            has_more: page < totalPages,
           };
           break;
         }
@@ -759,43 +811,41 @@ Réponse JSON:`;
           const invoices = await this.billitClient.getOverdueInvoices();
           const total = invoices.reduce((sum, inv) => sum + inv.total_amount, 0);
 
-          // 🔍 Détecter si l'utilisateur veut les détails ou juste le résumé
-          const questionLower = this.currentQuestion.toLowerCase();
-          const wantsDetails = questionLower.includes('liste') || questionLower.includes('détail') ||
-                               questionLower.includes('details') || questionLower.includes('donne') ||
-                               questionLower.includes('montre') || questionLower.includes('voir') ||
-                               (questionLower.includes('facture') && (questionLower.includes('quelle') || questionLower.includes('quelles')));
+          // Enrichir avec dates et jours de retard
+          const now = new Date();
+          const invoicesWithDetails = invoices.map(inv => {
+            const dueDate = new Date(inv.due_date);
 
-          let directResponse = '';
+            // Comparer UNIQUEMENT les dates (sans les heures)
+            const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+            const daysOverdue = Math.floor((nowDateOnly.getTime() - dueDateOnly.getTime()) / (1000 * 60 * 60 * 24));
 
-          if (wantsDetails && invoices.length > 0) {
-            // Afficher les détails de chaque facture
-            directResponse = `📋 Vous avez **${invoices.length} facture${invoices.length > 1 ? 's' : ''} en retard** pour un total de **${total.toFixed(2).replace('.', ',')} €**.\n\n`;
-            directResponse += `**Détails des factures :**\n`;
+            // Traduire le statut
+            let statusLabel = 'A payer (EN RETARD)';
+            if (inv.status === 'Paid' || inv.status === 'paid') {
+              statusLabel = 'Payée';
+            } else if (inv.status === 'DirectDebit' || inv.status === 'domiciliation') {
+              statusLabel = 'Domiciliation (EN RETARD)';
+            }
 
-            invoices.forEach((inv, index) => {
-              const daysOverdue = Math.floor(
-                (new Date().getTime() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24)
-              );
-              directResponse += `${index + 1}. ${inv.supplier_name} - ${inv.total_amount.toFixed(2).replace('.', ',')} € (en retard de ${daysOverdue} jour${daysOverdue > 1 ? 's' : ''})\n`;
-            });
-          } else {
-            // Réponse courte sans détails
-            directResponse = `📋 Vous avez **${invoices.length} facture${invoices.length > 1 ? 's' : ''} en retard** pour un total de **${total.toFixed(2).replace('.', ',')} €**.`;
-          }
+            return {
+              supplier: inv.supplier_name,
+              amount: inv.total_amount,
+              invoice_number: inv.invoice_number,
+              invoice_date: inv.invoice_date,
+              due_date: inv.due_date,
+              communication: inv.communication || 'N/A',
+              status: statusLabel,
+              days_overdue: daysOverdue,
+            };
+          });
 
           result = {
             count: invoices.length,
             total_amount: total,
             currency: 'EUR',
-            invoices: invoices.map(inv => ({
-              supplier: inv.supplier_name,
-              amount: inv.total_amount,
-              days_overdue: Math.floor(
-                (new Date().getTime() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24)
-              ),
-            })),
-            direct_response: directResponse
+            invoices: invoicesWithDetails,
           };
           break;
         }
@@ -5693,7 +5743,7 @@ Vérifiez:
       if (topSuppliersMatch) {
         const topNumber = topSuppliersMatch[2] || topSuppliersMatch[3] || topSuppliersMatch[6] || topSuppliersMatch[7] || topSuppliersMatch[8];
         console.log(`🔍 Détection: Top ${topNumber} fournisseurs - ajout d'un hint pour l'IA`);
-        question = `[HINT: L'utilisateur demande le top ${topNumber} des fournisseurs par dépenses. Utiliser analyze_supplier_expenses sans supplier_name pour obtenir le classement des fournisseurs. NE PAS utiliser get_period_transactions.] ${question}`;
+        question = `[HINT: L'utilisateur demande le top ${topNumber} des fournisseurs par dépenses. Utiliser get_supplier_ranking avec limit=${topNumber} pour obtenir le classement. NE PAS utiliser analyze_supplier_expenses ni get_period_transactions.] ${question}`;
       }
 
       // Détection de période multi-mois pour fournisseurs (ex: "dépenses entre octobre et décembre")

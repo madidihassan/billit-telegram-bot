@@ -1145,17 +1145,30 @@ Choisissez une catégorie pour voir des exemples concrets :
       'cherche', 'recherche', 'rechercher', 'search',
       'où', 'quand', 'pourquoi',
       'est-ce que', 'est ce que',
-      '?', '¿', '？'
+      '?', '¿', '？',
+      // Pagination
+      'page', 'suivant', 'suivante', 'suivantes', 'précédent', 'précédente',
+      'next', 'previous', 'suite'
     ];
 
     // Vérifier si le texte contient un mot-clé de question
     const hasQuestionWord = questionWords.some(word => t.includes(word));
 
+    // 🔧 FIX: Ajouter des mots-clés métier qui indiquent une vraie question
+    const businessKeywords = [
+      'facture', 'invoice', 'impayé', 'retard', 'paiement', 'paid', 'unpaid',
+      'salaire', 'salary', 'employé', 'employee', 'fournisseur', 'supplier',
+      'transaction', 'dépense', 'expense', 'balance', 'solde', 'compte',
+      'foster', 'sligro', 'coca', 'colruyt', // Fournisseurs courants
+      'prévision', 'forecast', 'alerte', 'alert', 'top', 'dernier'
+    ];
+    const hasBusinessKeyword = businessKeywords.some(word => t.includes(word));
+
     // Vérifier si c'est une phrase courte (moins de 100 caractères)
     const isShortMessage = text.length < 100;
 
-    // AMÉLIORATION: Traiter les messages courts avec mots-clés de question comme requêtes IA
-    return isShortMessage && hasQuestionWord;
+    // AMÉLIORATION: Traiter les messages courts avec mots-clés de question OU métier comme requêtes IA
+    return isShortMessage && (hasQuestionWord || hasBusinessKeyword);
   }
 
   /**
