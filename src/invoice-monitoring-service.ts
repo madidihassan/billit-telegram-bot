@@ -302,13 +302,24 @@ export class InvoiceMonitoringService {
     } else {
       // Notification pour une facture complète
       const statusTranslated = this.translateStatus(invoice.status);
+
+      // Formater la date d'échéance si disponible
+      const dueDateLine = invoice.due_date
+        ? `\n📆 <b>Date d'échéance:</b> ${new Date(invoice.due_date).toLocaleDateString('fr-FR')}`
+        : '';
+
+      // Communication structurée si disponible
+      const commLine = invoice.communication
+        ? `\n📝 <b>Communication:</b> ${this.escapeHtml(invoice.communication)}`
+        : '';
+
       message = `
 ${statusIcon} <b>Nouvelle Facture</b>
 
 🏢 <b>Fournisseur:</b> ${this.escapeHtml(invoice.supplier_name)}
 📄 <b>N° Facture:</b> ${this.escapeHtml(invoice.invoice_number)}
 💰 <b>Montant:</b> ${invoice.total_amount.toFixed(2)} ${invoice.currency}
-📅 <b>Date:</b> ${new Date(invoice.invoice_date).toLocaleDateString('fr-FR')}
+📅 <b>Date:</b> ${new Date(invoice.invoice_date).toLocaleDateString('fr-FR')}${dueDateLine}${commLine}
 📊 <b>Statut:</b> ${statusIcon} ${statusTranslated}
 
 ${isPaid ? '✨ Cette facture a été réglée' : '⚠️ Cette facture est en attente de paiement'}

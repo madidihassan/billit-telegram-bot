@@ -658,9 +658,9 @@ Réponse JSON:`;
             let allInvoices: any[] = [];
             let skip = 0;
             const pageSize = 120;
-            
+
             while (true) {
-              const batch = await this.billitClient.getInvoices({ 
+              const batch = await this.billitClient.getInvoices({
                 limit: pageSize,
                 skip: skip
               });
@@ -678,10 +678,20 @@ Réponse JSON:`;
               break;
             }
 
-            console.log(`📊 get_latest_invoice: ${allInvoices.length} factures récupérées`);
+            // 🔧 FIX: Filtrer par fournisseur si spécifié
+            let filteredInvoices = allInvoices;
+            if (args.supplier_name) {
+              const { matchesSupplier } = await import('./supplier-aliases');
+              filteredInvoices = allInvoices.filter(inv =>
+                matchesSupplier(inv.supplier_name, args.supplier_name)
+              );
+              console.log(`🔍 Filtrage par fournisseur "${args.supplier_name}": ${filteredInvoices.length} facture(s) trouvée(s)`);
+            }
+
+            console.log(`📊 get_latest_invoice: ${filteredInvoices.length} factures à considérer`);
 
             // Filtrer les factures avec une date valide et trier par date (la plus récente en premier)
-            const sortedInvoices = allInvoices
+            const sortedInvoices = filteredInvoices
               .filter(inv => inv.invoice_date && !isNaN(new Date(inv.invoice_date).getTime()))
               .sort((a, b) => {
                 const dateA = new Date(a.invoice_date).getTime();
@@ -692,13 +702,36 @@ Réponse JSON:`;
             if (sortedInvoices.length === 0) {
               result = {
                 success: false,
-                message: 'Aucune facture avec une date valide trouvée',
+                message: args.supplier_name
+                  ? `Aucune facture trouvée pour le fournisseur "${args.supplier_name}"`
+                  : 'Aucune facture avec une date valide trouvée',
               };
               break;
             }
 
             const latestInvoice = sortedInvoices[0];
             console.log(`📄 Dernière facture: ${latestInvoice.supplier_name} - ${latestInvoice.invoice_date} - ${latestInvoice.total_amount}€`);
+
+            // 🔧 FIX: Utiliser direct_response pour forcer le format avec communication
+            const invDate = new Date(latestInvoice.invoice_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+            const dueDateLine = latestInvoice.due_date ? `⏰ Date d'échéance : ${new Date(latestInvoice.due_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
+            const commLine = latestInvoice.communication ? `💬 Communication : ${latestInvoice.communication}` : '';
+
+            const statusText = latestInvoice.status.toLowerCase().includes('paid') || latestInvoice.status.toLowerCase().includes('payé')
+              ? 'Payée'
+              : latestInvoice.status.toLowerCase().includes('domiciliation')
+              ? 'Domiciliation'
+              : 'À payer';
+
+            const directResponse = `📄 Dernière facture reçue de ${latestInvoice.supplier_name} :
+
+🏪 Fournisseur : ${latestInvoice.supplier_name}
+💰 Montant : ${latestInvoice.total_amount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
+📋 N° de facture : ${latestInvoice.invoice_number}
+📅 Date : ${invDate}
+${dueDateLine}
+${commLine}
+📊 Statut : ${statusText}`;
 
             result = {
               success: true,
@@ -713,6 +746,7 @@ Réponse JSON:`;
                 status: latestInvoice.status,
                 communication: latestInvoice.communication || '',
               },
+              direct_response: directResponse,
             };
           } catch (error: any) {
             console.error('❌ Erreur get_latest_invoice:', error);
@@ -964,6 +998,19 @@ Réponse JSON:`;
 
         case 'get_invoice_stats': {
           const stats = await this.billitClient.getMonthlyStats();
+
+          // 🔧 AJOUT: Récupérer aussi les stats bancaires pour le bénéfice
+          const now = new Date();
+          const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+          const transactions = await this.bankClient.getTransactionsByPeriod(startDate, endDate);
+          const credits = transactions.filter(tx => tx.type === 'Credit');
+          const debits = transactions.filter(tx => tx.type === 'Debit');
+          const totalCredits = credits.reduce((sum, tx) => sum + tx.amount, 0);
+          const totalDebits = debits.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+          const balance = totalCredits - totalDebits; // Bénéfice net
+
           result = {
             month: new Date().toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' }),
             total_invoices: stats.count,
@@ -973,6 +1020,12 @@ Réponse JSON:`;
             unpaid_amount: stats.unpaid,
             total_amount: stats.total,
             currency: 'EUR',
+            // 🔧 AJOUT: Stats bancaires pour le bénéfice
+            bank_revenues: totalCredits,
+            bank_expenses: totalDebits,
+            bank_profit: balance,
+            credit_count: credits.length,
+            debit_count: debits.length,
           };
           break;
         }
@@ -1444,7 +1497,7 @@ Réponse JSON:`;
           // Détecter si l'utilisateur demande la liste détaillée ou juste le résumé
           const questionLower = this.currentQuestion.toLowerCase();
           const wantsDetailedList = questionLower.includes('liste') ||
-                                    questionLower.includes('transactions') ||
+                                    questionLower.includes('transaction') ||  // singulier OU pluriel
                                     questionLower.includes('détail') ||
                                     questionLower.includes('détaillé');
 
@@ -5976,6 +6029,26 @@ RÉPONSES:
 - Concis (2-4 phrases) sauf listes explicites
 - 2-3 émojis max
 - Format naturel
+
+📋 FORMAT OBLIGATOIRE POUR LES FACTURES:
+⚠️ Quand tu affiches UNE facture (get_latest_invoice), TOUJOURS inclure ces champs:
+- 🏪 Fournisseur
+- 💰 Montant
+- 📋 N° de facture
+- 📅 Date
+- ⏰ Date d'échéance (si disponible)
+- 💬 Communication (si disponible)
+- 📊 Statut
+
+Exemple:
+📄 Dernière facture reçue de Coca-Cola :
+🏪 Fournisseur : Coca-Cola Europacific Partners Belgium SRL
+💰 Montant : 1 432,35 €
+📋 N° de facture : 9901356238
+📅 Date : 21 janvier 2026
+⏰ Date d'échéance : 20 février 2026
+💬 Communication : [communication]
+📊 Statut : À payer
 
 📱 FORMATAGE TELEGRAM (CRITIQUE):
 ⚠️ JAMAIS d'espaces au début des lignes (cause problème largeur)

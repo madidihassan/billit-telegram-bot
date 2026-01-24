@@ -151,7 +151,9 @@ export class TelegramBotInteractive {
         // Gérer les commandes spéciales
         if (command === 'menu') {
           this.waitingForInput = null;
-          response = await this.commandHandler.handleCommand('help', []);
+          // Envoyer le menu principal unifié
+          await this.sendWelcomeMessage();
+          return;
         } else if (command === 'show_guide') {
           this.waitingForInput = null;
           await this.showUserGuide();
@@ -183,8 +185,9 @@ export class TelegramBotInteractive {
           this.waitingForInput = null;
           response = '🏢 <b>Fournisseurs</b>\n\nExemples de questions :\n• "top 10 fournisseurs"\n• "dépenses chez Sligro"\n• "compare Colruyt et Sligro"\n• "tendances Sligro sur 6 mois"';
         } else if (command === 'balance') {
+          // 🔧 FIX: Utiliser l'IA pour le solde (format avec soldes des comptes)
           this.waitingForInput = null;
-          response = await this.commandHandler.handleCommand('balance', []);
+          response = await this.aiAgentService.processQuestion('Donne-moi le solde des comptes', String(this.currentChatId));
         } else if (command === 'ai_tools') {
           this.waitingForInput = null;
           response = await this.getAIToolsList();
@@ -217,6 +220,10 @@ export class TelegramBotInteractive {
           }
 
           response = await this.aiAgentService.processQuestion(question, String(this.currentChatId));
+        } else if (command === 'stats') {
+          // 🔧 FIX: Utiliser l'IA pour les stats (format simplifié avec bénéfice)
+          this.waitingForInput = null;
+          response = await this.aiAgentService.processQuestion('Donne-moi les statistiques du mois', String(this.currentChatId));
         } else {
           // Commandes normales
           this.waitingForInput = null;

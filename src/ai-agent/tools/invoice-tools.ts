@@ -37,8 +37,17 @@ export const invoiceTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_latest_invoice',
-      description: '⚠️ APPEL OBLIGATOIRE: Obtenir LA dernière facture RÉELLE (la plus récente par date). Tu DOIS appeler cet outil quand l\'utilisateur demande "la dernière facture", "la facture la plus récente", "dernière facture reçue". Ne JAMAIS utiliser get_paid_invoices pour cette question.',
-      parameters: { type: 'object', properties: {}, required: [] },
+      description: '⚠️ APPEL OBLIGATOIRE: Obtenir LA dernière facture RÉELLE (la plus récente par date). Tu DOIS appeler cet outil quand l\'utilisateur demande "la dernière facture", "la facture la plus récente", "dernière facture reçue". Si un fournisseur est mentionné ("dernière facture de Coca-Cola"), utilise le paramètre supplier_name. Ne JAMAIS utiliser get_paid_invoices pour cette question.',
+      parameters: {
+        type: 'object',
+        properties: {
+          supplier_name: {
+            type: 'string',
+            description: 'Nom du fournisseur pour filtrer (ex: "Coca-Cola", "Foster"). Utilise ce paramètre si l\'utilisateur mentionne un fournisseur spécifique.',
+          },
+        },
+        required: [],
+      },
     },
   },
   {
@@ -108,7 +117,7 @@ export const invoiceTools: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_invoice_stats',
-      description: '⚠️ APPEL OBLIGATOIRE: Obtenir les statistiques RÉELLES des factures du mois. Tu DOIS appeler cet outil pour TOUTE question sur les stats/statistiques de factures. Ne JAMAIS inventer de chiffres. Exemples: "Stats du mois?", "Statistiques factures?", "Combien de factures?"',
+      description: '⚠️ APPEL OBLIGATOIRE: Obtenir les statistiques RÉELLES des factures du mois + bénéfice bancaire (recettes - dépenses). Tu DOIS appeler cet outil pour TOUTE question sur les stats/statistiques. Retourne factures payées/impayées + recettes/dépenses/bénéfice. Ne JAMAIS inventer de chiffres. Exemples: "Stats du mois?", "Statistiques factures?", "Combien de factures?", "Donne-moi les statistiques du mois"',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
