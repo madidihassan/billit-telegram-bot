@@ -469,6 +469,95 @@ Réponse JSON:`;
   }
 
   /**
+   * 💡 Génère des suggestions contextuelles basées sur les outils utilisés
+   */
+  private generateContextualSuggestion(toolsUsed: string[], response: string): string | null {
+    console.log('🔍 generateContextualSuggestion appelé avec toolsUsed =', toolsUsed, 'length =', response.length);
+
+    // Ne pas suggérer si la réponse est extrêmement longue (>5000 chars)
+    if (response.length > 5000) {
+      console.log('⚠️ Suggestion bloquée: réponse trop longue');
+      return null;
+    }
+
+    // Ne pas suggérer si c'est une réponse rapide (salutations, remerciements, etc.)
+    const quickResponsePatterns = [
+      'Bonjour', 'Salut', 'Merci', 'De rien', 'Parfait', 'OK',
+      'Au revoir', 'À bientôt', 'D\'accord', 'Super', 'Top'
+    ];
+    if (quickResponsePatterns.some(p => response.includes(p))) {
+      console.log('⚠️ Suggestion bloquée: réponse rapide détectée');
+      return null;
+    }
+
+    // Suggestions basées sur les outils utilisés
+    const suggestionMap: { [key: string]: string[] } = {
+      'get_recent_invoices': [
+        '💡 Vous pouvez aussi : Voulez-vous voir les factures impayées ?',
+        '💡 Vous pouvez aussi : Comparer avec un autre fournisseur ?',
+      ],
+      'get_supplier_invoices': [
+        '💡 Vous pouvez aussi : Voir le total des dépenses avec ce fournisseur ?',
+        '💡 Vous pouvez aussi : Analyser l\'évolution des dépenses avec ce fournisseur ?',
+        '💡 Vous pouvez aussi : Comparer avec un autre fournisseur ?',
+      ],
+      'get_latest_invoice': [
+        '💡 Vous pouvez aussi : Voulez-vous voir les autres factures de ce fournisseur ?',
+        '💡 Vous pouvez aussi : Afficher le total des dépenses avec ce fournisseur ?',
+      ],
+      'get_unpaid_invoices': [
+        '💡 Vous pouvez aussi : Voir les factures en retard ?',
+        '💡 Vous pouvez aussi : Afficher les factures à échéance proche ?',
+      ],
+      'get_overdue_invoices': [
+        '💡 Vous pouvez aussi : Calculer le total des factures en retard ?',
+        '💡 Vous pouvez aussi : Voir les factures impayées (toutes) ?',
+      ],
+      'get_monthly_balance': [
+        '💡 Vous pouvez aussi : Voir le détail des transactions du mois ?',
+        '💡 Vous pouvez aussi : Afficher les recettes ou les dépenses séparément ?',
+      ],
+      'get_monthly_stats': [
+        '💡 Vous pouvez aussi : Voir le top 5 des fournisseurs du mois ?',
+        '💡 Vous pouvez aussi : Comparer avec le mois précédent ?',
+      ],
+      'get_employee_salaries': [
+        '💡 Vous pouvez aussi : Voir le top des employés les mieux payés ?',
+        '💡 Vous pouvez aussi : Comparer deux employés ?',
+      ],
+      'analyze_supplier_expenses': [
+        '💡 Vous pouvez aussi : Voir l\'évolution sur plusieurs mois ?',
+        '💡 Vous pouvez aussi : Comparer avec un autre fournisseur ?',
+      ],
+      'get_period_transactions': [
+        '💡 Vous pouvez aussi : Afficher la balance du mois ?',
+        '💡 Vous pouvez aussi : Filtrer par recettes ou dépenses ?',
+      ],
+      'get_year_summary': [
+        '💡 Vous pouvez aussi : Voir le bilan trimestriel ?',
+        '💡 Vous pouvez aussi : Comparer avec l\'année précédente ?',
+      ],
+    };
+
+    // Prendre la suggestion du premier outil utilisé
+    for (const tool of toolsUsed) {
+      if (suggestionMap[tool]) {
+        const suggestions = suggestionMap[tool];
+        // Retourner une suggestion aléatoire
+        return suggestions[Math.floor(Math.random() * suggestions.length)];
+      }
+    }
+
+    // Suggestion par défaut si aucun outil spécifique
+    const defaultSuggestions = [
+      '💡 Vous pouvez aussi : Voir les factures impayées ?',
+      '💡 Vous pouvez aussi : Afficher les statistiques du mois ?',
+      '💡 Vous pouvez aussi : Consulter le solde des comptes ?',
+    ];
+    return defaultSuggestions[Math.floor(Math.random() * defaultSuggestions.length)];
+  }
+
+  /**
    * 💡 OPTIMISATION: Génère des hints dynamiques selon le contexte de la question
    * Améliore la précision en guidant l'IA avec des instructions contextuelles
    */
@@ -6030,6 +6119,19 @@ RÉPONSES:
 - 2-3 émojis max
 - Format naturel
 
+💡 SUGGESTIONS CONTEXTUELLES (OBLIGATOIRE):
+⚠️ À la fin de CHAQUE réponse, ajoute 1-2 suggestions pertinentes basées sur le contexte :
+- Après réponse sur factures → "Voulez-vous voir les factures impayées ?"
+- Après stats/balance → "Besoin de voir les détails des transactions ?"
+- Après réponse sur un fournisseur → "Voulez-vous comparer avec un autre fournisseur ?"
+- Après salaires → "Souhaitez-vous voir le top des employés ?"
+- Format: "💡 Vous pouvez aussi : [suggestion]" ou directement la question
+
+⚠️ NE PAS mettre de suggestions quand :
+- L'utilisateur demande une action spécifique (ex: "montre-moi X")
+- La réponse est déjà longue (liste)
+- C'est une réponse rapide (bonjour, merci, ok)
+
 📋 FORMAT OBLIGATOIRE POUR LES FACTURES:
 ⚠️ Quand tu affiches UNE facture (get_latest_invoice), TOUJOURS inclure ces champs:
 - 🏪 Fournisseur
@@ -6271,8 +6373,14 @@ Exemple:
             // Sauvegarder les outils appelés pour le benchmark
             this.lastToolsCalled = [...toolCallsUsed];
 
+            // 🔧 AJOUT: Générer et ajouter des suggestions contextuelles
+            const suggestion = this.generateContextualSuggestion(toolCallsUsed, directResponse);
+            const responseWithSuggestion = suggestion
+              ? directResponse + '\n\n' + suggestion
+              : directResponse;
+
             // Supprimer tous les ** du texte
-            return directResponse.replace(/\*\*/g, '');
+            return responseWithSuggestion.replace(/\*\*/g, '');
           }
 
           continue;
@@ -6333,8 +6441,17 @@ Exemple:
           // Sauvegarder les outils appelés pour le benchmark
           this.lastToolsCalled = [...toolCallsUsed];
 
+          // Ajouter une suggestion contextuelle si pertinente
+          console.log('🔍 DEBUG: toolCallsUsed =', toolCallsUsed);
+          console.log('🔍 DEBUG: response.length =', message.content.length);
+          const suggestion = this.generateContextualSuggestion(toolCallsUsed, message.content);
+          console.log('🔍 DEBUG: suggestion =', suggestion);
+          const responseWithSuggestion = suggestion
+            ? message.content + '\n\n' + suggestion
+            : message.content;
+
           // Supprimer tous les ** du texte
-          return message.content.replace(/\*\*/g, '');
+          return responseWithSuggestion.replace(/\*\*/g, '');
         }
 
         break;

@@ -13,20 +13,31 @@ BOT_NAME=$(basename "$BOT_DIR")
 
 echo "🚀 Démarrage sécurisé du bot $BOT_NAME..."
 
-# 1. Trouver les processus existants dans CE répertoire
-echo "🔍 Vérification des processus existants..."
-for PID in $(pgrep -f "dist/index-bot"); do
+# 1. Trouver et tuer TOUS les wrappers de ce bot d'abord
+echo "🔍 Vérification des wrappers existants..."
+for PID in $(pgrep -f "start-bot-wrapper"); do
   PROC_DIR=$(pwdx $PID 2>/dev/null | awk '{print $2}')
   if [ "$PROC_DIR" == "$BOT_DIR" ]; then
-    echo "   ⚠️  Processus existant trouvé (PID: $PID) dans $PROC_DIR"
-    echo "   🔪 Arrêt du processus..."
+    echo "   ⚠️  Wrapper existant trouvé (PID: $PID) dans $PROC_DIR"
+    echo "   🔪 Arrêt du wrapper..."
     kill -9 $PID 2>/dev/null
-    sleep 1
   fi
 done
 
-# 2. Tuer les anciens wrapper spécifiques à ce bot
-pkill -9 -f "$BOT_DIR.*start-bot-wrapper" 2>/dev/null
+sleep 2
+
+# 2. Trouver et tuer les processus bot dans CE répertoire
+echo "🔍 Vérification des processus bot existants..."
+for PID in $(pgrep -f "node dist/index-bot"); do
+  PROC_DIR=$(pwdx $PID 2>/dev/null | awk '{print $2}')
+  if [ "$PROC_DIR" == "$BOT_DIR" ]; then
+    echo "   ⚠️  Processus bot existant trouvé (PID: $PID) dans $PROC_DIR"
+    echo "   🔪 Arrêt du processus..."
+    kill -9 $PID 2>/dev/null
+  fi
+done
+
+sleep 1
 
 echo "✅ Environnement nettoyé"
 echo ""

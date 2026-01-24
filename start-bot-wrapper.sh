@@ -23,17 +23,21 @@ kill_processes_in_dir() {
 
     # Si le processus tourne dans notre répertoire, le tuer (sauf nous-même)
     if [ "$dir" = "$SCRIPT_DIR" ] && [ "$pid" != "$$" ]; then
-      parent_pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-      if [ "$parent_pid" != "$$" ]; then
-        echo "  ⚠️  Arrêt de $description existant (PID $pid)"
-        kill -9 "$pid" 2>/dev/null
-      fi
+      echo "  ⚠️  Arrêt de $description existant (PID $pid)"
+      kill -9 "$pid" 2>/dev/null
     fi
   done
 }
 
+# NOTE IMPORTANTE: Ce script ne devrait normalement jamais être appelé directement
+# car start-bot-safe.sh nettoie déjà tout avant de lancer ce wrapper.
+# Ce nettoyage est une sécurité supplémentaire.
+
 # Tuer les anciens wrappers (sauf le processus actuel)
 kill_processes_in_dir "start-bot-wrapper" "wrapper"
+
+# Attendre que les wrappers soient complètement arrêtés
+sleep 2
 
 # Tuer les anciens bots Node.js
 kill_processes_in_dir "node dist/index-bot" "bot"

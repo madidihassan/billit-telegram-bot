@@ -186,19 +186,34 @@ if [ -d "$DEV_PATH" ]; then
     echo "🔄 ÉTAPE 8: Redémarrage du bot ${TARGET_NAME}"
     echo "────────────────────────────────────────────────────────────"
     
-    info "Arrêt de l'ancien processus..."
-    # Trouver les PIDs des processus node dist/index-bot
-    OLD_PIDS=$(pgrep -f "node dist/index-bot" || true)
-    if [ -n "$OLD_PIDS" ]; then
-        for pid in $OLD_PIDS; do
-            # Vérifier le répertoire de travail du processus
+    info "Arrêt des anciens processus..."
+
+    # 1. Tuer les wrappers d'abord
+    WRAPPER_PIDS=$(pgrep -f "start-bot-wrapper" || true)
+    if [ -n "$WRAPPER_PIDS" ]; then
+        for pid in $WRAPPER_PIDS; do
             PWD_PATH=$(pwdx "$pid" 2>/dev/null | awk '{print $2}')
             if [ "$PWD_PATH" = "$DEV_PATH" ]; then
-                info "Arrêt du processus $pid (répertoire: $PWD_PATH)"
+                info "Arrêt du wrapper $pid (répertoire: $PWD_PATH)"
                 kill -9 "$pid" 2>/dev/null || true
             fi
         done
     fi
+
+    sleep 2
+
+    # 2. Tuer les processus node
+    OLD_PIDS=$(pgrep -f "node dist/index-bot" || true)
+    if [ -n "$OLD_PIDS" ]; then
+        for pid in $OLD_PIDS; do
+            PWD_PATH=$(pwdx "$pid" 2>/dev/null | awk '{print $2}')
+            if [ "$PWD_PATH" = "$DEV_PATH" ]; then
+                info "Arrêt du processus bot $pid (répertoire: $PWD_PATH)"
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
+
     sleep 2
     
     info "Démarrage du nouveau bot avec start-bot-safe.sh..."
