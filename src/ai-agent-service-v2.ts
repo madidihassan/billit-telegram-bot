@@ -480,16 +480,6 @@ Réponse JSON:`;
       return null;
     }
 
-    // Ne pas suggérer si c'est une réponse rapide (salutations, remerciements, etc.)
-    const quickResponsePatterns = [
-      'Bonjour', 'Salut', 'Merci', 'De rien', 'Parfait', 'OK',
-      'Au revoir', 'À bientôt', 'D\'accord', 'Super', 'Top'
-    ];
-    if (quickResponsePatterns.some(p => response.includes(p))) {
-      console.log('⚠️ Suggestion bloquée: réponse rapide détectée');
-      return null;
-    }
-
     // Suggestions basées sur les outils utilisés
     const suggestionMap: { [key: string]: string[] } = {
       'get_recent_invoices': [
@@ -540,21 +530,29 @@ Réponse JSON:`;
     };
 
     // Prendre la suggestion du premier outil utilisé
+    console.log('🔍 Boucle toolsUsed:', toolsUsed);
     for (const tool of toolsUsed) {
+      console.log(`🔍 Vérification outil: ${tool}, dans map?`, !!suggestionMap[tool]);
       if (suggestionMap[tool]) {
         const suggestions = suggestionMap[tool];
+        console.log('🔍 Suggestions trouvées:', suggestions);
         // Retourner une suggestion aléatoire
-        return suggestions[Math.floor(Math.random() * suggestions.length)];
+        const selected = suggestions[Math.floor(Math.random() * suggestions.length)];
+        console.log('🔍 Suggestion sélectionnée:', selected);
+        return selected;
       }
     }
 
     // Suggestion par défaut si aucun outil spécifique
+    console.log('🔍 Aucune suggestion trouvée, utilisation par défaut');
     const defaultSuggestions = [
       '💡 Vous pouvez aussi : Voir les factures impayées ?',
       '💡 Vous pouvez aussi : Afficher les statistiques du mois ?',
       '💡 Vous pouvez aussi : Consulter le solde des comptes ?',
     ];
-    return defaultSuggestions[Math.floor(Math.random() * defaultSuggestions.length)];
+    const defaultSelected = defaultSuggestions[Math.floor(Math.random() * defaultSuggestions.length)];
+    console.log('🔍 Suggestion par défaut:', defaultSelected);
+    return defaultSelected;
   }
 
   /**
