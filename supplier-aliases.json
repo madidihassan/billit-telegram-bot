@@ -9,6 +9,16 @@
       "aboukhalid"
     ]
   },
+  "action 2414 1000": {
+    "aliases": [
+      "action 2414 1000",
+      "action",
+      "action 2414"
+    ],
+    "patterns": [
+      "action24141000"
+    ]
+  },
   "administration communale molenbeek": {
     "aliases": [
       "administration communale molenbeek",
@@ -826,6 +836,16 @@
     ],
     "patterns": [
       "mahjoub"
+    ]
+  },
+  "media markt docks 1000": {
+    "aliases": [
+      "media markt docks 1000",
+      "media",
+      "media markt"
+    ],
+    "patterns": [
+      "mediamarktdocks1000"
     ]
   },
   "mediwet": {

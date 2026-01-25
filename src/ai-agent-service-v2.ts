@@ -65,6 +65,7 @@ export class AIAgentServiceV2 {
   private currentQuestion: string = ''; // Question actuelle de l'utilisateur
   private tools: any[];
   public lastToolsCalled: string[] = []; // Outils appelés lors de la dernière requête (pour benchmark)
+  private lastSuggestionQuestions: string[] | null = null; // 🆕 Suggestions contextuelles (tableau de questions)
 
   // NIVEAU 2: Nouveau système de conversation intelligent
   private conversationManager: ConversationManager;
@@ -470,8 +471,9 @@ Réponse JSON:`;
 
   /**
    * 💡 Génère des suggestions contextuelles basées sur les outils utilisés
+   * RETOURNE: { text: string, questions: string[] } - text contient les suggestions numérotées, questions contient les questions à exécuter
    */
-  private generateContextualSuggestion(toolsUsed: string[], response: string): string | null {
+  private generateContextualSuggestion(toolsUsed: string[], response: string): { text: string, questions: string[] } | null {
     console.log('🔍 generateContextualSuggestion appelé avec toolsUsed =', toolsUsed, 'length =', response.length);
 
     // Ne pas suggérer si la réponse est extrêmement longue (>5000 chars)
@@ -480,79 +482,279 @@ Réponse JSON:`;
       return null;
     }
 
-    // Suggestions basées sur les outils utilisés
-    const suggestionMap: { [key: string]: string[] } = {
+    // 🔧 EXTRAIRE: Nom du fournisseur depuis la réponse pour les rendre autonomes
+    let supplierName: string | null = null;
+    const supplierMatch = response.match(/🏪\s*Fournisseur\s*:\s*([^\n]+)/i);
+    if (supplierMatch && supplierMatch[1]) {
+      supplierName = supplierMatch[1].trim();
+      console.log('🔍 Fournisseur extrait:', supplierName);
+    }
+
+    // Fonction helper pour remplacer "ce fournisseur" par le nom réel
+    const makeQuestionAutonomous = (question: string): string => {
+      if (supplierName) {
+        return question.replace(/ce fournisseur/gi, supplierName);
+      }
+      return question;
+    };
+
+    // Map des suggestions avec les questions correspondantes
+    const suggestionMap: { [key: string]: Array<{ text: string, question: string }> } = {
       'get_recent_invoices': [
-        '💡 Vous pouvez aussi : Voulez-vous voir les factures impayées ?',
-        '💡 Vous pouvez aussi : Comparer avec un autre fournisseur ?',
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Voir les factures en retard', question: 'Montre-moi les factures en retard' },
+        { text: 'Calculer le total des factures récentes', question: 'Quel est le total des factures récentes ?' },
+        { text: 'Voir les factures du mois', question: 'Montre-moi les factures du mois' },
+        { text: 'Voir les factures payées', question: 'Montre-moi les factures payées' },
       ],
       'get_supplier_invoices': [
-        '💡 Vous pouvez aussi : Voir le total des dépenses avec ce fournisseur ?',
-        '💡 Vous pouvez aussi : Analyser l\'évolution des dépenses avec ce fournisseur ?',
-        '💡 Vous pouvez aussi : Comparer avec un autre fournisseur ?',
+        { text: 'Voir le total des dépenses', question: 'Quel est le total des dépenses avec ce fournisseur ?' },
+        { text: 'Analyser l\'évolution des dépenses', question: 'Analyse l\'évolution des dépenses avec ce fournisseur sur les 12 derniers mois' },
+        { text: 'Voir les factures impayées de ce fournisseur', question: 'Montre-moi les factures impayées de ce fournisseur' },
+        { text: 'Voir les factures payées de ce fournisseur', question: 'Montre-moi les factures payées de ce fournisseur' },
+        { text: 'Comparer avec un autre fournisseur', question: 'Compare les dépenses avec un autre fournisseur' },
       ],
       'get_latest_invoice': [
-        '💡 Vous pouvez aussi : Voulez-vous voir les autres factures de ce fournisseur ?',
-        '💡 Vous pouvez aussi : Afficher le total des dépenses avec ce fournisseur ?',
+        { text: 'Voir les autres factures de ce fournisseur', question: 'Cherche toutes les factures du fournisseur ce fournisseur' },
+        { text: 'Voir le total des dépenses', question: 'Quel est le total des dépenses avec ce fournisseur ?' },
+        { text: 'Analyser l\'évolution des dépenses', question: 'Analyse l\'évolution des dépenses avec ce fournisseur' },
+        { text: 'Voir les factures impayées de ce fournisseur', question: 'Montre-moi les factures impayées de ce fournisseur' },
+        { text: 'Comparer avec un autre fournisseur', question: 'Compare ce fournisseur avec un autre' },
       ],
       'get_unpaid_invoices': [
-        '💡 Vous pouvez aussi : Voir les factures en retard ?',
-        '💡 Vous pouvez aussi : Afficher les factures à échéance proche ?',
+        { text: 'Voir les factures en retard', question: 'Montre-moi les factures en retard' },
+        { text: 'Calculer le total des impayés', question: 'Calcule le total des factures impayées' },
+        { text: 'Voir les factures à échéance proche', question: 'Quelles factures arrivent à échéance bientôt ?' },
+        { text: 'Voir les factures du mois', question: 'Montre-moi les factures impayées du mois' },
+        { text: 'Analyser les dépenses par fournisseur', question: 'Analyse les dépenses par fournisseur' },
       ],
       'get_overdue_invoices': [
-        '💡 Vous pouvez aussi : Calculer le total des factures en retard ?',
-        '💡 Vous pouvez aussi : Voir les factures impayées (toutes) ?',
+        { text: 'Calculer le total en retard', question: 'Calcule le total des factures en retard' },
+        { text: 'Voir toutes les impayées', question: 'Montre-moi toutes les factures impayées' },
+        { text: 'Voir les factures à échéance proche', question: 'Quelles factures arrivent à échéance bientôt ?' },
+        { text: 'Voir les factures en retard du mois', question: 'Montre-moi les factures en retard du mois' },
+        { text: 'Analyser l\'évolution des impayés', question: 'Analyse l\'évolution des factures impayées' },
+      ],
+      'analyze_supplier_trends': [
+        { text: 'Voir le classement des fournisseurs', question: 'Quel est le classement des fournisseurs par dépenses ?' },
+        { text: 'Comparer avec un autre fournisseur', question: 'Compare les dépenses avec un autre fournisseur' },
+        { text: 'Voir les dépenses mensuelles', question: 'Montre-moi les dépenses mensuelles de ce fournisseur' },
+        { text: 'Calculer la moyenne mensuelle', question: 'Quelle est la moyenne mensuelle des dépenses ?' },
+        { text: 'Voir les factures de ce fournisseur', question: 'Montre-moi les factures de ce fournisseur' },
+      ],
+      'get_upcoming_due_invoices': [
+        { text: 'Voir les factures en retard', question: 'Montre-moi les factures en retard' },
+        { text: 'Calculer le total à payer', question: 'Calcule le total des factures à payer' },
+        { text: 'Voir toutes les impayées', question: 'Montre-moi toutes les factures impayées' },
+        { text: 'Analyser les échéances', question: 'Analyse les échéances des factures impayées' },
+        { text: 'Voir les factures du mois', question: 'Montre-moi les factures impayées du mois' },
+      ],
+      'get_paid_invoices': [
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Calculer le total payé', question: 'Calcule le total des factures payées' },
+        { text: 'Voir les factures du mois', question: 'Montre-moi les factures payées du mois' },
+        { text: 'Analyser les paiements', question: 'Analyse les paiements par fournisseur' },
+        { text: 'Voir les dernières factures payées', question: 'Montre-moi les dernières factures payées' },
       ],
       'get_monthly_balance': [
-        '💡 Vous pouvez aussi : Voir le détail des transactions du mois ?',
-        '💡 Vous pouvez aussi : Afficher les recettes ou les dépenses séparément ?',
+        { text: 'Voir le détail des transactions', question: 'Montre-moi le détail des transactions du mois' },
+        { text: 'Comparer avec le mois précédent', question: 'Compare avec le mois précédent' },
+        { text: 'Voir les statistiques du mois', question: 'Donne-moi les statistiques du mois' },
+        { text: 'Analyser les dépenses', question: 'Analyse les dépenses du mois' },
+        { text: 'Voir le solde bancaire', question: 'Quel est le solde bancaire actuel ?' },
       ],
       'get_monthly_stats': [
-        '💡 Vous pouvez aussi : Voir le top 5 des fournisseurs du mois ?',
-        '💡 Vous pouvez aussi : Comparer avec le mois précédent ?',
+        { text: 'Voir le top 5 fournisseurs', question: 'Qui sont les top 5 fournisseurs du mois ?' },
+        { text: 'Comparer avec le mois précédent', question: 'Compare les statistiques avec le mois précédent' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées du mois' },
+        { text: 'Analyser les dépenses par catégorie', question: 'Analyse les dépenses par catégorie' },
+        { text: 'Voir le résumé mensuel', question: 'Donne-moi un résumé du mois' },
       ],
-      'get_employee_salaries': [
-        '💡 Vous pouvez aussi : Voir le top des employés les mieux payés ?',
-        '💡 Vous pouvez aussi : Comparer deux employés ?',
-      ],
-      'analyze_supplier_expenses': [
-        '💡 Vous pouvez aussi : Voir l\'évolution sur plusieurs mois ?',
-        '💡 Vous pouvez aussi : Comparer avec un autre fournisseur ?',
-      ],
-      'get_period_transactions': [
-        '💡 Vous pouvez aussi : Afficher la balance du mois ?',
-        '💡 Vous pouvez aussi : Filtrer par recettes ou dépenses ?',
+      'get_supplier_ranking': [
+        { text: 'Analyser un fournisseur spécifique', question: 'Analyse les dépenses de ce fournisseur' },
+        { text: 'Comparer deux fournisseurs', question: 'Compare les dépenses entre ces deux fournisseurs' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Analyser les tendances', question: 'Analyse les tendances des dépenses' },
+        { text: 'Voir le classement annuel', question: 'Quel est le classement des fournisseurs sur l\'année ?' },
       ],
       'get_year_summary': [
-        '💡 Vous pouvez aussi : Voir le bilan trimestriel ?',
-        '💡 Vous pouvez aussi : Comparer avec l\'année précédente ?',
+        { text: 'Voir le top 10 fournisseurs', question: 'Qui sont les top 10 fournisseurs de l\'année ?' },
+        { text: 'Comparer avec l\'année précédente', question: 'Compare avec l\'année précédente' },
+        { text: 'Voir les statistiques mensuelles', question: 'Montre-moi les statistiques de chaque mois' },
+        { text: 'Analyser les tendances annuelles', question: 'Analyse les tendances sur l\'année' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+      ],
+      'compare_periods': [
+        { text: 'Voir les détails de la première période', question: 'Montre-moi les détails de cette période' },
+        { text: 'Analyser les dépenses', question: 'Analyse les dépenses par fournisseur' },
+        { text: 'Comparer avec d\'autres périodes', question: 'Compare avec d\'autres périodes' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Obtenir un résumé annuel', question: 'Donne-moi le résumé de l\'année' },
+      ],
+      'detect_anomalies': [
+        { text: 'Analyser les dépenses anormales', question: 'Analyse les dépenses par fournisseur' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Comparer les périodes', question: 'Compare les dépenses entre deux périodes' },
+        { text: 'Analyser les tendances', question: 'Analyse les tendances des dépenses' },
+        { text: 'Voir le top fournisseurs', question: 'Qui sont les top fournisseurs ?' },
+      ],
+      'predict_next_month': [
+        { text: 'Analyser l\'historique', question: 'Analyse l\'historique des dépenses' },
+        { text: 'Voir les tendances', question: 'Analyse les tendances des dépenses' },
+        { text: 'Comparer avec le mois actuel', question: 'Compare avec les dépenses du mois actuel' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Obtenir un résumé mensuel', question: 'Donne-moi le résumé du mois' },
+      ],
+      'analyze_trends': [
+        { text: 'Voir les prévisions', question: 'Prévois les dépenses du prochain mois' },
+        { text: 'Comparer les périodes', question: 'Compare les dépenses entre deux périodes' },
+        { text: 'Analyser par fournisseur', question: 'Analyse les dépenses par fournisseur' },
+        { text: 'Voir les statistiques', question: 'Donne-moi les statistiques du mois' },
+        { text: 'Détecter les anomalies', question: 'Détecte les dépenses anormales' },
+      ],
+      'get_employee_salaries': [
+        { text: 'Voir le top 10 employés', question: 'Qui sont les 10 employés les mieux payés ?' },
+        { text: 'Comparer deux employés', question: 'Compare les salaires de deux employés' },
+        { text: 'Voir les salaires du mois', question: 'Montre-moi les salaires du mois' },
+        { text: 'Analyser l\'évolution des salaires', question: 'Montre-moi les salaires employés des 3 derniers mois' },
+        { text: 'Calculer le total des salaires', question: 'Calcule le total des salaires du mois' },
+      ],
+      'get_all_invoices': [
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Voir les factures en retard', question: 'Montre-moi les factures en retard' },
+        { text: 'Voir les factures du mois', question: 'Montre-moi les factures du mois' },
+        { text: 'Analyser par fournisseur', question: 'Analyse les dépenses par fournisseur' },
+        { text: 'Voir les statistiques', question: 'Donne-moi les statistiques' },
+      ],
+      'get_bank_balances': [
+        { text: 'Voir le solde du mois', question: 'Montre-moi le solde du mois' },
+        { text: 'Voir les dernières transactions', question: 'Montre-moi les dernières transactions bancaires' },
+        { text: 'Analyser les dépenses', question: 'Analyse les dépenses bancaires' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Comparer les périodes', question: 'Compare les soldes entre deux périodes' },
+      ],
+      'get_quarterly_report': [
+        { text: 'Voir le rapport trimestriel détaillé', question: 'Donne-moi le rapport trimestriel détaillé' },
+        { text: 'Comparer les trimestres', question: 'Compare les dépenses entre les trimestres' },
+        { text: 'Voir le top fournisseurs du trimestre', question: 'Qui sont les top fournisseurs du trimestre ?' },
+        { text: 'Analyser les tendances trimestrielles', question: 'Analyse les tendances trimestrielles' },
+        { text: 'Voir le résumé annuel', question: 'Donne-moi le résumé de l\'année' },
+      ],
+      'export_to_csv': [
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Analyser les dépenses', question: 'Analyse les dépenses par fournisseur' },
+        { text: 'Voir les statistiques du mois', question: 'Donne-moi les statistiques du mois' },
+        { text: 'Exporter les transactions', question: 'Exporte les transactions en CSV' },
+        { text: 'Voir les tendances', question: 'Analyse les tendances des dépenses' },
+      ],
+      'compare_supplier_expenses': [
+        { text: 'Analyser un fournisseur spécifique', question: 'Analyse les dépenses de ce fournisseur' },
+        { text: 'Voir le classement des fournisseurs', question: 'Quel est le classement des fournisseurs ?' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Analyser les tendances', question: 'Analyse les tendances des dépenses' },
+        { text: 'Voir les statistiques', question: 'Donne-moi les statistiques' },
+      ],
+      'analyze_supplier_expenses': [
+        { text: 'Voir le classement des fournisseurs', question: 'Quel est le classement des fournisseurs ?' },
+        { text: 'Comparer avec un autre fournisseur', question: 'Compare les dépenses avec un autre fournisseur' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Analyser les tendances', question: 'Analyse les tendances des dépenses' },
+        { text: 'Obtenir un résumé annuel', question: 'Donne-moi le résumé de l\'année' },
+      ],
+      'get_monthly_invoices': [
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées du mois' },
+        { text: 'Voir les factures en retard', question: 'Montre-moi les factures en retard du mois' },
+        { text: 'Analyser par fournisseur', question: 'Analyse les dépenses par fournisseur du mois' },
+        { text: 'Comparer avec le mois précédent', question: 'Compare avec le mois précédent' },
+        { text: 'Voir les statistiques du mois', question: 'Donne-moi les statistiques du mois' },
+      ],
+      'detect_supplier_patterns': [
+        { text: 'Analyser un fournisseur spécifique', question: 'Analyse les dépenses de ce fournisseur' },
+        { text: 'Voir le classement des fournisseurs', question: 'Quel est le classement des fournisseurs ?' },
+        { text: 'Voir les factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: 'Analyser les tendances', question: 'Analyse les tendances des dépenses' },
+        { text: 'Détecter les anomalies', question: 'Détecte les dépenses anormales' },
       ],
     };
 
-    // Prendre la suggestion du premier outil utilisé
-    console.log('🔍 Boucle toolsUsed:', toolsUsed);
+    // Prendre TOUTES les suggestions du premier outil utilisé
     for (const tool of toolsUsed) {
-      console.log(`🔍 Vérification outil: ${tool}, dans map?`, !!suggestionMap[tool]);
       if (suggestionMap[tool]) {
         const suggestions = suggestionMap[tool];
-        console.log('🔍 Suggestions trouvées:', suggestions);
-        // Retourner une suggestion aléatoire
-        const selected = suggestions[Math.floor(Math.random() * suggestions.length)];
-        console.log('🔍 Suggestion sélectionnée:', selected);
-        return selected;
+
+        // 🆕 FORMATER: Créer le texte avec des suggestions numérotées (une par ligne, sans espacement)
+        const suggestionLines = suggestions.map((s, index) => {
+          return `${index + 1}. ${s.text} ?`;
+        });
+        const suggestionText = '💡 Suggestions :\n\n' + suggestionLines.join('\n') + '\n\nRépondez avec le numéro (1, 2...)';
+
+        // 🆕 RENDRE LES QUESTIONS AUTONOMES: Remplacer "ce fournisseur" par le nom réel
+        const questions = suggestions.map(s => makeQuestionAutonomous(s.question));
+
+        return {
+          text: suggestionText,
+          questions: questions
+        };
       }
     }
 
-    // Suggestion par défaut si aucun outil spécifique
-    console.log('🔍 Aucune suggestion trouvée, utilisation par défaut');
-    const defaultSuggestions = [
-      '💡 Vous pouvez aussi : Voir les factures impayées ?',
-      '💡 Vous pouvez aussi : Afficher les statistiques du mois ?',
-      '💡 Vous pouvez aussi : Consulter le solde des comptes ?',
+    // Pas de suggestion spécifique
+    return null;
+  }
+
+  /**
+   * Génère des boutons inline pour les suggestions contextuelles (NON UTILISÉ pour l'instant)
+   */
+  generateInlineButtons(toolsUsed: string[]): any[] | null {
+    console.log('🔍 generateInlineButtons appelé avec toolsUsed =', toolsUsed);
+
+    // Map des suggestions avec les questions correspondantes
+    const suggestionButtonsMap: { [key: string]: Array<{ text: string, question: string }> } = {
+      'get_recent_invoices': [
+        { text: '📋 Factures impayées', question: 'Montre-moi les factures impayées' },
+        { text: '⚠️ Factures en retard', question: 'Quelles factures sont en retard ?' },
+      ],
+      'get_supplier_invoices': [
+        { text: '💰 Total dépenses fournisseur', question: 'Quel est le total des dépenses avec ce fournisseur ?' },
+        { text: '📈 Évolution dépenses', question: 'Analyse l\'évolution des dépenses avec ce fournisseur' },
+      ],
+      'get_latest_invoice': [
+        { text: '📄 Autres factures fournisseur', question: 'Montre-moi les autres factures de ce fournisseur' },
+        { text: '💰 Total dépenses fournisseur', question: 'Quel est le total des dépenses avec ce fournisseur ?' },
+      ],
+      'get_unpaid_invoices': [
+        { text: '⚠️ Factures en retard', question: 'Montre-moi les factures en retard' },
+        { text: '📆 Factures à échéance proche', question: 'Quelles factures arrivent à échéance bientôt ?' },
+      ],
+      'get_overdue_invoices': [
+        { text: '💰 Total en retard', question: 'Calcule le total des factures en retard' },
+        { text: '📋 Toutes les impayées', question: 'Montre-moi toutes les factures impayées' },
+      ],
+      'get_monthly_balance': [
+        { text: '📊 Détail transactions', question: 'Montre-moi le détail des transactions du mois' },
+        { text: '📈 Recettes vs Dépenses', question: 'Compare les recettes et les dépenses du mois' },
+      ],
+      'get_monthly_stats': [
+        { text: '🏆 Top 5 fournisseurs', question: 'Qui sont les top 5 fournisseurs du mois ?' },
+        { text: '📊 Comparaison mois précédent', question: 'Compare avec le mois précédent' },
+      ],
+    };
+
+    // Prendre les boutons du premier outil utilisé
+    for (const tool of toolsUsed) {
+      if (suggestionButtonsMap[tool]) {
+        const buttons = suggestionButtonsMap[tool];
+        // Retourner format inline_keyboard pour Telegram
+        return buttons.map(btn => [{ text: btn.text, callback_data: `suggestion:${btn.question}` }]);
+      }
+    }
+
+    // Boutons par défaut
+    const defaultButtons = [
+      [{ text: '📋 Factures impayées', callback_data: 'suggestion:Montre-moi les factures impayées' }],
+      [{ text: '📊 Statistiques du mois', callback_data: 'suggestion:Donne-moi les statistiques du mois' }],
     ];
-    const defaultSelected = defaultSuggestions[Math.floor(Math.random() * defaultSuggestions.length)];
-    console.log('🔍 Suggestion par défaut:', defaultSelected);
-    return defaultSelected;
+    return defaultButtons;
   }
 
   /**
@@ -562,6 +764,13 @@ Réponse JSON:`;
   private generateDynamicHints(question: string): string {
     const q = question.toLowerCase();
     const hints: string[] = [];
+
+    // ⚠️ CRITIQUE: "du mois" sans spécifier le mois = mois actuel
+    if ((q.includes('du mois') || q.includes('ce mois') || q.includes('le mois')) && !q.match(/janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre/i)) {
+      const now = new Date();
+      const currentMonthName = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][now.getMonth()];
+      hints.push(`⚠️⚠️⚠️ "DU MOIS" DÉTECTÉ: L'utilisateur parle du mois actuel (${currentMonthName} ${now.getFullYear()}). TOUJOURS ajouter month="${currentMonthName}". Exemple: {month: "${currentMonthName}"}`);
+    }
 
     // ⚠️ CRITIQUE: Hints pour les périodes annuelles - FORCER period_text
     if (q.includes('année 202') || q.includes('de l\'année') || q.includes('sur l\'année')) {
@@ -1546,6 +1755,27 @@ ${commLine}
         }
 
         case 'get_period_transactions': {
+          // 🔧 CORRECTION AUTO: "salaire" détecté → rediriger vers get_employee_salaries
+          const qLower = this.currentQuestion.toLowerCase();
+          if (qLower.includes('salaire') || qLower.includes('salaires')) {
+            console.log(`🔧 REDIRECTION AUTO: get_period_transactions → get_employee_salaries (mot 'salaire' détecté)`);
+            // Convertir les dates en month si possible
+            if (args.start_date && args.end_date) {
+              const start = BankClient.parseDate(args.start_date);
+              const end = BankClient.parseDate(args.end_date);
+              if (start && end && start.getMonth() === end.getMonth()) {
+                const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+                args.month = monthNames[start.getMonth()];
+                console.log(`🔧 Conversion date→month: ${args.month}`);
+              }
+            }
+            // Supprimer start_date et end_date pour ne pas interférer
+            delete args.start_date;
+            delete args.end_date;
+            // Continuer avec get_employee_salaries
+            return await this.executeFunction('get_employee_salaries', args);
+          }
+
           let startDate = BankClient.parseDate(args.start_date);
           let endDate = BankClient.parseDate(args.end_date);
 
@@ -1677,6 +1907,16 @@ ${commLine}
         }
 
         case 'get_employee_salaries': {
+          // 🔧 CORRECTION AUTO: "du mois" sans paramètre de période = mois actuel
+          const qLower = this.currentQuestion.toLowerCase();
+          const hasPeriodParam = args.period_text || args.month || args.start_month || args.end_month || args.year;
+          if (!hasPeriodParam && (qLower.includes('du mois') || qLower.includes('ce mois') || qLower.includes('le mois'))) {
+            const now = new Date();
+            const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+            args.month = monthNames[now.getMonth()];
+            console.log(`🔧 CORRECTION AUTO: "du mois" détecté → ajout month="${args.month}"`);
+          }
+
           // 🤖 Matching IA de l'employé si spécifié
           if (args.employee_name) {
             const matchedEmployee = await this.matchEmployeeWithAI(args.employee_name);
@@ -2185,6 +2425,9 @@ ${commLine}
             questionLower.includes('évolution') ||
             questionLower.includes('classement') ||
             questionLower.includes('meilleur') ||
+            questionLower.includes('mieux') ||  // "les mieux payés", "le mieux payé"
+            /\d+\s+employés/.test(questionLower) ||  // "10 employés", "les 5 employés"
+            /\d+\s+derniers?\s+mois/.test(questionLower) ||  // "3 derniers mois", "6 derniers mois"
             questionLower.includes('le plus') && !questionLower.includes('liste');  // "Le plus payé" mais PAS "montre la liste"
 
           const userWantsDetails = args.include_details === true || userAsksForList;
@@ -3174,6 +3417,7 @@ Vérifiez:
 
             directResponse = `${titleWithSupplier}\n\n` +
               `Total: ${totalSpent.toFixed(2)}€ (${supplierExpenses.length} ${countLabel})` +
+              `\n\n💡 Note: Ce montant représente les paiements réellement effectués (factures payées). Les factures en attente de paiement ne sont pas incluses.` +
               analysisText;
 
             if (includeDetailedList) {
@@ -5857,6 +6101,41 @@ Vérifiez:
         question = `[HINT: L'utilisateur demande une période de plusieurs mois (${multiMonthMatch[1]} à ${multiMonthMatch[2]}). Utiliser get_employee_salaries avec start_month="${multiMonthMatch[1]}" et end_month="${multiMonthMatch[2]}" (NE PAS utiliser month=).] ${question}`;
       }
 
+      // 🔧 CORRECTION AUTO: "X derniers mois" → conversion en start_month/end_month
+      // Ex: "3 derniers mois" → start_month="octobre", end_month="décembre" (si on est en janvier 2026)
+      const lastMonthsPattern = /(\d+)\s*(derniers?|précédents?)\s+mois/i;
+      const lastMonthsMatch = question.match(lastMonthsPattern);
+      if (lastMonthsMatch) {
+        const monthCount = parseInt(lastMonthsMatch[1], 10);
+        if (monthCount > 0 && monthCount <= 12) {
+          const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+          const now = new Date();
+          const currentYear = now.getFullYear();
+          const currentMonth = now.getMonth(); // 0-11
+
+          // Calculer les derniers mois COMPLETS (excluant le mois courant qui est potentiellement incomplet)
+          // Pour "3 derniers mois" en janvier 2026: octobre, novembre, décembre 2025
+          const endMonthIndex = currentMonth - 1; // Mois précédent (décembre si janvier)
+          const startMonthIndex = endMonthIndex - (monthCount - 1);
+
+          // Calculer l'année de début (peut être l'année précédente)
+          let startYear = currentYear;
+          if (startMonthIndex < 0) {
+            startYear = currentYear - 1;
+          }
+
+          const startMonthName = monthNames[(startMonthIndex % 12 + 12) % 12];
+          const endMonthName = monthNames[(endMonthIndex % 12 + 12) % 12];
+
+          const targetFunction = questionLower.includes('salaire') ? 'get_employee_salaries' :
+                                 (questionLower.includes('fournisseur') || questionLower.includes('dépense')) ? 'analyze_supplier_expenses' :
+                                 'get_period_transactions';
+
+          console.log(`🔍 Détection: ${monthCount} derniers mois → ${startMonthName} à ${endMonthName} ${startYear}`);
+          question = `[HINT: L'utilisateur demande les ${monthCount} derniers mois complets. Utiliser ${targetFunction} avec start_month="${startMonthName}" et end_month="${endMonthName}".] ${question}`;
+        }
+      }
+
       // Détection de "top X employés" ou "les X employés les mieux payés"
       const topEmployeesPattern = /(top\s*(\d+)\s+employ[eé]s|les?\s+(\d+)\s+employ[eé]s\s+(les\s+)?(mieux|plus)\s+pay[eé]s)/i;
       const topEmployeesMatch = question.match(topEmployeesPattern);
@@ -6116,6 +6395,9 @@ RÉPONSES:
 - Concis (2-4 phrases) sauf listes explicites
 - 2-3 émojis max
 - Format naturel
+- ⚠️ PAS de conclusions du type "Si vous avez besoin d'autres informations, n'hésitez pas à demander !"
+- ⚠️ PAS de phrases de politesse inutiles ("Merci de votre question", etc.)
+- ⚠️ TERMINER directement après les faits/informations, sans ajout de texte
 
 💡 SUGGESTIONS CONTEXTUELLES (OBLIGATOIRE):
 ⚠️ À la fin de CHAQUE réponse, ajoute 1-2 suggestions pertinentes basées sur le contexte :
@@ -6333,6 +6615,7 @@ Exemple:
 
           // Si on a un direct_response, le retourner immédiatement
           if (directResponse) {
+            console.log('🚪 SORTIE: direct_response détecté, retour de la réponse sans nouvelle itération');
             this.conversationHistory.push(
               { role: 'user', content: question },
               { role: 'assistant', content: directResponse }
@@ -6373,12 +6656,36 @@ Exemple:
 
             // 🔧 AJOUT: Générer et ajouter des suggestions contextuelles
             const suggestion = this.generateContextualSuggestion(toolCallsUsed, directResponse);
+
+            // 🔧 CORRECTION: Nettoyer la réponse IA - supprimer les conclusions et anciennes suggestions
+            let cleanedResponse = directResponse;
+            const unwantedPatterns = [
+              /Si vous avez besoin d'autres informations[^!]*!\s*/gi,
+              /n'hésitez pas à demander[^!]*!\s*/gi,
+              /💡 Vous pouvez aussi :[^«"\n]*[«"\n]/gi,
+              /Voulez-vous voir [^«"\n]*[«"\?]\s*/gi,
+            ];
+            unwantedPatterns.forEach(pattern => {
+              cleanedResponse = cleanedResponse.replace(pattern, '');
+            });
+            cleanedResponse = cleanedResponse.trim();
+
+            // 🆕 MARQUEUR SPECIAL pour indiquer qu'il ne faut PAS utiliser le streaming
             const responseWithSuggestion = suggestion
-              ? directResponse + '\n\n' + suggestion
-              : directResponse;
+              ? cleanedResponse + '\n\n' + suggestion.text + '[[NO_STREAMING]]'
+              : cleanedResponse;
+
+            // Stocker les questions de suggestion pour utilisation avec les numéros (1, 2, 3...)
+            if (suggestion) {
+              this.lastSuggestionQuestions = suggestion.questions;
+            } else {
+              this.lastSuggestionQuestions = null;
+            }
 
             // Supprimer tous les ** du texte
-            return responseWithSuggestion.replace(/\*\*/g, '');
+            const finalResponse = responseWithSuggestion.replace(/\*\*/g, '');
+            console.log('✅ RETOUR: réponse finale retournée, longueur =', finalResponse.length);
+            return finalResponse;
           }
 
           continue;
@@ -6439,14 +6746,33 @@ Exemple:
           // Sauvegarder les outils appelés pour le benchmark
           this.lastToolsCalled = [...toolCallsUsed];
 
+          // 🔧 CORRECTION: Nettoyer la réponse IA - supprimer les conclusions et anciennes suggestions
+          let cleanedResponse = message.content;
+          const unwantedPatterns = [
+            /Si vous avez besoin d'autres informations[^!]*!\s*/gi,
+            /n'hésitez pas à demander[^!]*!\s*/gi,
+            /💡 Vous pouvez aussi :[^«"\n]*[«"\n]/gi,
+            /Voulez-vous voir [^«"\n]*[«"\?]\s*/gi,
+          ];
+          unwantedPatterns.forEach(pattern => {
+            cleanedResponse = cleanedResponse.replace(pattern, '');
+          });
+          cleanedResponse = cleanedResponse.trim();
+
           // Ajouter une suggestion contextuelle si pertinente
-          console.log('🔍 DEBUG: toolCallsUsed =', toolCallsUsed);
-          console.log('🔍 DEBUG: response.length =', message.content.length);
-          const suggestion = this.generateContextualSuggestion(toolCallsUsed, message.content);
-          console.log('🔍 DEBUG: suggestion =', suggestion);
+          const suggestion = this.generateContextualSuggestion(toolCallsUsed, cleanedResponse);
+
+          // 🆕 MARQUEUR SPECIAL pour indiquer qu'il ne faut PAS utiliser le streaming
           const responseWithSuggestion = suggestion
-            ? message.content + '\n\n' + suggestion
-            : message.content;
+            ? cleanedResponse + '\n\n' + suggestion.text + '[[NO_STREAMING]]'
+            : cleanedResponse;
+
+          // Stocker les questions de suggestion pour utilisation avec les numéros (1, 2, 3...)
+          if (suggestion) {
+            this.lastSuggestionQuestions = suggestion.questions;
+          } else {
+            this.lastSuggestionQuestions = null;
+          }
 
           // Supprimer tous les ** du texte
           return responseWithSuggestion.replace(/\*\*/g, '');
@@ -6555,6 +6881,21 @@ Exemple:
     } catch (error: any) {
       console.error('⚠️  Erreur effacement conversation:', error.message);
     }
+  }
+
+  /**
+   * Retourne les dernières suggestions contextuelles (tableau de questions)
+   * Utilisé pour les réponses numériques de l'utilisateur (1, 2, 3...)
+   */
+  public getLastSuggestion(): string[] | null {
+    return this.lastSuggestionQuestions;
+  }
+
+  /**
+   * Nettoie les dernières suggestions (après utilisation ou nouvelle question)
+   */
+  public clearLastSuggestion(): void {
+    this.lastSuggestionQuestions = null;
   }
 
   isConfigured(): boolean {

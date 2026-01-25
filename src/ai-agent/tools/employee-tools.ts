@@ -26,7 +26,7 @@ export const employeeTools: Groq.Chat.Completions.ChatCompletionTool[] = [
           },
           month: {
             type: 'string',
-            description: '⚠️ À OMETTRE si période annuelle OU période multi-mois: Mois unique (novembre, décembre, 11, 12). NE PAS spécifier si "année", "entre X et Y".',
+            description: '⚠️⚠️⚠️ CRITIQUE: Si l\'utilisateur dit "du mois", "ce mois", "le mois" SANS spécifier le nom → TOUJOURS utiliser le mois actuel (janvier 2026). Sinon: Mois unique (novembre, décembre, 11, 12). À OMETTRE si période annuelle OU période multi-mois ("année", "entre X et Y").',
           },
           start_month: {
             type: 'string',

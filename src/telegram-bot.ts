@@ -27,6 +27,8 @@ export class TelegramBotInteractive {
   private currentChatId: string | number; // Chat ID de l'utilisateur actuel
   private waitingForInput: string | null = null; // Pour mémoriser l'état de la conversation
   private lastInvoiceNumber: string | null = null; // Mémoriser la dernière facture consultée
+  private lastSuggestions: Map<string, string[]> = new Map(); // 🆕 Mémoriser les suggestions par utilisateur (chatId -> tableau de questions)
+  private selectedSuggestion: string | null = null; // 🆕 Suggestion sélectionnée par numéro (1, 2, 3...)
   private voiceService: VoiceService;
   private intentService: IntentService;
   private aiConversationService: AIConversationService;
@@ -88,6 +90,22 @@ export class TelegramBotInteractive {
     this.rateLimitManager.register('general', RateLimiterFactory.createDefault());
     this.rateLimitManager.register('ai', RateLimiterFactory.createForAI());
     this.rateLimitManager.register('voice', RateLimiterFactory.createForVoice());
+  }
+
+  /**
+   * 🔧 NETTOYAGE: Fonction utilitaire pour nettoyer systématiquement les marqueurs internes
+   * Retire tous les marqueurs [[NO_STREAMING]] qui ne doivent pas apparaître dans les messages utilisateur
+   */
+  private cleanResponseText(text: string): string {
+    if (!text) return text;
+    // Retirer tous les marqueurs [[NO_STREAMING]] de manière sécurisée
+    const cleaned = text.split('[[NO_STREAMING]]').join('');
+    // Vérifier qu'il ne reste plus de marqueurs (defense in depth)
+    if (cleaned !== text && cleaned.includes('[[NO_STREAMING]]')) {
+      logDebug('WARNING: Multiple [[NO_STREAMING]] markers found, cleaning recursively', 'telegram-bot');
+      return this.cleanResponseText(cleaned); // Nettoyage récursif si nécessaire
+    }
+    return cleaned;
   }
 
   /**
@@ -422,6 +440,14 @@ export class TelegramBotInteractive {
           // Réponse rapide déjà envoyée, ne pas continuer
           return;
         } else if (intentResult) {
+          // 💡 CAS SPÉCIAL: Réponse numérique (1, 2, 3...) ou "oui" avec suggestion mémorisée
+          if (this.selectedSuggestion) {
+            // Utiliser la suggestion sélectionnée comme question
+            validation.sanitized = this.selectedSuggestion;
+            this.selectedSuggestion = null; // Nettoyer
+            console.log(`💡 Question remplacée par: "${validation.sanitized}"`);
+          }
+
           // RATE LIMITING: Limiter les questions IA (plus coûteuses)
           const aiRateLimit = this.rateLimitManager.check('ai', msg.chat.id);
           if (!aiRateLimit.allowed) {
@@ -432,7 +458,19 @@ export class TelegramBotInteractive {
           console.log('🤖 Question détectée, traitement par IA conversationnelle');
           // Afficher l'action "typing" pendant le traitement IA
           await this.bot.sendChatAction(this.currentChatId, 'typing');
-          await this.handleAIQuestion(validation.sanitized!);
+          const response = await this.handleAIQuestion(validation.sanitized!);
+
+          // 💡 Stocker les suggestions contextuelles pour utilisation avec les numéros (1, 2, 3...)
+          const lastSuggestions = this.aiAgentService.getLastSuggestion();
+          console.log(`🔍 DEBUG: getLastSuggestion() =`, lastSuggestions);
+          console.log(`🔍 DEBUG: currentChatId =`, this.currentChatId);
+          if (lastSuggestions && lastSuggestions.length > 0) {
+            this.lastSuggestions.set(String(this.currentChatId), lastSuggestions);
+            console.log(`💡 ${lastSuggestions.length} suggestion(s) stockée(s) pour ${this.currentChatId}`);
+            console.log(`🔍 DEBUG: Map keys =`, Array.from(this.lastSuggestions.keys()));
+          } else {
+            console.log(`⚠️ DEBUG: Pas de suggestions ou suggestions vides`);
+          }
         } else {
           console.log('📨 Message texte reçu, envoi du menu');
           await this.sendWelcomeMessage();
@@ -1190,6 +1228,18 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
         duration: `${duration}ms`,
       });
 
+      // 💡 Stocker les suggestions contextuelles pour utilisation avec les numéros (1, 2, 3...)
+      const lastSuggestions = this.aiAgentService.getLastSuggestion();
+      console.log(`🔍 DEBUG [VOCAL]: getLastSuggestion() =`, lastSuggestions);
+      console.log(`🔍 DEBUG [VOCAL]: currentChatId =`, this.currentChatId);
+      if (lastSuggestions && lastSuggestions.length > 0) {
+        this.lastSuggestions.set(String(this.currentChatId), lastSuggestions);
+        console.log(`💡 [VOCAL] ${lastSuggestions.length} suggestion(s) stockée(s) pour ${this.currentChatId}`);
+        console.log(`🔍 DEBUG [VOCAL]: Map keys =`, Array.from(this.lastSuggestions.keys()));
+      } else {
+        console.log(`⚠️ DEBUG [VOCAL]: Pas de suggestions ou suggestions vides`);
+      }
+
     } catch (error: any) {
       const duration = Date.now() - startTime;
       globalMetrics.trackRequest(String(this.currentChatId), duration);
@@ -1233,10 +1283,57 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
     }
 
     // 🎯 OPTIM 6.3: Détection locale des confirmations simples (réponse directe)
-    const confirmations = ['ok', 'd\'accord', 'okay', 'cool', 'parfait', 'bien', 'super', 'nice', 'top', 'oui'];
+    const confirmations = ['ok', 'd\'accord', 'okay', 'cool', 'parfait', 'bien', 'super', 'nice', 'top'];
     if (confirmations.includes(t)) {
       this.sendQuickResponse('👍 Parfait ! Autre chose ?');
       return 'quick_response'; // Réponse déjà envoyée, ne pas continuer
+    }
+
+    // 💡 DÉTECTION DE RÉPONSES NUMÉRIQUES (1, 2, 3...) - Utiliser les suggestions contextuelles
+    const numericResponse = t.match(/^\s*(\d+)\s*$/);
+    if (numericResponse) {
+      const suggestionIndex = parseInt(numericResponse[1], 10) - 1; // Convertir 1-based à 0-based
+      console.log(`🔍 DEBUG: Réponse numérique détectée: ${numericResponse[1]} (index: ${suggestionIndex})`);
+      console.log(`🔍 DEBUG: currentChatId =`, this.currentChatId);
+      console.log(`🔍 DEBUG: Map keys =`, Array.from(this.lastSuggestions.keys()));
+      console.log(`🔍 DEBUG: lastSuggestions.get(String(this.currentChatId)) =`, this.lastSuggestions.get(String(this.currentChatId)));
+
+      const suggestions = this.lastSuggestions.get(String(this.currentChatId));
+
+      if (suggestions && suggestionIndex >= 0 && suggestionIndex < suggestions.length) {
+        const selectedQuestion = suggestions[suggestionIndex];
+        console.log(`✅ Utilisation de la suggestion #${suggestionIndex + 1}: "${selectedQuestion}"`);
+        // Nettoyer les suggestions après utilisation
+        this.lastSuggestions.delete(String(this.currentChatId));
+        // 💡 TRICK: Retourner true pour déclencher le traitement IA
+        // mais stocker la suggestion sélectionnée pour l'utiliser dans le code appelant
+        this.selectedSuggestion = selectedQuestion; // Stocker temporairement
+        return true; // Traiter comme une question IA
+      } else if (suggestions) {
+        // Numéro invalide
+        this.sendQuickResponse(`❌ Numéro invalide. Choisissez entre 1 et ${suggestions.length}.`);
+        return 'quick_response';
+      }
+      // Pas de suggestions mémorisées, continuer le traitement normal
+      console.log(`⚠️ DEBUG: Pas de suggestions trouvées pour currentChatId`);
+    }
+
+    // 💡 DÉTECTION DE "OUI" - Utiliser la première suggestion contextuelle (compatibilité arrière)
+    if (t === 'oui' || t === 'yes' || t === 'si') {
+      const suggestions = this.lastSuggestions.get(String(this.currentChatId));
+      if (suggestions && suggestions.length > 0) {
+        const firstSuggestion = suggestions[0];
+        logDebug(`Utilisation de la première suggestion: "${firstSuggestion}"`, 'telegram-bot');
+        // Nettoyer les suggestions après utilisation
+        this.lastSuggestions.delete(String(this.currentChatId));
+        // 💡 TRICK: Retourner true pour déclencher le traitement IA
+        // mais stocker la suggestion pour l'utiliser dans le code appelant
+        this.selectedSuggestion = firstSuggestion; // Stocker temporairement
+        return true; // Traiter comme une question IA
+      }
+      // Pas de suggestion mémorisée, traiter comme une confirmation normale
+      this.sendQuickResponse('👍 Parfait ! Autre chose ?');
+      return 'quick_response';
     }
 
     // 🎯 OPTIM 6.4: Détection locale des demandes d'aide (réponse directe)
@@ -1249,7 +1346,7 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
     // Mots-clés qui indiquent une question explicite nécessitant l'IA
     const questionWords = [
       'combien', 'quel', 'quelle', 'quels', 'quelles',
-      'montre', 'montrez', 'show', 'voir',
+      'montre', 'montrez', 'show', 'voir', 'affiche', 'afficher',
       'liste', 'list', 'lister',
       'calcule', 'calculer',
       'total', 'somme', 'moyenne',
@@ -1273,7 +1370,9 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
       'salaire', 'salary', 'employé', 'employee', 'fournisseur', 'supplier',
       'transaction', 'dépense', 'expense', 'balance', 'solde', 'compte',
       'foster', 'sligro', 'coca', 'colruyt', // Fournisseurs courants
-      'prévision', 'forecast', 'alerte', 'alert', 'top', 'dernier'
+      'prévision', 'forecast', 'alerte', 'alert', 'top', 'dernier',
+      'anomalie', 'anomalies', 'détecte', 'détecter', 'tendance', 'tendances', // Analytics
+      'donne', 'donne-moi', 'donnez' // Pour les requêtes vocales "Donne-moi..."
     ];
     const hasBusinessKeyword = businessKeywords.some(word => t.includes(word));
 
@@ -1339,29 +1438,60 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
           String(this.currentChatId)
         );
 
+        // 🆕 DÉTECTION: Marqueur [[NO_STREAMING]] pour désactiver le streaming
+        const hasSuggestionsStrict = strictResponse.includes('💡 Suggestions :');
+        // 🔧 NETTOYER: Retirer le marqueur [[NO_STREAMING]] de la réponse (méthode sécurisée)
+        const cleanStrictResponse = this.cleanResponseText(strictResponse);
+
         // ✅ PAGINATION : Si réponse trop longue (>4000 chars), découper automatiquement
-        if (strictResponse.length > 4000) {
+        if (cleanStrictResponse.length > 4000) {
           const paginator = TelegramPaginationFactory.create(this.bot, Number(this.currentChatId));
-          await paginator.sendLongMessage(strictResponse, progressMsg.message_id);
+          await paginator.sendLongMessage(cleanStrictResponse, progressMsg.message_id);
+        } else if (hasSuggestionsStrict) {
+          // 🆕 NO_STREAMING: Envoyer sans streaming pour préserver le formatage
+          await this.bot.editMessageText(cleanStrictResponse, {
+            chat_id: this.currentChatId,
+            message_id: progressMsg.message_id,
+            parse_mode: 'HTML',
+          });
         } else {
           // ✅ STREAMING : Éditer le message existant
-          await streamer.streamText(strictResponse, progressMsg.message_id);
+          await streamer.streamText(cleanStrictResponse, progressMsg.message_id);
         }
 
       } else {
         // 📺 ÉTAPE 4: STREAMING de la réponse (UX ChatGPT-like)
         // ⚡ NOUVEAU: Détection automatique pagination pour réponses longues
 
-        if (response.length > 4000) {
+        // 🆕 DÉTECTION: Marqueur [[NO_STREAMING]] pour désactiver le streaming (préserve le formatage des suggestions)
+        const hasSuggestions = response.includes('💡 Suggestions :');
+        const hasMarker = response.includes('[[NO_STREAMING]]');
+        logDebug(`DEBUG: hasSuggestions=${hasSuggestions} hasMarker=${hasMarker} responseLength=${response.length} responseEnd="${response.substring(response.length - 100)}"`, 'telegram-bot');
+        // 🔧 NETTOYER: Retirer le marqueur [[NO_STREAMING]] de la réponse (méthode sécurisée avec nettoyage récursif)
+        const cleanResponse = this.cleanResponseText(response);
+        logDebug(`DEBUG: cleanResponseLength=${cleanResponse.length} hasRemainingMarker=${cleanResponse.includes('[[NO_STREAMING]]')} cleanResponseEnd="${cleanResponse.substring(cleanResponse.length - 100)}"`, 'telegram-bot');
+
+        if (cleanResponse.length > 4000) {
           // 📄 PAGINATION : Réponse trop longue, découper en plusieurs messages
-          logInfo(`Réponse longue (${response.length} chars), pagination automatique`, 'telegram-bot');
+          logInfo(`Réponse longue (${cleanResponse.length} chars), pagination automatique`, 'telegram-bot');
 
           const paginator = TelegramPaginationFactory.create(this.bot, Number(this.currentChatId));
-          await paginator.sendLongMessage(response, progressMsg.message_id);
+          await paginator.sendLongMessage(cleanResponse, progressMsg.message_id);
 
+        } else if (hasSuggestions) {
+          // 🆕 NO_STREAMING: Envoyer sans streaming pour préserver le formatage des suggestions
+          // ⚠️ PAS de parse_mode pour préserver les sauts de ligne \n
+          console.log('=== ENVOI TELEGRAM ===');
+          console.log('cleanResponse end:', cleanResponse.substring(cleanResponse.length - 200));
+          console.log('hasRemainingMarker:', cleanResponse.includes('[[NO_STREAMING]]'));
+          console.log('========================');
+          await this.bot.editMessageText(cleanResponse, {
+            chat_id: this.currentChatId,
+            message_id: progressMsg.message_id,
+          });
         } else {
           // 📺 STREAMING : Réponse courte, streaming normal
-          await streamer.streamText(response, progressMsg.message_id);
+          await streamer.streamText(cleanResponse, progressMsg.message_id);
         }
       }
 

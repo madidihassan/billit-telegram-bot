@@ -7,6 +7,21 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Fichier PID pour le wrapper
+PID_FILE="$SCRIPT_DIR/.bot-wrapper.pid"
+
+# Nettoyer le fichier PID à la sortie
+cleanup() {
+  echo ""
+  echo "🧹 Nettoyage du fichier PID..."
+  rm -f "$PID_FILE"
+  echo "👋 Wrapper arrêté"
+  exit 0
+}
+
+# Capturer les signaux pour nettoyer proprement
+trap cleanup SIGINT SIGTERM EXIT
+
 # ========================================
 # PRÉVENTION DES DOUBLONS
 # ========================================
@@ -16,25 +31,31 @@ echo "🔍 Vérification des processus existants dans $SCRIPT_DIR..."
 kill_processes_in_dir() {
   local pattern="$1"
   local description="$2"
+  local killed_count=0
 
-  pgrep -f "$pattern" 2>/dev/null | while read pid; do
+  for pid in $(pgrep -f "$pattern" 2>/dev/null); do
     # Vérifier le répertoire de travail du processus
     dir=$(pwdx "$pid" 2>/dev/null | awk '{print $2}')
 
-    # Si le processus tourne dans notre répertoire, le tuer (sauf nous-même)
-    if [ "$dir" = "$SCRIPT_DIR" ] && [ "$pid" != "$$" ]; then
+    # Si le processus tourne dans notre répertoire, le tuer (sauf nous-même et notre parent)
+    if [ "$dir" = "$SCRIPT_DIR" ] && [ "$pid" != "$$" ] && [ "$pid" != "$PPID" ]; then
       echo "  ⚠️  Arrêt de $description existant (PID $pid)"
       kill -9 "$pid" 2>/dev/null
+      killed_count=$((killed_count + 1))
     fi
   done
+
+  if [ $killed_count -gt 0 ]; then
+    echo "  ✅ $killed_count $description(s) arrêté(s)"
+  fi
 }
 
 # NOTE IMPORTANTE: Ce script ne devrait normalement jamais être appelé directement
 # car start-bot-safe.sh nettoie déjà tout avant de lancer ce wrapper.
-# Ce nettoyage est une sécurité supplémentaire.
+# Ce nettoyage est une sécurité supplémentaire au cas où.
 
-# Tuer les anciens wrappers (sauf le processus actuel)
-kill_processes_in_dir "start-bot-wrapper" "wrapper"
+# Tuer les anciens wrappers (sauf le processus actuel et son parent)
+kill_processes_in_dir "bash.*start-bot-wrapper.sh" "wrapper"
 
 # Attendre que les wrappers soient complètement arrêtés
 sleep 2

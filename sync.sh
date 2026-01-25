@@ -188,13 +188,25 @@ if [ -d "$DEV_PATH" ]; then
     
     info "Arrêt des anciens processus..."
 
-    # 1. Tuer les wrappers d'abord
-    WRAPPER_PIDS=$(pgrep -f "start-bot-wrapper" || true)
+    # 1. Vérifier et tuer le wrapper depuis le fichier PID (méthode fiable)
+    PID_FILE="$DEV_PATH/.bot-wrapper.pid"
+    if [ -f "$PID_FILE" ]; then
+        WRAPPER_PID=$(cat "$PID_FILE")
+        if [ -n "$WRAPPER_PID" ] && kill -0 "$WRAPPER_PID" 2>/dev/null; then
+            info "Arrêt du wrapper depuis PID file (PID: $WRAPPER_PID)"
+            kill -9 "$WRAPPER_PID" 2>/dev/null || true
+            sleep 1
+        fi
+        rm -f "$PID_FILE"
+    fi
+
+    # 2. Tuer les wrappers orphelins (sécurité supplémentaire)
+    WRAPPER_PIDS=$(pgrep -f "bash.*start-bot-wrapper.sh" || true)
     if [ -n "$WRAPPER_PIDS" ]; then
         for pid in $WRAPPER_PIDS; do
             PWD_PATH=$(pwdx "$pid" 2>/dev/null | awk '{print $2}')
             if [ "$PWD_PATH" = "$DEV_PATH" ]; then
-                info "Arrêt du wrapper $pid (répertoire: $PWD_PATH)"
+                info "Arrêt du wrapper orphelin $pid (répertoire: $PWD_PATH)"
                 kill -9 "$pid" 2>/dev/null || true
             fi
         done
@@ -202,7 +214,7 @@ if [ -d "$DEV_PATH" ]; then
 
     sleep 2
 
-    # 2. Tuer les processus node
+    # 3. Tuer les processus node
     OLD_PIDS=$(pgrep -f "node dist/index-bot" || true)
     if [ -n "$OLD_PIDS" ]; then
         for pid in $OLD_PIDS; do

@@ -109,10 +109,11 @@ export class StreamingResponse {
         message = await this.bot.editMessageText(firstChunk, {
           chat_id: this.chatId,
           message_id: this.currentMessageId,
+          parse_mode: 'HTML',
         }) as TelegramBot.Message;
       } else {
         // Créer un nouveau message
-        message = await this.bot.sendMessage(this.chatId, firstChunk);
+        message = await this.bot.sendMessage(this.chatId, firstChunk, { parse_mode: 'HTML' });
         this.currentMessageId = message.message_id;
       }
 
@@ -133,6 +134,7 @@ export class StreamingResponse {
             message = await this.bot.editMessageText(accumulatedText, {
               chat_id: this.chatId,
               message_id: this.currentMessageId!,
+              parse_mode: 'HTML',
             }) as TelegramBot.Message;
 
             this.lastUpdateTime = Date.now();
@@ -158,12 +160,13 @@ export class StreamingResponse {
           return await this.bot.editMessageText(fullText, {
             chat_id: this.chatId,
             message_id: this.currentMessageId,
+            parse_mode: 'HTML',
           }) as TelegramBot.Message;
         } catch {
-          return await this.bot.sendMessage(this.chatId, fullText);
+          return await this.bot.sendMessage(this.chatId, fullText, { parse_mode: 'HTML' });
         }
       }
-      return await this.bot.sendMessage(this.chatId, fullText);
+      return await this.bot.sendMessage(this.chatId, fullText, { parse_mode: 'HTML' });
     }
   }
 
@@ -172,7 +175,9 @@ export class StreamingResponse {
    */
   private splitIntoChunks(text: string): string[] {
     const chunks: string[] = [];
-    const sentences = text.split(/(?<=[.!?])\s+/); // Split par phrase
+    // 🆕 Utiliser un regex qui capture les sauts de ligne pour les préserver
+    // Le groupe de capture () gardera les \n\n dans le résultat
+    const sentences = text.split(/(?<=[.!?])(\s+)(?!\d+\.)/);
 
     let currentChunk = '';
 
@@ -183,7 +188,8 @@ export class StreamingResponse {
         chunks.push(currentChunk);
         currentChunk = '';
       } else {
-        currentChunk += (currentChunk ? ' ' : '') + sentence;
+        // 🆕 Ne pas ajouter d'espace si l'élément commence par un saut de ligne
+        currentChunk += (currentChunk && !sentence.match(/^\s/) ? ' ' : '') + sentence;
       }
     }
 

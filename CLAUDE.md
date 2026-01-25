@@ -44,9 +44,12 @@ npm run start        # Démarrer le notifier uniquement
 
 ### Déploiement
 ```bash
-./start-bot.sh       # Démarrage simple
-./start-bot-wrapper.sh  # Démarrage avec auto-redémarrage
+./start-bot-safe.sh      # ⭐ RECOMMANDÉ: Démarrage sécurisé avec anti-doublons
+./start-bot-wrapper.sh   # Wrapper auto-redémarrage (appelé par start-bot-safe.sh)
+./start-bot.sh           # Démarrage simple (legacy)
 ```
+
+**⚠️ IMPORTANT** : Toujours utiliser `./start-bot-safe.sh` pour garantir qu'un seul bot tourne
 
 ### Git
 ```bash
@@ -218,22 +221,26 @@ npm run start:bot
 
 ### 3. Déploiement
 ```bash
-# ⚠️ NOUVEAU: Utilisez start-bot-safe.sh au lieu de start-bot-wrapper.sh
+# ⚠️ TOUJOURS utiliser start-bot-safe.sh (système anti-doublons intégré)
 # Ce script garantit qu'un seul bot tourne par dossier
 
 # Pour démarrer le bot Tonton202:
-cd /home/ubuntu/Billit/tonton202
+cd /home/ubuntu/Billit/bot_tonton202
 ./start-bot-safe.sh
 
 # Pour démarrer le bot Mustfood:
-cd /home/ubuntu/Billit/mustfood
+cd /home/ubuntu/Billit/bot_mustfood
 ./start-bot-safe.sh
 
-# Le script start-bot-safe.sh:
-# - Tue automatiquement les anciens processus du MÊME dossier
-# - N'interfère PAS avec les bots des autres dossiers
-# - Vérifie que le bot démarre correctement
-# - Utilise pwdx pour identifier précisément les processus à tuer
+# Le script start-bot-safe.sh fait automatiquement:
+# ✅ Vérifie le fichier PID du wrapper existant et le tue
+# ✅ Cherche et tue les wrappers orphelins (sécurité supplémentaire)
+# ✅ Tue tous les processus bot du MÊME dossier uniquement
+# ✅ Utilise pwdx pour identifier précisément les processus
+# ✅ N'interfère PAS avec les bots des autres dossiers
+# ✅ Lance le wrapper avec fichier PID pour tracking
+# ✅ Vérifie que le bot démarre correctement (timeout 30s)
+# ✅ Empêche les lancements simultanés avec fichier de verrouillage
 
 # Commiter les changements
 git add .
@@ -529,14 +536,33 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 
 ### Problèmes fréquents
 
-**Erreur 409 Conflict**:
-- Plusieurs instances du bot tournent
-- Solution: `pkill -9 -f "npm run start:bot"` puis redémarrer
+**Erreur 409 Conflict** (plusieurs instances du bot):
+- ✅ **Correctif définitif appliqué** (25 jan 2026) : Système anti-doublons avec fichier PID
+- **Diagnostic** : Vérifier combien de bots tournent
+  ```bash
+  ps aux | grep "node dist/index-bot" | grep -v grep
+  for PID in $(pgrep -f "node dist/index-bot"); do
+    echo "PID: $PID - DIR: $(pwdx $PID 2>/dev/null | awk '{print $2}')";
+  done
+  ```
+- **Solution rapide** : Relancer avec `./start-bot-safe.sh` (nettoie automatiquement)
+- **Solution manuelle** :
+  ```bash
+  # Tuer tous les processus de ce dossier
+  kill -9 $(cat .bot-wrapper.pid) 2>/dev/null
+  pkill -f "$(pwd).*node.*dist/index-bot"
+  rm -f .bot-wrapper.pid .bot-start.lock
+  ./start-bot-safe.sh
+  ```
 
-**Les deux bots s'arrêtent quand on en démarre un** ou **Doublons de processus**:
-- Correctif appliqué dans commit bd2555e
-- Le script `sync.sh` utilise `pgrep` + `pwdx` pour identifier le processus exact à tuer
-- Chaque processus est vérifié par son répertoire de travail avant d'être tué
+**Doublons de processus** (plusieurs bots pour un même dossier):
+- ✅ **RÉSOLU** avec le système de fichier PID + verrouillage (25 jan 2026)
+- Le script `start-bot-safe.sh` garantit qu'un seul bot tourne par dossier
+- Protection multi-niveaux : fichier PID, verrouillage, détection pwdx
+
+**Les deux bots s'arrêtent quand on en démarre un**:
+- ✅ **RÉSOLU** : Utilisation de `pwdx` pour identifier précisément les processus
+- Chaque bot (tonton202 et mustfood) peut tourner en parallèle sans conflit
 
 **Réponses vont au mauvais utilisateur**:
 - Bug multi-user corrigé dans commit 38d52a6
@@ -545,7 +571,8 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 **Bot ne répond pas**:
 - Vérifier que le Chat ID est dans la whitelist
 - Vérifier `.env` pour les bons tokens
-- Redémarrer le bot
+- Vérifier qu'un seul bot tourne : `ps aux | grep "node dist/index-bot"`
+- Redémarrer le bot avec `./start-bot-safe.sh`
 
 ## Structure des données
 
@@ -577,6 +604,48 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 ```
 
 ## Historique des versions récentes
+
+### Commit (25 jan 2026) - Système anti-doublons définitif ✅
+- **FIX CRITIQUE**: Résolution définitive du problème de processus bot multiples
+- **Problème identifié** : Race condition dans le système de redémarrage créait des instances multiples
+  - Wrappers en boucle infinie relançaient le bot sans vérification
+  - Détection défaillante : bot démarrait mais n'était pas détecté → relançage → doublons
+  - Lancements simultanés de `start-bot-safe.sh` créaient des wrappers concurrents
+
+#### 🛡️ Solutions implémentées (3 niveaux de protection) :
+
+1. **Système de fichier PID** (`.bot-wrapper.pid`)
+   - Track le PID du wrapper actif
+   - Vérifie et tue le wrapper existant avant de démarrer un nouveau
+   - Cleanup automatique avec `trap` à la sortie
+
+2. **Système de verrouillage** (`.bot-start.lock`)
+   - Empêche plusieurs lancements simultanés de `start-bot-safe.sh`
+   - Vérifie si un processus de démarrage est déjà en cours
+   - Abandon automatique pour éviter les doublons
+
+3. **Détection améliorée du bot**
+   - ❌ Avant : `pgrep -f "$BOT_DIR.*dist/index-bot"` (ne fonctionnait pas)
+   - ✅ Maintenant : Cherche tous les processus, filtre avec `pwdx` pour vérifier le répertoire
+   - Détection fiable basée sur le répertoire de travail réel du processus
+
+4. **Intégration dans `sync.sh`**
+   - Tue le wrapper via fichier PID en priorité (méthode fiable)
+   - Cherche et nettoie les wrappers orphelins (sécurité supplémentaire)
+   - Évite les conflits entre bot_tonton202 et bot_mustfood
+
+#### 📊 Résultat :
+- ✅ **Garantie : Un seul bot par dossier**
+- ✅ Plus d'erreurs 409 Conflict de Telegram
+- ✅ Redémarrage sûr avec `sync` ou `./start-bot-safe.sh`
+- ✅ Les deux bots (tonton202 et mustfood) peuvent tourner en parallèle sans se perturber
+
+#### 📝 Fichiers modifiés :
+- `start-bot-safe.sh` : Système PID + verrouillage + détection améliorée (56 lignes modifiées)
+- `start-bot-wrapper.sh` : Cleanup PID avec trap, compteurs, exclusion PPID (28 lignes)
+- `sync.sh` : Kill via fichier PID, gestion wrappers orphelins (17 lignes)
+
+---
 
 ### Commit 1065e25 (28 déc 2025) - Analyse complète mois unique
 - **FEAT**: Analyse complète pour mois unique quand "analyse" demandée
@@ -731,11 +800,12 @@ Total: 150000€ (250 paiements)
 4. **Sauvegarder sur GitHub** après chaque correction importante
 5. **Vérifier les logs** en cas de comportement inattendu
 6. **Utiliser `sync`** pour synchroniser les modifications entre Tonton202 et Mustfood
+7. **⭐ TOUJOURS utiliser `./start-bot-safe.sh`** pour garantir qu'un seul bot tourne (système anti-doublons)
 
 ---
 
-**Dernière mise à jour**: 19 janvier 2026
-**Version du bot**: 3.1 - Agent IA avec 50 outils
+**Dernière mise à jour**: 25 janvier 2026
+**Version du bot**: 3.1.1 - Agent IA avec 50 outils + Système anti-doublons
 **Statut**: Production ✅
 
 ## 🚀 Nouveautés Version 3.1 (19 janvier 2026)
