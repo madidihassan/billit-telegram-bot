@@ -146,8 +146,10 @@ echo "────────────────────────�
 
 if [ "$TARGET_BRANCH" = "mustfood" ]; then
     DEV_PATH="/home/ubuntu/Billit/bot_mustfood"
+    PM2_NAME="bot-mustfood"
 elif [ "$TARGET_BRANCH" = "main" ]; then
     DEV_PATH="/home/ubuntu/Billit/bot_tonton202"
+    PM2_NAME="bot-tonton202"
 fi
 
 if [ -d "$DEV_PATH" ]; then
@@ -161,8 +163,7 @@ if [ -d "$DEV_PATH" ]; then
         --exclude='*.log' \
         src/ "$DEV_PATH/src/"
 
-    cp package.json tsconfig.json start-bot-safe.sh start-bot-wrapper.sh "$DEV_PATH/" 2>/dev/null || true
-    chmod +x "$DEV_PATH/start-bot-safe.sh" "$DEV_PATH/start-bot-wrapper.sh" 2>/dev/null || true
+    cp package.json tsconfig.json "$DEV_PATH/" 2>/dev/null || true
 
     cd "$DEV_PATH"
     info "Compilation du code TypeScript..."
@@ -186,55 +187,12 @@ if [ -d "$DEV_PATH" ]; then
     echo "🔄 ÉTAPE 8: Redémarrage du bot ${TARGET_NAME}"
     echo "────────────────────────────────────────────────────────────"
     
-    info "Arrêt des anciens processus..."
-
-    # 1. Vérifier et tuer le wrapper depuis le fichier PID (méthode fiable)
-    PID_FILE="$DEV_PATH/.bot-wrapper.pid"
-    if [ -f "$PID_FILE" ]; then
-        WRAPPER_PID=$(cat "$PID_FILE")
-        if [ -n "$WRAPPER_PID" ] && kill -0 "$WRAPPER_PID" 2>/dev/null; then
-            info "Arrêt du wrapper depuis PID file (PID: $WRAPPER_PID)"
-            kill -9 "$WRAPPER_PID" 2>/dev/null || true
-            sleep 1
-        fi
-        rm -f "$PID_FILE"
-    fi
-
-    # 2. Tuer les wrappers orphelins (sécurité supplémentaire)
-    WRAPPER_PIDS=$(pgrep -f "bash.*start-bot-wrapper.sh" || true)
-    if [ -n "$WRAPPER_PIDS" ]; then
-        for pid in $WRAPPER_PIDS; do
-            PWD_PATH=$(pwdx "$pid" 2>/dev/null | awk '{print $2}')
-            if [ "$PWD_PATH" = "$DEV_PATH" ]; then
-                info "Arrêt du wrapper orphelin $pid (répertoire: $PWD_PATH)"
-                kill -9 "$pid" 2>/dev/null || true
-            fi
-        done
-    fi
-
-    sleep 2
-
-    # 3. Tuer les processus node
-    OLD_PIDS=$(pgrep -f "node dist/index-bot" || true)
-    if [ -n "$OLD_PIDS" ]; then
-        for pid in $OLD_PIDS; do
-            PWD_PATH=$(pwdx "$pid" 2>/dev/null | awk '{print $2}')
-            if [ "$PWD_PATH" = "$DEV_PATH" ]; then
-                info "Arrêt du processus bot $pid (répertoire: $PWD_PATH)"
-                kill -9 "$pid" 2>/dev/null || true
-            fi
-        done
-    fi
-
-    sleep 2
-    
-    info "Démarrage du nouveau bot avec start-bot-safe.sh..."
-    cd "$DEV_PATH"
-    if ./start-bot-safe.sh; then
-        success "Bot ${TARGET_NAME} redémarré avec succès"
+    info "Redémarrage via PM2..."
+    if pm2 restart "$PM2_NAME"; then
+        success "Bot ${TARGET_NAME} redémarré avec succès (PM2)"
     else
-        error "Échec du redémarrage du bot ${TARGET_NAME}"
-        error "Vérifiez les logs: tail -f $DEV_PATH/mustfood-bot.log"
+        error "Échec du redémarrage PM2 pour ${TARGET_NAME}"
+        error "Vérifiez avec: pm2 logs $PM2_NAME"
         cd /home/ubuntu/Billit/bot_tonton202
         git checkout "$CURRENT_BRANCH"
         exit 1
@@ -272,7 +230,7 @@ echo "   ✅ Push GitHub (${CURRENT_BRANCH})"
 echo "   ✅ Merge vers ${TARGET_BRANCH}"
 echo "   ✅ Push GitHub (${TARGET_BRANCH})"
 echo "   ✅ Déploiement développement ${TARGET_NAME}"
-echo "   ✅ Bot ${TARGET_NAME} redémarré"
+echo "   ✅ Bot ${TARGET_NAME} redémarré (PM2)"
 echo ""
 echo "🔄 Prochaine action:"
 echo "   • Tester le bot ${TARGET_NAME} sur Telegram"

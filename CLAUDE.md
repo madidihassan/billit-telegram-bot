@@ -9,7 +9,8 @@ Bot Telegram interactif pour gérer les factures Billit avec IA autonome, reconn
 ### 📱 Bots Telegram (répertoire `/home/ubuntu/Billit/`)
 - **bot_tonton202** : Bot Telegram pour le compte "tonton202" (⚠️ avec préfixe "bot_")
 - **bot_mustfood** : Bot Telegram pour Mustfood (⚠️ avec préfixe "bot_")
-- **Ces bots sont gérés avec les scripts `sync.sh`, `start-bot-wrapper.sh` et `restart-bot.sh`**
+- **Ces bots sont gérés par **PM2** (`bot-tonton202` et `bot-mustfood`) depuis le 22 fév 2026**
+- Anciens scripts wrapper (`start-bot-safe.sh`, `start-bot-wrapper.sh`) conservés mais **ne plus utiliser**
 
 ### 🌐 Autres applications (répertoire `/home/ubuntu/tonton.app/apps/production/`)
 - **tonton202, mustfood, testing, portail** : Applications web/services différents (gérés par PM2, ⚠️ SANS préfixe "bot_")
@@ -42,14 +43,25 @@ npm run start:bot    # Démarrer le bot (production)
 npm run start        # Démarrer le notifier uniquement
 ```
 
-### Déploiement
+### Déploiement (PM2 — depuis le 22 fév 2026)
 ```bash
-./start-bot-safe.sh      # ⭐ RECOMMANDÉ: Démarrage sécurisé avec anti-doublons
-./start-bot-wrapper.sh   # Wrapper auto-redémarrage (appelé par start-bot-safe.sh)
-./start-bot.sh           # Démarrage simple (legacy)
+# ⭐ COMMANDES PM2 À UTILISER
+pm2 restart bot-tonton202   # Redémarrer tonton202
+pm2 restart bot-mustfood    # Redémarrer mustfood
+pm2 stop bot-tonton202      # Arrêter tonton202
+pm2 logs bot-tonton202      # Logs en temps réel
+pm2 logs bot-mustfood       # Logs en temps réel
+pm2 list                    # Voir l'état de tous les processus
+
+# Config PM2 (ecosystem)
+# bot_tonton202/ecosystem-bot.config.js  → name: 'bot-tonton202'
+# bot_mustfood/ecosystem-bot.config.js   → name: 'bot-mustfood'
+
+# ⚠️ NE PLUS UTILISER les anciens scripts wrapper :
+# ./start-bot-safe.sh, ./start-bot-wrapper.sh (conservés mais obsolètes)
 ```
 
-**⚠️ IMPORTANT** : Toujours utiliser `./start-bot-safe.sh` pour garantir qu'un seul bot tourne
+**⚠️ IMPORTANT** : PM2 garantit une seule instance par bot — ne jamais lancer `./start-bot-safe.sh` en parallèle
 
 ### Git
 ```bash
@@ -61,18 +73,17 @@ git push origin main # Pousser sur GitHub
 
 ### Gestion des processus
 ```bash
-# Voir les processus des bots Telegram
-ps aux | grep "node dist/index-bot" | grep -v grep
+# ⭐ AVEC PM2 (méthode recommandée)
+pm2 list                        # État de tous les processus
+pm2 restart bot-tonton202       # Redémarrer tonton202
+pm2 restart bot-mustfood        # Redémarrer mustfood
+pm2 logs bot-tonton202 --lines 50  # Dernières lignes de log
+pm2 describe bot-tonton202      # Détails du processus
 
-# Identifier quel bot tourne (tonton202 ou mustfood)
-pwdx <PID>  # Affiche le répertoire de travail du processus
-
-# Tuer un bot spécifique
-pkill -f "/home/ubuntu/Billit/bot_tonton202.*node.*dist/index-bot"  # Tonton202
-pkill -f "/home/ubuntu/Billit/bot_mustfood.*node.*dist/index-bot"   # Mustfood
-
-# Tuer tous les bots Telegram
-pkill -f "/home/ubuntu/Billit.*node.*dist/index-bot"
+# En cas de problème grave (reset complet)
+pm2 delete bot-tonton202
+pm2 start /home/ubuntu/Billit/bot_tonton202/ecosystem-bot.config.js
+pm2 save
 ```
 
 ## Architecture du projet
@@ -221,26 +232,9 @@ npm run start:bot
 
 ### 3. Déploiement
 ```bash
-# ⚠️ TOUJOURS utiliser start-bot-safe.sh (système anti-doublons intégré)
-# Ce script garantit qu'un seul bot tourne par dossier
-
-# Pour démarrer le bot Tonton202:
-cd /home/ubuntu/Billit/bot_tonton202
-./start-bot-safe.sh
-
-# Pour démarrer le bot Mustfood:
-cd /home/ubuntu/Billit/bot_mustfood
-./start-bot-safe.sh
-
-# Le script start-bot-safe.sh fait automatiquement:
-# ✅ Vérifie le fichier PID du wrapper existant et le tue
-# ✅ Cherche et tue les wrappers orphelins (sécurité supplémentaire)
-# ✅ Tue tous les processus bot du MÊME dossier uniquement
-# ✅ Utilise pwdx pour identifier précisément les processus
-# ✅ N'interfère PAS avec les bots des autres dossiers
-# ✅ Lance le wrapper avec fichier PID pour tracking
-# ✅ Vérifie que le bot démarre correctement (timeout 30s)
-# ✅ Empêche les lancements simultanés avec fichier de verrouillage
+# ⭐ AVEC PM2 (méthode recommandée depuis le 22 fév 2026)
+npm run build                   # Compiler le code
+pm2 restart bot-tonton202       # Redémarrer le bot (PM2 garantit 1 seule instance)
 
 # Commiter les changements
 git add .
@@ -537,32 +531,24 @@ tail -f /dev/null  # Pas de fichier log, utiliser la sortie stdout
 ### Problèmes fréquents
 
 **Erreur 409 Conflict** (plusieurs instances du bot):
-- ✅ **Correctif définitif appliqué** (25 jan 2026) : Système anti-doublons avec fichier PID
-- **Diagnostic** : Vérifier combien de bots tournent
+- ✅ **RÉSOLU définitivement** (22 fév 2026) : Migration vers PM2
+- PM2 garantit une seule instance par nom de processus
+- **Diagnostic** :
   ```bash
-  ps aux | grep "node dist/index-bot" | grep -v grep
-  for PID in $(pgrep -f "node dist/index-bot"); do
-    echo "PID: $PID - DIR: $(pwdx $PID 2>/dev/null | awk '{print $2}')";
-  done
+  pm2 list                    # Voir l'état
+  pm2 logs bot-tonton202      # Voir les erreurs
   ```
-- **Solution rapide** : Relancer avec `./start-bot-safe.sh` (nettoie automatiquement)
-- **Solution manuelle** :
+- **Solution** :
   ```bash
-  # Tuer tous les processus de ce dossier
-  kill -9 $(cat .bot-wrapper.pid) 2>/dev/null
-  pkill -f "$(pwd).*node.*dist/index-bot"
-  rm -f .bot-wrapper.pid .bot-start.lock
-  ./start-bot-safe.sh
+  pm2 restart bot-tonton202   # Redémarrage propre
+  # ou en cas de problème grave :
+  pm2 delete bot-tonton202
+  pm2 start /home/ubuntu/Billit/bot_tonton202/ecosystem-bot.config.js
+  pm2 save
   ```
-
-**Doublons de processus** (plusieurs bots pour un même dossier):
-- ✅ **RÉSOLU** avec le système de fichier PID + verrouillage (25 jan 2026)
-- Le script `start-bot-safe.sh` garantit qu'un seul bot tourne par dossier
-- Protection multi-niveaux : fichier PID, verrouillage, détection pwdx
 
 **Les deux bots s'arrêtent quand on en démarre un**:
-- ✅ **RÉSOLU** : Utilisation de `pwdx` pour identifier précisément les processus
-- Chaque bot (tonton202 et mustfood) peut tourner en parallèle sans conflit
+- ✅ **RÉSOLU** : PM2 gère chaque bot indépendamment par nom (`bot-tonton202`, `bot-mustfood`)
 
 **Réponses vont au mauvais utilisateur**:
 - Bug multi-user corrigé dans commit 38d52a6
@@ -804,9 +790,36 @@ Total: 150000€ (250 paiements)
 
 ---
 
-**Dernière mise à jour**: 25 janvier 2026
-**Version du bot**: 3.1.1 - Agent IA avec 50 outils + Système anti-doublons
+**Dernière mise à jour**: 22 février 2026
+**Version du bot**: 3.1.2 - PM2 + Service réconciliation paiements (tonton202)
 **Statut**: Production ✅
+
+## 🚀 Nouveautés Version 3.1.2 (22 février 2026)
+
+### ✅ Migration PM2 + Service de réconciliation paiements
+
+#### 1. Migration vers PM2 (gestion des processus)
+- **Avant** : Scripts wrapper bash (`start-bot-safe.sh`, `start-bot-wrapper.sh`) → problèmes de doublons, race conditions
+- **Maintenant** : PM2 gère les deux bots (`bot-tonton202`, `bot-mustfood`)
+- PM2 garantit **1 seule instance** par bot, redémarrage auto, logs centralisés
+- Config : `ecosystem-bot.config.js` dans chaque dossier bot
+- Sauvegardé avec `pm2 save` → redémarrage automatique au reboot serveur
+
+#### 2. Service de réconciliation paiements (tonton202 uniquement)
+- **Nouveau fichier** : `src/services/payment-reconciliation-service.ts`
+- Réconciliation automatique **toutes les 30 min** entre transactions bancaires et factures impayées
+- Commande manuelle : `/reconcile`
+- Boutons de confirmation : "Lier maintenant" / "Ignorer"
+- Cooldown 24h pour les notifications automatiques
+- Base de données SQLite (`better-sqlite3`) — nécessite `npm rebuild better-sqlite3` si changement de version Node.js
+
+#### ⚠️ Note importante
+- `better-sqlite3` doit être recompilé si Node.js change de version :
+  ```bash
+  npm rebuild better-sqlite3
+  ```
+
+---
 
 ## 🚀 Nouveautés Version 3.1 (19 janvier 2026)
 

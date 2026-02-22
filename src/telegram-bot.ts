@@ -8,6 +8,7 @@ import { AIConversationService } from './ai-conversation-service';
 import { AIAgentService } from './ai-agent-service';
 import { AIAgentServiceV2 } from './ai-agent-service-v2';
 import { InvoiceMonitoringService } from './invoice-monitoring-service';
+import { PaymentReconciliationService } from './services/payment-reconciliation-service';
 import { sanitizeError, logUnauthorizedAccess, logSuspiciousActivity, sanitizeUrl } from './utils/security';
 import { validateUserInput, sanitizeArgs } from './utils/validation';
 import { RateLimiterManager, RateLimiterFactory } from './utils/rate-limiter';
@@ -34,6 +35,7 @@ export class TelegramBotInteractive {
   private aiConversationService: AIConversationService;
   private aiAgentService: AIAgentServiceV2; // Version V2 améliorée
   private invoiceMonitoringService: InvoiceMonitoringService;
+  private reconciliationService: PaymentReconciliationService | null = null;
   private rateLimitManager: RateLimiterManager;
 
   constructor(commandHandler: CommandHandler) {
@@ -242,11 +244,47 @@ export class TelegramBotInteractive {
           // 🔧 FIX: Utiliser l'IA pour les stats (format simplifié avec bénéfice)
           this.waitingForInput = null;
           response = await this.aiAgentService.processQuestion('Donne-moi les statistiques du mois', String(this.currentChatId));
+        } else if (command === 'reconcile_link') {
+          this.waitingForInput = null;
+          const key = args[0];
+          if (!this.reconciliationService) {
+            response = '❌ Service de réconciliation non disponible.';
+          } else {
+            const success = await this.reconciliationService.linkPending(key);
+            // Retirer les boutons du message original pour éviter les doubles-clics
+            if (msg) {
+              try {
+                await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
+                  chat_id: msg.chat.id,
+                  message_id: msg.message_id,
+                });
+              } catch (e) { /* message trop vieux ou déjà édité */ }
+            }
+            response = success
+              ? '✅ <b>Paiement lié avec succès dans Billit !</b>'
+              : '❌ <b>Liaison échouée.</b>\nVeuillez vérifier manuellement dans Billit.';
+          }
+        } else if (command === 'reconcile_ignore') {
+          this.waitingForInput = null;
+          const key = args[0];
+          if (this.reconciliationService) {
+            this.reconciliationService.ignorePending(key);
+          }
+          // Retirer les boutons du message original
+          if (msg) {
+            try {
+              await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
+                chat_id: msg.chat.id,
+                message_id: msg.message_id,
+              });
+            } catch (e) { /* message trop vieux ou déjà édité */ }
+          }
+          response = '🚫 <b>Suggestion ignorée.</b>\nCooldown de 24h remis à zéro.';
         } else {
           // Commandes normales
           this.waitingForInput = null;
           response = await this.commandHandler.handleCommand(command, args);
-          
+
           // Capturer le contexte
           this.captureInvoiceContext(command, args, response);
         }
@@ -323,6 +361,22 @@ export class TelegramBotInteractive {
       try {
         // Afficher l'action "typing" pendant le traitement
         await this.bot.sendChatAction(this.currentChatId, 'typing');
+
+        // ── Commande /reconcile : forcer une vérification immédiate ──
+        if (command === 'reconcile') {
+          if (!this.reconciliationService) {
+            await this.sendMessage('❌ Service de réconciliation non initialisé.');
+            return;
+          }
+          await this.sendMessage('🔗 <b>Réconciliation lancée...</b>\nVérification des paiements en cours, patientez.');
+          const result = await this.reconciliationService.triggerManual();
+          const summary =
+            `✅ <b>Réconciliation terminée</b>\n\n` +
+            `🔗 Paiements liés automatiquement : <b>${result.linked}</b>\n` +
+            `💡 Suggestions (vérification manuelle) : <b>${result.suggestions}</b>`;
+          await this.sendMessage(summary);
+          return;
+        }
 
         const response = await this.commandHandler.handleCommand(command, args);
 
@@ -1538,6 +1592,13 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
   }
 
   /**
+   * Enregistre le service de réconciliation (appelé depuis index-bot.ts)
+   */
+  setReconciliationService(service: PaymentReconciliationService): void {
+    this.reconciliationService = service;
+  }
+
+  /**
    * Envoie un message à tous les chats autorisés (pour les notifications de monitoring)
    */
   async broadcastMessage(message: string): Promise<void> {
@@ -1552,6 +1613,33 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
         console.log(`📤 Notification envoyée au chat ${user.chat_id} (${user.username || 'Inconnu'})`);
       } catch (error) {
         console.error(`❌ Erreur lors de l'envoi au chat ${user.chat_id}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Envoie un message de suggestion avec boutons inline ✅ Lier / ❌ Ignorer
+   * Utilisé par PaymentReconciliationService pour les correspondances à confirmer
+   */
+  async broadcastSuggestionWithButtons(message: string, linkKey: string): Promise<void> {
+    const authorizedUsers = getAllAuthorizedUsers();
+    const keyboard = {
+      inline_keyboard: [[
+        { text: '✅ Lier maintenant', callback_data: `reconcile_link:${linkKey}` },
+        { text: '❌ Ignorer', callback_data: `reconcile_ignore:${linkKey}` },
+      ]]
+    };
+
+    for (const user of authorizedUsers) {
+      try {
+        await this.bot.sendMessage(user.chat_id, message, {
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard,
+        });
+        console.log(`📤 Suggestion (boutons) envoyée au chat ${user.chat_id}`);
+      } catch (error) {
+        console.error(`❌ Erreur envoi suggestion au chat ${user.chat_id}:`, error);
       }
     }
   }
