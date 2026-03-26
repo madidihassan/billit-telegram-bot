@@ -1,12 +1,14 @@
 module.exports = {
   apps: [{
-    name: 'billit-bot',
+    name: 'bot-mustfood',
     script: './dist/index-bot.js',
+    cwd: '/home/ubuntu/Billit/bot_mustfood',
     instances: 1,
-    exec_mode: 'fork',  // IMPORTANT: fork mode pour Telegram polling
+    exec_mode: 'fork',
     autorestart: true,
     watch: false,
-    max_memory_restart: '200M',
+    max_memory_restart: '300M',
+    restart_delay: 5000,
     env: {
       NODE_ENV: 'production'
     },
@@ -14,7 +16,6 @@ module.exports = {
     out_file: './logs/bot-output.log',
     log_file: './logs/bot-combined.log',
     time: true,
-    merge_logs: true,
-    restart_delay: 10000
+    merge_logs: true
   }]
 };

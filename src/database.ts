@@ -168,6 +168,51 @@ export function isUserAuthorized(chatId: string): boolean {
   return user !== null;
 }
 
+/**
+ * Récupérer le rôle d'un utilisateur
+ */
+export function getUserRole(chatId: string): 'owner' | 'admin' | 'user' | null {
+  const user = getUserByChatId(chatId);
+  return user ? user.role : null;
+}
+
+// Définition des permissions par opération
+const OPERATION_PERMISSIONS: Record<string, Array<'owner' | 'admin' | 'user'>> = {
+  'add_user': ['owner', 'admin'],
+  'adduser': ['owner', 'admin'],
+  'remove_user': ['owner', 'admin'],
+  'removeuser': ['owner', 'admin'],
+  'restart_bot': ['owner'],
+  'mark_invoice_as_paid': ['owner', 'admin'],
+  'markpaid': ['owner', 'admin'],
+  'payinvoice': ['owner', 'admin'],
+};
+
+/**
+ * Vérifier si un utilisateur a la permission d'exécuter une opération
+ * Retourne true si l'opération n'est pas restreinte ou si l'utilisateur a le rôle requis
+ */
+export function hasPermission(chatId: string, operation: string): boolean {
+  const allowedRoles = OPERATION_PERMISSIONS[operation];
+  if (!allowedRoles) return true; // Pas de restriction = tout utilisateur autorisé peut accéder
+
+  const user = getUserByChatId(chatId);
+  if (!user) return false;
+
+  return allowedRoles.includes(user.role);
+}
+
+/**
+ * Obtenir le message d'erreur pour un refus de permission
+ */
+export function getPermissionDeniedMessage(operation: string): string {
+  const allowedRoles = OPERATION_PERMISSIONS[operation];
+  if (!allowedRoles) return '';
+
+  const rolesText = allowedRoles.join(' ou ');
+  return `⛔ Accès refusé. Cette opération nécessite le rôle : ${rolesText}.`;
+}
+
 // ============================================================
 // GESTION DES EMPLOYÉS
 // ============================================================

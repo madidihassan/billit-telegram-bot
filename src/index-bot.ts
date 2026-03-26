@@ -1,24 +1,29 @@
 import { config, validateConfig } from './config';
 import { BillitClient } from './billit-client';
+import { BankClient } from './bank-client';
 import { TelegramClient } from './telegram-client';
 import { TelegramBotInteractive } from './telegram-bot';
 import { CommandHandler } from './command-handler';
 import { Storage } from './storage';
 import { BillitInvoice } from './types';
 import { BankBalanceUpdater } from './bank-balance-updater';
+import { PaymentReconciliationService } from './services/payment-reconciliation-service';
 
 class BillitNotifierWithBot {
   private billitClient: BillitClient;
+  private bankClient: BankClient;
   private telegramClient: TelegramClient;
   private telegramBot: TelegramBotInteractive;
   private commandHandler: CommandHandler;
   private storage: Storage;
   private bankBalanceUpdater: BankBalanceUpdater;
+  private reconciliationService!: PaymentReconciliationService;
   private isRunning: boolean = false;
   private intervalId: NodeJS.Timeout | null = null;
 
   constructor() {
     this.billitClient = new BillitClient();
+    this.bankClient = new BankClient();
     this.telegramClient = new TelegramClient();
     this.commandHandler = new CommandHandler(this.billitClient, this.telegramClient);
     this.telegramBot = new TelegramBotInteractive(this.commandHandler);
@@ -54,7 +59,17 @@ class BillitNotifierWithBot {
 
     console.log(`\n⏱️  Intervalle de vérification: ${config.checkInterval / 1000} secondes`);
     console.log('📊 Surveillance active...');
-    console.log('🤖 Bot interactif activé - Tapez /help sur Telegram\n');
+    console.log('🤖 Bot interactif activé - Tapez /help sur Telegram');
+    console.log('🔗 Réconciliation paiements activée (toutes les 30 min)\n');
+
+    // Initialiser le service de réconciliation (après télégramBot car il en dépend)
+    this.reconciliationService = new PaymentReconciliationService(
+      this.billitClient,
+      this.bankClient,
+      this.telegramBot
+    );
+    // Enregistrer dans le bot pour la commande /reconcile
+    this.telegramBot.setReconciliationService(this.reconciliationService);
   }
 
   /**
@@ -147,6 +162,9 @@ class BillitNotifierWithBot {
 
     // Démarrer le service de mise à jour automatique des soldes bancaires
     this.bankBalanceUpdater.start();
+
+    // Démarrer le service de réconciliation paiements-factures
+    this.reconciliationService.start();
   }
 
   /**
@@ -159,6 +177,7 @@ class BillitNotifierWithBot {
     }
     this.telegramBot.stop();
     this.bankBalanceUpdater.stop();
+    this.reconciliationService.stop();
     this.isRunning = false;
     console.log('\n👋 Arrêt du système...');
   }

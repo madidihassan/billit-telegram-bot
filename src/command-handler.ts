@@ -4,8 +4,9 @@ import { BankClient } from './bank-client';
 import { BillitInvoice } from './types';
 import { matchesSupplier, getSupplierDisplayName, normalizeSearchTerm as normalizeSupplierTerm, SUPPLIER_ALIASES, addSupplier, deleteSupplier, listSuppliers } from './supplier-aliases';
 import { normalizeSearchTerm } from './utils/string-utils';
-import { addAuthorizedUser, removeAuthorizedUser, getAllAuthorizedUsers, getUserByChatId, getAllEmployees } from './database';
+import { addAuthorizedUser, removeAuthorizedUser, getAllAuthorizedUsers, getUserByChatId, getAllEmployees, hasPermission, getPermissionDeniedMessage } from './database';
 import { BankBalanceService } from './bank-balance-service';
+import { sanitizeError } from './utils/security';
 
 // Liste des employés (pour filtrer les salaires)
 const EMPLOYEE_KEYS = [
@@ -38,8 +39,9 @@ export class CommandHandler {
 
   /**
    * Traite une commande reçue
+   * @param callerChatId - Chat ID de l'utilisateur qui exécute la commande (pour vérification de permissions)
    */
-  async handleCommand(command: string, args: string[]): Promise<string> {
+  async handleCommand(command: string, args: string[], callerChatId?: string): Promise<string> {
     console.log(`📨 Commande reçue: /${command} ${args.join(' ')}`);
 
     switch (command) {
@@ -122,9 +124,15 @@ export class CommandHandler {
         return this.handleTools();
 
       case 'adduser':
+        if (callerChatId && !hasPermission(callerChatId, 'adduser')) {
+          return getPermissionDeniedMessage('adduser');
+        }
         return this.handleAddUser(args);
 
       case 'removeuser':
+        if (callerChatId && !hasPermission(callerChatId, 'removeuser')) {
+          return getPermissionDeniedMessage('removeuser');
+        }
         return this.handleRemoveUser(args);
 
       case 'listusers':
@@ -132,6 +140,9 @@ export class CommandHandler {
 
       case 'markpaid':
       case 'payinvoice':
+        if (callerChatId && !hasPermission(callerChatId, command)) {
+          return getPermissionDeniedMessage(command);
+        }
         return this.handleMarkPaid(args);
 
       // Commandes pour les soldes bancaires
@@ -252,7 +263,7 @@ Voir GUIDE_UTILISATEUR.md pour tous les exemples
       return this.formatInvoice(invoice);
     } catch (error: any) {
       console.error('Erreur handleLastInvoice:', error);
-      return `❌ Erreur lors de la recherche: ${error.message}`;
+      return `❌ Erreur lors de la recherche: ${sanitizeError(error)}`;
     }
   }
 
@@ -290,7 +301,7 @@ ${lines.join('\n')}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleUnpaid:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -332,7 +343,7 @@ ${lines.join('\n')}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handlePaid:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -373,7 +384,7 @@ ${lines.join('\n')}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleOverdue:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -440,7 +451,7 @@ ${lines.join('\n')}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleDueInvoices:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -544,7 +555,7 @@ ${lines.join('\n')}
       return result.trim();
     } catch (error: any) {
       console.error('Erreur handleStats:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -586,7 +597,7 @@ ${lines.join('\n')}${moreText}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleSearch:', error);
-      return `❌ Erreur lors de la recherche: ${error.message}`;
+      return `❌ Erreur lors de la recherche: ${sanitizeError(error)}`;
     }
   }
 
@@ -641,7 +652,7 @@ ${lines.join('\n\n')}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleListSuppliers:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -670,7 +681,7 @@ ${lines.join('\n\n')}
       return `💼 Liste des employés (${employees.length})\n\n${lines}`;
     } catch (error: any) {
       console.error('Erreur handleListEmployees:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -718,7 +729,7 @@ ${lines.join('\n')}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleSupplier:', error);
-      return `❌ Erreur lors de la recherche: ${error.message}`;
+      return `❌ Erreur lors de la recherche: ${sanitizeError(error)}`;
     }
   }
 
@@ -815,7 +826,7 @@ ${status} <b>Statut:</b> ${invoice.status}
       return this.formatInvoiceDetails(details, invoice);
     } catch (error: any) {
       console.error('Erreur handleInvoiceDetails:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -992,7 +1003,7 @@ ${lines.join('\n\n')}${moreText}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleTransactionsMois:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -1044,7 +1055,7 @@ ${lines.join('\n\n')}${moreText}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleRecettesMois:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -1096,7 +1107,7 @@ ${lines.join('\n\n')}${moreText}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleDepensesMois:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -1132,7 +1143,7 @@ ${balanceEmoji} <b>BALANCE NETTE: ${balanceFormatted}</b>
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleBalanceMois:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -1234,7 +1245,7 @@ ${balanceEmoji} <b>BALANCE NETTE: ${balanceFormatted}</b>
       return response.trim();
     } catch (error: any) {
       console.error('Erreur handleTransactionsFournisseur:', error);
-      return `❌ Erreur lors de la recherche: ${error.message}`;
+      return `❌ Erreur lors de la recherche: ${sanitizeError(error)}`;
     }
   }
 
@@ -1395,7 +1406,7 @@ ${summarySection}
       `.trim();
     } catch (error: any) {
       console.error('Erreur handleTransactionsPeriode:', error);
-      return `❌ Erreur lors de la récupération: ${error.message}`;
+      return `❌ Erreur lors de la récupération: ${sanitizeError(error)}`;
     }
   }
 
@@ -1439,7 +1450,7 @@ Utilisation: <code>/addsupplier [clé] [nom principal] [alias1] [alias2] ...</co
       return result.message;
     } catch (error: any) {
       console.error('Erreur handleAddSupplier:', error);
-      return `❌ Erreur lors de l'ajout: ${error.message}`;
+      return `❌ Erreur lors de l'ajout: ${sanitizeError(error)}`;
     }
   }
 
@@ -1470,7 +1481,7 @@ Utilisation: <code>/deletesupplier [clé]</code>
       return result.message;
     } catch (error: any) {
       console.error('Erreur handleDeleteSupplier:', error);
-      return `❌ Erreur lors de la suppression: ${error.message}`;
+      return `❌ Erreur lors de la suppression: ${sanitizeError(error)}`;
     }
   }
 
@@ -1633,7 +1644,7 @@ Utilisation: <code>/deletesupplier [clé]</code>
       return `✅ Facture **${invoiceNumber}** marquée comme payée avec succès !`;
     } catch (error: any) {
       console.error('Erreur handleMarkPaid:', error);
-      return `❌ Erreur lors du marquage de la facture: ${error.message}`;
+      return `❌ Erreur lors du marquage de la facture: ${sanitizeError(error)}`;
     }
   }
 
@@ -1698,7 +1709,7 @@ BANK_ACCOUNTS=BE07671870399966|Europabank|80075.06;BE12001745766792|BNP Paribas 
       return message;
     } catch (error: any) {
       console.error('Erreur lors de l\'initialisation des soldes:', error);
-      return `❌ Erreur lors de l'initialisation des soldes: ${error.message}`;
+      return `❌ Erreur lors de l'initialisation des soldes: ${sanitizeError(error)}`;
     }
   }
 
@@ -1710,7 +1721,7 @@ BANK_ACCOUNTS=BE07671870399966|Europabank|80075.06;BE12001745766792|BNP Paribas 
       return this.bankBalanceService.formatBalances();
     } catch (error: any) {
       console.error('Erreur lors de la récupération des soldes:', error);
-      return `❌ Erreur: ${error.message}`;
+      return `❌ Erreur: ${sanitizeError(error)}`;
     }
   }
 
@@ -1742,7 +1753,7 @@ Nouveau solde: €${balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 }
 Utilisez /balances pour voir tous les soldes.`;
     } catch (error: any) {
       console.error('Erreur lors de la modification du solde:', error);
-      return `❌ Erreur: ${error.message}`;
+      return `❌ Erreur: ${sanitizeError(error)}`;
     }
   }
 
@@ -1780,7 +1791,7 @@ Utilisez /balances pour les consulter.`;
       return message;
     } catch (error: any) {
       console.error('Erreur lors de la mise à jour des soldes:', error);
-      return `❌ Erreur: ${error.message}`;
+      return `❌ Erreur: ${sanitizeError(error)}`;
     }
   }
 

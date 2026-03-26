@@ -1,66 +1,19 @@
 /**
  * Service d'auto-apprentissage des fournisseurs
  * Extrait automatiquement les noms de fournisseurs depuis les descriptions de transactions
- * et les ajoute à la base de données
+ * et les ajoute à la base de données SQLite
+ *
+ * HISTORIQUE: Ce service écrivait dans supplier-aliases.json (split-brain).
+ * Migré vers SQLite pour cohérence avec supplier-aliases.ts et database.ts.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { matchesSupplier } from './supplier-aliases';
-
-interface SupplierAlias {
-  aliases: string[];
-  patterns: string[];
-}
-
-interface SuppliersDatabase {
-  [key: string]: SupplierAlias;
-}
+import { matchesSupplier, reloadSuppliers, SUPPLIER_ALIASES } from './supplier-aliases';
+import { addSupplier as dbAddSupplier, findSupplierByNameOrAlias, removeSupplier as dbRemoveSupplier, getAllSuppliers } from './database';
 
 export class SupplierLearningService {
-  private readonly ALIASES_FILE = path.join(process.cwd(), 'supplier-aliases.json');
-  private database: SuppliersDatabase = {};
 
   constructor() {
-    this.loadDatabase();
-  }
-
-  /**
-   * Charge la base de données des fournisseurs
-   */
-  private loadDatabase(): void {
-    try {
-      const content = fs.readFileSync(this.ALIASES_FILE, 'utf-8');
-      this.database = JSON.parse(content);
-      console.log('✅ Base de données des fournisseurs chargée');
-    } catch (error: any) {
-      console.error('❌ Erreur lors du chargement de la base:', error.message);
-      this.database = {};
-    }
-  }
-
-  /**
-   * Sauvegarde la base de données des fournisseurs
-   */
-  private saveDatabase(): void {
-    try {
-      // Trier les clés par ordre alphabétique
-      const sorted = Object.keys(this.database).sort();
-      const sortedDatabase: SuppliersDatabase = {};
-
-      sorted.forEach(key => {
-        sortedDatabase[key] = this.database[key];
-      });
-
-      fs.writeFileSync(
-        this.ALIASES_FILE,
-        JSON.stringify(sortedDatabase, null, 2),
-        'utf-8'
-      );
-      console.log('💾 Base de données des fournisseurs sauvegardée');
-    } catch (error: any) {
-      console.error('❌ Erreur lors de la sauvegarde:', error.message);
-    }
+    // Pas de chargement JSON - on utilise SQLite via SUPPLIER_ALIASES
   }
 
   /**
@@ -69,44 +22,38 @@ export class SupplierLearningService {
   extractSupplierFromDescription(description: string): string | null {
     if (!description) return null;
 
-    // Nettoyer la description
     const cleanDesc = description.trim();
 
     // Pattern 1: "Belgian Shell SA -                    DEBIT POUR DOMICILIATION..."
-    // Extraire tout avant le premier " - " ou ":"
     let match = cleanDesc.match(/^([A-Z][A-Za-z0-9&\s\.]+?)(?:\s+-\s+|\s*:|\s{5,})/);
     if (match && match[1]) {
       const supplierName = match[1].trim();
-      // Vérifier que le nom a au moins 2 mots et semble valide
       const words = supplierName.split(/\s+/).filter(w => w.length > 0);
       if (words.length >= 2 && words[0].length >= 2) {
         return supplierName;
       }
     }
 
-    // Pattern 2: "VIREMENT EN FAVEUR DE mediwet BE91390..." ou "vers Coca-Cola - Communication: ..."
-    // Arrêter l'extraction si on rencontre un IBAN (commence par BE ou DE suivi de chiffres)
+    // Pattern 2: "VIREMENT EN FAVEUR DE mediwet BE91390..."
     match = cleanDesc.match(/(?:vers|en faveur de)\s+([A-Za-z0-9&]+?)(?:\s+BE\d+|\s+DE\d+|\s+NL\d+|\s+FR\d+|\s+-|\s+Identification|\s*,|\s+Paiement)/i);
     if (match && match[1]) {
       const supplierName = match[1].trim();
-      // Vérifier que le nom a au moins 2 caractères
       if (supplierName.length >= 2) {
         return supplierName;
       }
     }
 
-    // Pattern 3: "RECOUVREMENT EUROPÉEN KBC BANK NV 0001 0001" - Extraire après "RECOUVREMENT", "VIREMENT", etc.
+    // Pattern 3: "RECOUVREMENT EUROPÉEN KBC BANK NV 0001 0001"
     match = cleanDesc.match(/^(?:RECOUVREMENT|VIREMENT|PRELEVEMENT|DOMICILIATION|PREL[EÈ]VEMENT)\s+(?:EUROP[ÉE]EN\s+)?(?:SEPA\s+)?([A-Z][A-Za-z0-9&\s\.]+?)(?:\s+\d{4,}|$)/i);
     if (match && match[1]) {
       const supplierName = match[1].trim();
-      // Vérifier que le nom a au moins 2 mots
       const words = supplierName.split(/\s+/).filter(w => w.length > 0);
       if (words.length >= 2) {
         return supplierName;
       }
     }
 
-    // Pattern 4: Extraire le premier mot-clé en majuscules au début
+    // Pattern 4: Premier mot-clé en majuscules
     match = cleanDesc.match(/^([A-Z]{2,}(?:\s+[A-Z]{2,})+(?:\s+SA|NV|Bureau|SPRL|Ltd)+)/);
     if (match && match[1]) {
       return match[1].trim();
@@ -116,31 +63,20 @@ export class SupplierLearningService {
   }
 
   /**
-   * Normalise un nom de fournisseur pour en faire une clé de base de données
-   * Ex: "Belgian Shell SA" -> "shell"
+   * Normalise un nom de fournisseur pour en faire une clé
    */
   normalizeSupplierKey(supplierName: string): string {
-    // Convertir en minuscules
     let key = supplierName.toLowerCase();
-
-    // Enlever les suffixes communs
     key = key.replace(/\s+(sa|nv|bureau|sprl|ltd|gmbh|srl|bv|ba)$/i, '');
-
-    // Enlever les mots communs
     key = key.replace(/\s+(belgian|n\.v\.|de|la|le|les|des|du)/i, ' ');
-
-    // Garder seulement les caractères alphanumériques et espaces
     key = key.replace(/[^a-z0-9\s]/g, ' ');
-
-    // Remplacer les espaces multiples par un seul
     key = key.replace(/\s+/g, ' ').trim();
-
     return key;
   }
 
   /**
    * Apprend un nouveau fournisseur depuis une description de transaction
-   * Retourne true si le fournisseur a été ajouté
+   * Ecrit dans SQLite via database.ts
    */
   learnFromDescription(description: string): boolean {
     const supplierName = this.extractSupplierFromDescription(description);
@@ -149,37 +85,37 @@ export class SupplierLearningService {
       return false;
     }
 
-    // Vérifier si le fournisseur existe déjà
+    // Vérifier si le fournisseur existe déjà dans SQLite
     if (this.isSupplierKnown(supplierName)) {
-      return false; // Déjà connu
+      return false;
     }
 
-    // Créer la clé normalisée
-    const key = this.normalizeSupplierKey(supplierName);
-
-    // Créer les aliases et patterns
     const aliases = this.createAliases(supplierName);
-    const patterns = this.createPatterns(supplierName);
 
-    // Ajouter à la base de données
-    this.database[key] = {
-      aliases,
-      patterns
-    };
+    // Ajouter dans SQLite
+    const supplierId = dbAddSupplier(supplierName, aliases, 'fournisseur');
 
-    // Sauvegarder
-    this.saveDatabase();
+    if (!supplierId) {
+      return false;
+    }
 
-    console.log(`🧑‍🎓 Nouveau fournisseur appris: "${supplierName}" (clé: "${key}")`);
+    // Recharger le cache en mémoire
+    reloadSuppliers();
+
+    console.log(`🧑‍🎓 Nouveau fournisseur appris: "${supplierName}" (SQLite ID: ${supplierId})`);
     return true;
   }
 
   /**
-   * Vérifie si un fournisseur est déjà connu (via aliases ou patterns)
+   * Vérifie si un fournisseur est déjà connu (via SQLite + cache mémoire)
    */
   isSupplierKnown(supplierName: string): boolean {
-    // Vérifier dans la base de données
-    for (const key in this.database) {
+    // Vérifier dans la BDD SQLite
+    const found = findSupplierByNameOrAlias(supplierName);
+    if (found) return true;
+
+    // Vérifier dans le cache en mémoire (fuzzy matching)
+    for (const key in SUPPLIER_ALIASES) {
       if (matchesSupplier(supplierName, key)) {
         return true;
       }
@@ -194,110 +130,86 @@ export class SupplierLearningService {
     const aliases: string[] = [];
     const normalized = supplierName.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
-    // Alias principal (nom complet normalisé)
     aliases.push(normalized);
 
-    // Alias sans "SA", "NV", etc.
     const withoutSuffix = normalized.replace(/\s+(sa|nv|bureau|sprl|ltd|gmbh|srl|bv|ba)$/, '').trim();
     if (withoutSuffix !== normalized && withoutSuffix.length > 2) {
       aliases.push(withoutSuffix);
     }
 
-    // Alias court (premier mot significatif)
     const words = normalized.split(/\s+/);
     if (words.length > 1) {
-      // Premier mot
       aliases.push(words[0]);
-      // Premier et deuxième mot
       aliases.push(`${words[0]} ${words[1]}`);
+    }
+
+    // Ajouter aussi la clé normalisée
+    const key = this.normalizeSupplierKey(supplierName);
+    if (!aliases.includes(key)) {
+      aliases.push(key);
     }
 
     return aliases;
   }
 
   /**
-   * Crée les patterns pour la recherche floue
-   */
-  private createPatterns(supplierName: string): string[] {
-    const patterns: string[] = [];
-    const normalized = supplierName.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    // Pattern principal (sans espaces)
-    patterns.push(normalized);
-
-    return patterns;
-  }
-
-  /**
-   * Retourne le nombre de fournisseurs dans la base de données
+   * Retourne le nombre de fournisseurs dans la base
    */
   getSupplierCount(): number {
-    return Object.keys(this.database).length;
+    return getAllSuppliers().length;
   }
 
   /**
    * Liste tous les fournisseurs connus
    */
   listSuppliers(): string[] {
-    return Object.keys(this.database).sort();
+    return getAllSuppliers().map(s => s.name).sort();
   }
 
   /**
-   * Ajoute manuellement un fournisseur à la base de données
-   * @param supplierName Nom complet du fournisseur (ex: "KBC BANK NV", "Mediwet")
-   * @param customAliases Aliases optionnels supplémentaires
-   * @returns true si ajouté, false si déjà existant
+   * Ajoute manuellement un fournisseur dans SQLite
    */
   addSupplier(supplierName: string, customAliases?: string[]): boolean {
-    // Vérifier si le fournisseur existe déjà
     if (this.isSupplierKnown(supplierName)) {
       return false;
     }
 
-    // Créer la clé normalisée
-    const key = this.normalizeSupplierKey(supplierName);
-
-    // Créer les aliases et patterns de base
     const aliases = this.createAliases(supplierName);
-    const patterns = this.createPatterns(supplierName);
 
-    // Ajouter les aliases personnalisés si fournis
     if (customAliases && customAliases.length > 0) {
-      customAliases.forEach(alias => {
+      for (const alias of customAliases) {
         const normalizedAlias = alias.toLowerCase().trim();
         if (!aliases.includes(normalizedAlias)) {
           aliases.push(normalizedAlias);
         }
-      });
+      }
     }
 
-    // Ajouter à la base de données
-    this.database[key] = {
-      aliases,
-      patterns
-    };
+    const supplierId = dbAddSupplier(supplierName, aliases, 'fournisseur');
 
-    // Sauvegarder
-    this.saveDatabase();
+    if (!supplierId) {
+      return false;
+    }
 
-    console.log(`➕ Fournisseur ajouté manuellement: "${supplierName}" (clé: "${key}")`);
+    reloadSuppliers();
+    console.log(`➕ Fournisseur ajouté: "${supplierName}" (SQLite ID: ${supplierId})`);
     return true;
   }
 
   /**
-   * Supprime un fournisseur de la base de données
-   * @param key Clé du fournisseur à supprimer
-   * @returns true si supprimé, false si non trouvé
+   * Supprime un fournisseur de SQLite
    */
   removeSupplier(key: string): boolean {
-    if (!this.database[key]) {
+    const supplier = findSupplierByNameOrAlias(key);
+    if (!supplier) {
       return false;
     }
 
-    delete this.database[key];
-    this.saveDatabase();
-
-    console.log(`🗑️  Fournisseur supprimé: "${key}"`);
-    return true;
+    const success = dbRemoveSupplier(supplier.id);
+    if (success) {
+      reloadSuppliers();
+      console.log(`🗑️ Fournisseur supprimé: "${supplier.name}" (SQLite ID: ${supplier.id})`);
+    }
+    return success;
   }
 }

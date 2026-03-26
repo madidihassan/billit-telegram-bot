@@ -4,10 +4,9 @@ import { isUserAuthorized, getAllAuthorizedUsers } from './database';
 import { CommandHandler } from './command-handler';
 import { VoiceService } from './voice-service';
 import { IntentService } from './intent-service';
-import { AIConversationService } from './ai-conversation-service';
-import { AIAgentService } from './ai-agent-service';
 import { AIAgentServiceV2 } from './ai-agent-service-v2';
 import { InvoiceMonitoringService } from './invoice-monitoring-service';
+import { PaymentReconciliationService } from './services/payment-reconciliation-service';
 import { sanitizeError, logUnauthorizedAccess, logSuspiciousActivity, sanitizeUrl } from './utils/security';
 import { validateUserInput, sanitizeArgs } from './utils/validation';
 import { RateLimiterManager, RateLimiterFactory } from './utils/rate-limiter';
@@ -31,9 +30,9 @@ export class TelegramBotInteractive {
   private selectedSuggestion: string | null = null; // 🆕 Suggestion sélectionnée par numéro (1, 2, 3...)
   private voiceService: VoiceService;
   private intentService: IntentService;
-  private aiConversationService: AIConversationService;
-  private aiAgentService: AIAgentServiceV2; // Version V2 améliorée
+  private aiAgentService: AIAgentServiceV2;
   private invoiceMonitoringService: InvoiceMonitoringService;
+  private reconciliationService: PaymentReconciliationService | null = null;
   private rateLimitManager: RateLimiterManager;
 
   constructor(commandHandler: CommandHandler) {
@@ -51,8 +50,7 @@ export class TelegramBotInteractive {
     this.currentChatId = this.chatId; // Par défaut, utilise le chatId du propriétaire
     this.voiceService = new VoiceService();
     this.intentService = new IntentService();
-    this.aiConversationService = new AIConversationService(commandHandler);
-    this.aiAgentService = new AIAgentServiceV2(commandHandler, this.bot); // V2 avec synthèse améliorée + bot Telegram
+    this.aiAgentService = new AIAgentServiceV2(commandHandler, this.bot);
 
     // Initialiser le service de monitoring des factures
     this.invoiceMonitoringService = new InvoiceMonitoringService(
@@ -75,8 +73,7 @@ export class TelegramBotInteractive {
     console.log('   Chat ID:', this.chatId);
     console.log('   Reconnaissance vocale:', this.voiceService.isConfigured() ? '✅ Activée' : '❌ Désactivée');
     console.log('   Compréhension IA (vocaux):', this.intentService.isConfigured() ? '✅ Activée' : '❌ Désactivée');
-    console.log('   Conversation IA (ancien):', this.aiConversationService.isConfigured() ? '✅ Activée' : '❌ Désactivée');
-    console.log('   🆕 Agent IA autonome V2:', this.aiAgentService.isConfigured() ? '✅ Activé (synthèse améliorée)' : '❌ Désactivé');
+    console.log('   Agent IA:', this.aiAgentService.isConfigured() ? '✅ Activé' : '❌ Désactivé');
     console.log('   Monitoring factures:', this.invoiceMonitoringService['config'].enabled ? '✅ Activé' : '❌ Désactivé');
     console.log('   Rate limiting:', '✅ Activé');
 
@@ -242,11 +239,47 @@ export class TelegramBotInteractive {
           // 🔧 FIX: Utiliser l'IA pour les stats (format simplifié avec bénéfice)
           this.waitingForInput = null;
           response = await this.aiAgentService.processQuestion('Donne-moi les statistiques du mois', String(this.currentChatId));
+        } else if (command === 'reconcile_link') {
+          this.waitingForInput = null;
+          const key = args[0];
+          if (!this.reconciliationService) {
+            response = '❌ Service de réconciliation non disponible.';
+          } else {
+            const success = await this.reconciliationService.linkPending(key);
+            // Retirer les boutons du message original pour éviter les doubles-clics
+            if (msg) {
+              try {
+                await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
+                  chat_id: msg.chat.id,
+                  message_id: msg.message_id,
+                });
+              } catch (e) { /* message trop vieux ou déjà édité */ }
+            }
+            response = success
+              ? '✅ <b>Paiement lié avec succès dans Billit !</b>'
+              : '❌ <b>Liaison échouée.</b>\nVeuillez vérifier manuellement dans Billit.';
+          }
+        } else if (command === 'reconcile_ignore') {
+          this.waitingForInput = null;
+          const key = args[0];
+          if (this.reconciliationService) {
+            this.reconciliationService.ignorePending(key);
+          }
+          // Retirer les boutons du message original
+          if (msg) {
+            try {
+              await this.bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
+                chat_id: msg.chat.id,
+                message_id: msg.message_id,
+              });
+            } catch (e) { /* message trop vieux ou déjà édité */ }
+          }
+          response = '🚫 <b>Suggestion ignorée.</b>\nCooldown de 24h remis à zéro.';
         } else {
           // Commandes normales
           this.waitingForInput = null;
-          response = await this.commandHandler.handleCommand(command, args);
-          
+          response = await this.commandHandler.handleCommand(command, args, String(this.currentChatId));
+
           // Capturer le contexte
           this.captureInvoiceContext(command, args, response);
         }
@@ -324,7 +357,23 @@ export class TelegramBotInteractive {
         // Afficher l'action "typing" pendant le traitement
         await this.bot.sendChatAction(this.currentChatId, 'typing');
 
-        const response = await this.commandHandler.handleCommand(command, args);
+        // ── Commande /reconcile : forcer une vérification immédiate ──
+        if (command === 'reconcile') {
+          if (!this.reconciliationService) {
+            await this.sendMessage('❌ Service de réconciliation non initialisé.');
+            return;
+          }
+          await this.sendMessage('🔗 <b>Réconciliation lancée...</b>\nVérification des paiements en cours, patientez.');
+          const result = await this.reconciliationService.triggerManual();
+          const summary =
+            `✅ <b>Réconciliation terminée</b>\n\n` +
+            `🔗 Paiements liés automatiquement : <b>${result.linked}</b>\n` +
+            `💡 Suggestions (vérification manuelle) : <b>${result.suggestions}</b>`;
+          await this.sendMessage(summary);
+          return;
+        }
+
+        const response = await this.commandHandler.handleCommand(command, args, String(this.currentChatId));
 
         // Capturer le contexte
         this.captureInvoiceContext(command, args, response);
@@ -1125,11 +1174,23 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
 
       console.log('📝 Transcription:', transcription);
 
+      // SÉCURITÉ: Valider la transcription avant traitement
+      const voiceValidation = validateUserInput(transcription, {
+        maxLength: config.security.maxInputLength,
+        allowEmpty: false,
+        fieldName: 'Transcription vocale',
+      });
+
+      if (!voiceValidation.valid) {
+        await this.sendMessage(`❌ ${voiceValidation.error}`);
+        return;
+      }
+
       // Envoyer la transcription à l'utilisateur
-      await this.sendMessage(`📝 <i>Vous avez dit:</i> "${transcription}"`);
+      await this.sendMessage(`📝 <i>Vous avez dit:</i> "${voiceValidation.sanitized}"`);
 
       // Traiter la transcription comme une commande
-      await this.processVoiceCommand(transcription);
+      await this.processVoiceCommand(voiceValidation.sanitized!);
 
     } catch (error: any) {
       console.error('❌ Erreur lors du traitement du message vocal:', error);
@@ -1538,6 +1599,13 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
   }
 
   /**
+   * Enregistre le service de réconciliation (appelé depuis index-bot.ts)
+   */
+  setReconciliationService(service: PaymentReconciliationService): void {
+    this.reconciliationService = service;
+  }
+
+  /**
    * Envoie un message à tous les chats autorisés (pour les notifications de monitoring)
    */
   async broadcastMessage(message: string): Promise<void> {
@@ -1552,6 +1620,33 @@ Je vous aide à gérer vos factures, finances et bien plus avec <b>50 outils IA<
         console.log(`📤 Notification envoyée au chat ${user.chat_id} (${user.username || 'Inconnu'})`);
       } catch (error) {
         console.error(`❌ Erreur lors de l'envoi au chat ${user.chat_id}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Envoie un message de suggestion avec boutons inline ✅ Lier / ❌ Ignorer
+   * Utilisé par PaymentReconciliationService pour les correspondances à confirmer
+   */
+  async broadcastSuggestionWithButtons(message: string, linkKey: string): Promise<void> {
+    const authorizedUsers = getAllAuthorizedUsers();
+    const keyboard = {
+      inline_keyboard: [[
+        { text: '✅ Lier maintenant', callback_data: `reconcile_link:${linkKey}` },
+        { text: '❌ Ignorer', callback_data: `reconcile_ignore:${linkKey}` },
+      ]]
+    };
+
+    for (const user of authorizedUsers) {
+      try {
+        await this.bot.sendMessage(user.chat_id, message, {
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard,
+        });
+        console.log(`📤 Suggestion (boutons) envoyée au chat ${user.chat_id}`);
+      } catch (error) {
+        console.error(`❌ Erreur envoi suggestion au chat ${user.chat_id}:`, error);
       }
     }
   }

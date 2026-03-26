@@ -411,6 +411,12 @@ export class BankClient {
     try {
       const ibanClean = iban.replace(/\s/g, '');
 
+      // Validation IBAN : uniquement lettres majuscules et chiffres
+      if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(ibanClean)) {
+        console.warn(`⚠️ IBAN invalide rejeté: ${ibanClean.substring(0, 10)}...`);
+        return null;
+      }
+
       console.log(`🔍 Récupération du solde réel pour ${ibanClean}...`);
 
       // Essayer l'endpoint /v1/bankaccounts avec filtre sur l'IBAN
