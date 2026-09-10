@@ -4,7 +4,7 @@
  */
 
 import { BillitClient } from './billit-client';
-import { TelegramBotInteractive } from './telegram-bot';
+import { InvoiceNotifier } from './types/notifier';
 import { BillitInvoice } from './types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -26,13 +26,24 @@ export interface NotificationStats {
 }
 
 export class InvoiceMonitoringService {
-  private bot: TelegramBotInteractive;
+  private bot: InvoiceNotifier;
   private billitClient: BillitClient;
   private config: MonitoringConfig;
   private intervalId: NodeJS.Timeout | null = null;
   private processedInvoices: Set<string> = new Set();
   private notifiedOverdueInvoices: Map<string, number> = new Map(); // ID facture -> timestamp dernière notification
   private readonly REMINDER_INTERVAL_DAYS = 7; // Rappel tous les 7 jours
+  /**
+   * Contexte des boutons "Marquer Payé" : invoice.id → infos d'affichage.
+   * Évite de packer invoice_number + supplier_name dans callback_data (limite Telegram 64 bytes).
+   * Ex : pour "Coca-Cola Europacific Partners Belgium SRL", l'ancien format dépassait silencieusement
+   * la limite → bouton non envoyé. Cf. finding #15+#16 de l'analyse.
+   */
+  private payButtonContext: Map<string, { invoiceNumber: string; supplierName: string; createdAt: number }> = new Map();
+  /** TTL du contexte des boutons (24h). Au-delà, l'user doit re-déclencher l'action via /unpaid. */
+  private readonly PAY_CONTEXT_TTL_MS = 24 * 60 * 60 * 1000;
+  /** Plafond de taille pour éviter une croissance non bornée. */
+  private readonly PAY_CONTEXT_MAX_SIZE = 500;
   private stats: NotificationStats = {
     lastCheck: new Date(),
     totalChecked: 0,
@@ -41,7 +52,7 @@ export class InvoiceMonitoringService {
     errors: 0,
   };
 
-  constructor(bot: TelegramBotInteractive, billitClient: BillitClient, config: MonitoringConfig) {
+  constructor(bot: InvoiceNotifier, billitClient: BillitClient, config: MonitoringConfig) {
     this.bot = bot;
     this.billitClient = billitClient;
     this.config = config;
@@ -329,15 +340,33 @@ ${isPaid ? '✨ Cette facture a été réglée' : '⚠️ Cette facture est en a
     try {
       const docType = isDraft ? 'BROUILLON' : invoice.invoice_number;
 
+      // Bouton "Payé" inline pour les factures non payées
+      // callback_data limité à 64 bytes par Telegram → on garde uniquement l'ID, et on stocke
+      // invoice_number + supplier_name dans `payButtonContext` (lu par le handler du bot).
+      // Comparaison stricte, alignée sur billit-client (getUnpaidInvoices / getPaidInvoices) :
+      // un `includes('paid')` classerait « unpaid » ou « partiallyPaid » comme payées et
+      // supprimerait silencieusement le bouton.
+      const normalizedStatus = invoice.status?.toLowerCase();
+      const isPaidStatus = normalizedStatus === 'paid' || normalizedStatus === 'payé';
+      let payButton: any = undefined;
+      if (!isDraft && !isPaidStatus) {
+        this.registerPayContext(invoice);
+        payButton = {
+          inline_keyboard: [[
+            { text: '💰 Marquer Payé', callback_data: `pay_invoice:${invoice.id}` }
+          ]]
+        };
+      }
+
       // Pour les factures complètes (pas les brouillons), essayer d'envoyer le PDF
       if (!isDraft) {
         console.log(`📥 Tentative de téléchargement du PDF pour ${docType}...`);
         const pdfBuffer = await this.billitClient.downloadInvoicePdf(invoice.id);
 
         if (pdfBuffer) {
-          // Envoyer le PDF avec le message en légende
+          // Envoyer le PDF avec le message en légende + bouton Payé
           const filename = `Facture_${invoice.invoice_number}_${invoice.supplier_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-          await this.bot.broadcastDocument(pdfBuffer, filename, message);
+          await this.bot.broadcastDocument(pdfBuffer, filename, message, payButton);
           console.log(`📤 PDF envoyé: ${docType} (${invoice.supplier_name})`);
           return;
         } else {
@@ -473,5 +502,60 @@ ${isPaid ? '✨ Cette facture a été réglée' : '⚠️ Cette facture est en a
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  /**
+   * Marque une facture comme payée dans Billit via l'API.
+   *
+   * L'erreur est propagée : l'appelant (le handler du bouton « Marquer Payé »)
+   * doit pouvoir distinguer un succès d'un échec, sans quoi il confirmerait à
+   * l'utilisateur un paiement que Billit a refusé.
+   */
+  async markInvoicePaid(orderId: string): Promise<void> {
+    try {
+      await this.billitClient.addPaymentToOrder(orderId);
+      console.log(`✅ Facture ${orderId} marquée comme payée dans Billit`);
+    } catch (err: any) {
+      console.error(`❌ Erreur marquage payé Billit ${orderId}:`, err.message);
+      throw err;
+    }
+  }
+
+  /**
+   * Enregistre les infos d'affichage liées à un bouton "Marquer Payé" pour une facture donnée.
+   * Pruning automatique : drop entrées > 24h, et capping à PAY_CONTEXT_MAX_SIZE entrées.
+   */
+  private registerPayContext(invoice: BillitInvoice): void {
+    const now = Date.now();
+    // Purge les entrées expirées avant insertion
+    for (const [id, ctx] of this.payButtonContext) {
+      if (now - ctx.createdAt >= this.PAY_CONTEXT_TTL_MS) {
+        this.payButtonContext.delete(id);
+      }
+    }
+    // Si toujours plein après purge, drop la plus ancienne (FIFO sur insertion order)
+    if (this.payButtonContext.size >= this.PAY_CONTEXT_MAX_SIZE) {
+      const oldest = this.payButtonContext.keys().next().value;
+      if (oldest !== undefined) this.payButtonContext.delete(oldest);
+    }
+    this.payButtonContext.set(invoice.id, {
+      invoiceNumber: invoice.invoice_number,
+      supplierName: invoice.supplier_name,
+      createdAt: now,
+    });
+  }
+
+  /**
+   * Récupère le contexte d'affichage d'un bouton "Marquer Payé". Retourne undefined si la
+   * notification d'origine est trop vieille (>24h) — l'user devra retrouver la facture autrement.
+   */
+  getPayContext(invoiceId: string): { invoiceNumber: string; supplierName: string } | undefined {
+    const ctx = this.payButtonContext.get(invoiceId);
+    if (!ctx) return undefined;
+    if (Date.now() - ctx.createdAt >= this.PAY_CONTEXT_TTL_MS) {
+      this.payButtonContext.delete(invoiceId);
+      return undefined;
+    }
+    return { invoiceNumber: ctx.invoiceNumber, supplierName: ctx.supplierName };
   }
 }

@@ -7,7 +7,8 @@ import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'billit.db');
+// DB_PATH override-able via env var pour permettre l'isolation des tests (sans toucher la DB de prod)
+const DB_PATH = process.env.BILLIT_DB_PATH || path.join(__dirname, '..', 'data', 'billit.db');
 const DATA_DIR = path.dirname(DB_PATH);
 
 // Créer le répertoire data s'il n'existe pas
@@ -130,6 +131,19 @@ export function addAuthorizedUser(
   addedBy: string | null = null
 ): boolean {
   try {
+    // Vérifier si l'utilisateur existe déjà (désactivé)
+    const existing = db.prepare('SELECT * FROM authorized_users WHERE chat_id = ?').get(chatId) as any;
+    if (existing) {
+      // Réactiver l'utilisateur existant
+      const stmt = db.prepare(`
+        UPDATE authorized_users
+        SET is_active = 1, username = COALESCE(?, username), role = ?, added_by = ?, added_at = CURRENT_TIMESTAMP
+        WHERE chat_id = ?
+      `);
+      stmt.run(username, role, addedBy, chatId);
+      return true;
+    }
+
     const stmt = db.prepare(`
       INSERT INTO authorized_users (chat_id, username, role, added_by)
       VALUES (?, ?, ?, ?)
@@ -211,6 +225,39 @@ export function getPermissionDeniedMessage(operation: string): string {
 
   const rolesText = allowedRoles.join(' ou ');
   return `⛔ Accès refusé. Cette opération nécessite le rôle : ${rolesText}.`;
+}
+
+/**
+ * Vérifie si un outil donné est exposable au LLM pour un rôle donné.
+ * Utilisé pour filtrer la liste des tools envoyée au LLM AVANT le tool_choice :
+ * un user "user" ne doit même pas voir `add_user`/`restart_bot` dans le schema, sinon
+ * le LLM peut être prompt-injecté pour les appeler (le check runtime sauve la mise mais
+ * coûte des tokens et expose la surface d'attaque). Cf. findings #7 + #14 de l'analyse.
+ */
+export function isToolAllowedForRole(toolName: string, role: 'owner' | 'admin' | 'user'): boolean {
+  const allowedRoles = OPERATION_PERMISSIONS[toolName];
+  if (!allowedRoles) return true; // Outil non restreint = visible par tous
+  return allowedRoles.includes(role);
+}
+
+/**
+ * Filtre une liste d'outils OpenAI/Groq selon le rôle du chatId. Si le chatId n'est pas
+ * autorisé (ou inconnu), filtre par défaut au niveau "user" (le moins privilégié).
+ * Garde les outils non listés dans OPERATION_PERMISSIONS (= sans restriction).
+ *
+ * Compatible avec le type officiel Groq.Chat.Completions.ChatCompletionTool où `function`
+ * est optionnel — un tool sans `.function.name` est conservé tel quel (pas de filtrage applicable).
+ */
+export function filterToolsByChatRole<T extends { function?: { name?: string } | undefined }>(
+  tools: T[],
+  chatId: string | undefined,
+): T[] {
+  const role: 'owner' | 'admin' | 'user' = (chatId && getUserRole(chatId)) || 'user';
+  return tools.filter(t => {
+    const name = t.function?.name;
+    if (!name) return true; // Tool sans nom identifiable → on laisse passer (cas non régulé)
+    return isToolAllowedForRole(name, role);
+  });
 }
 
 // ============================================================
@@ -365,7 +412,7 @@ export function addSupplier(
     // Insérer les alias
     if (aliases.length > 0) {
       const stmtAlias = db.prepare(`
-        INSERT INTO supplier_aliases (supplier_id, alias)
+        INSERT OR IGNORE INTO supplier_aliases (supplier_id, alias)
         VALUES (?, ?)
       `);
       for (const alias of aliases) {

@@ -172,14 +172,18 @@ export class BillitClient {
     let skip = 0;
     const pageSize = 120; // Limite API Billit
     let hasMore = true;
+    // 🛡️ Plafond anti-ban (06/2026) : ne JAMAIS paginer /v1/orders en profondeur.
+    const MAX_PAGES = Number(process.env.BILLIT_INVOICE_MAX_PAGES) || 30;
+    let pageCount = 0;
 
     console.log('🔄 Récupération de TOUTES les factures impayées (pagination)...');
 
-    while (hasMore) {
+    while (hasMore && pageCount < MAX_PAGES) {
+      pageCount++;
       // Récupérer une page de factures
-      const invoices = await this.getInvoices({ 
+      const invoices = await this.getInvoices({
         limit: pageSize,
-        skip: skip 
+        skip: skip
       });
 
       if (invoices.length === 0) {
@@ -203,6 +207,9 @@ export class BillitClient {
       }
     }
 
+    if (hasMore && pageCount >= MAX_PAGES) {
+      console.warn(`⚠️ getUnpaidInvoices: plafond ${MAX_PAGES} pages atteint — résultat tronqué (anti-ban Billit).`);
+    }
     console.log(`✅ ${allInvoices.length} facture(s) impayée(s) trouvée(s) sur toutes les pages`);
     return allInvoices;
   }
@@ -623,6 +630,22 @@ export class BillitClient {
         success: false,
         message: `Erreur: ${error.message}`,
       };
+    }
+  }
+
+  /**
+   * Marque une facture comme payée via PATCH (même méthode que le bot IA)
+   */
+  async addPaymentToOrder(orderId: string): Promise<void> {
+    try {
+      await this.axiosInstance.patch(`/v1/orders/${orderId}`, {
+        Paid: true,
+        PaidDate: new Date().toISOString(),
+      });
+      console.log(`✅ Facture ${orderId} marquée comme payée via PATCH`);
+    } catch (error: any) {
+      console.error(`❌ addPaymentToOrder ${orderId}:`, error.response?.data || error.message);
+      throw error;
     }
   }
 }
