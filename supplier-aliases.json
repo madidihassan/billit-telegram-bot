@@ -57,6 +57,16 @@
       "alkhoomsy"
     ]
   },
+  "amazon be retail 1855": {
+    "aliases": [
+      "amazon be retail 1855",
+      "amazon",
+      "amazon be"
+    ],
+    "patterns": [
+      "amazonberetail1855"
+    ]
+  },
   "amazon marketplace": {
     "aliases": [
       "amazon marketplace",
@@ -798,6 +808,16 @@
     ],
     "patterns": [
       "lukoilbelgiumnv"
+    ]
+  },
+  "mabru vzw 1000": {
+    "aliases": [
+      "mabru vzw 1000",
+      "mabru",
+      "mabru vzw"
+    ],
+    "patterns": [
+      "mabruvzw1000"
     ]
   },
   "madidihassan": {

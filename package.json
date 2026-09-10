@@ -1,30 +1,16 @@
 {
   "name": "billit-telegram-notifier",
   "version": "1.0.0",
-  "description": "Système de notifications Telegram pour les factures Billit",
-  "main": "dist/index.js",
+  "description": "Notifications Telegram des nouvelles factures Billit",
+  "main": "dist/index-notify.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "start:bot": "node dist/index-bot.js",
-    "dev": "ts-node src/index.ts",
-    "dev:bot": "ts-node src/index-bot.ts",
+    "start": "node dist/index-notify.js",
+    "dev": "ts-node src/index-notify.ts",
     "watch": "tsc -w",
-    "test": "ts-node src/test-connection.ts",
-    "test:ai": "ts-node test-ai-conversation.ts",
-    "test:complet": "ts-node test-bot-complet.ts",
-    "test:complet:build": "npm run build && node dist/test-bot-complet.js",
-    "migrate": "ts-node src/migrate-to-database.ts",
-    "backup": "ts-node src/backup-database.ts",
-    "benchmark": "ts-node src/benchmark.ts",
-    "benchmark:before": "ts-node src/benchmark.ts before",
-    "benchmark:after": "ts-node src/benchmark.ts after",
-    "benchmark:compare": "ts-node src/benchmark/compare.ts",
-    "pm2:start": "npm run build && pm2 start ecosystem.config.js",
-    "pm2:stop": "pm2 stop billit-notifier",
-    "pm2:restart": "pm2 restart billit-notifier",
-    "pm2:logs": "pm2 logs billit-notifier",
-    "pm2:start:bot": "npm run build && pm2 start ecosystem-bot.config.js"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pm2:start": "npm run build && pm2 start ecosystem-bot.config.js"
   },
   "keywords": [
     "billit",
@@ -38,19 +24,14 @@
     "axios": "^1.6.0",
     "better-sqlite3": "^12.5.0",
     "dotenv": "^16.3.1",
-    "form-data": "^4.0.5",
-    "groq-sdk": "^0.37.0",
-    "node-cache": "^5.1.2",
-    "node-telegram-bot-api": "^0.64.0",
-    "openai": "^6.16.0",
-    "winston": "^3.19.0",
-    "winston-daily-rotate-file": "^5.0.0"
+    "node-telegram-bot-api": "^0.64.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",
     "@types/node-telegram-bot-api": "^0.64.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.2"
   }
 }

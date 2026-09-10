@@ -1,0 +1,1 @@
+../bot_mustfood/vitest.config.ts

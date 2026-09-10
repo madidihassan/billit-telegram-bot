@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'bot-tonton202',
-    script: './dist/index-bot.js',
+    script: './dist/index-notify.js',
     cwd: '/home/ubuntu/Billit/bot_tonton202',
     instances: 1,
     exec_mode: 'fork',
